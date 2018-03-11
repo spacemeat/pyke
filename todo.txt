@@ -1,0 +1,12 @@
+find all includes of all includes
+(use precompiler if you must)
+or at least check for including .hpp
+
+chain clean commands
+
+add -aggro to clean to fully wipe directories
+
+add rebuild alias
+
+copy res/* to bin/config/res/*
+

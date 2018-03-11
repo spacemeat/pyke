@@ -1,0 +1,3 @@
+class PykeError(Exception):
+    pass
+

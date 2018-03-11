@@ -1,0 +1,130 @@
+{
+    "format-version": "0.0",
+    
+    "version": "0.0.0",
+    "name": "c++_project",
+    "type": "cpp_project",
+    "output-type": "exe",
+    "use-std": "14",
+    "multithreaded": true,
+    "whole-program": false,
+    "whole-opt": false,
+    "include-dirs": ["inc"],
+    "use-std-include-dirs": true,
+    "source-dir": "src",
+    "resource-dir": "res",
+    "lib-dirs": [],
+    "intermediate-dir": "obj",
+    "output-dir": "bin",
+    "output-name": "a.out",
+    "sources": [],
+    "resources": [],
+    "packages": [],
+    "libs": [],
+    "compile-args": "-Wall",
+    "link-args": "-Wall",
+    "whole-build-args": "-Wall",
+    "default-configuration": "debug",
+    "configurations" : {
+        "debug": {
+            "output-dir": "bin/debug",
+            "lib-dirs": [
+                "bin/debug"
+            ],
+            "intermediate-dir": "obj/debug",
+            "packages": [],
+            "libs": [],
+            "compile-args": "-Wall -g -Og -fno-inline",
+            "link-args": "-Wall",
+            "whole-build-args": "-Wall -g -Og -fno-inline"
+        },
+        "release": {
+            "output-dir": "bin/release",
+            "lib-dirs": [
+                "bin/release"
+            ],
+            "intermediate-dir": "obj/release",
+            "whole-program": false,
+            "whole-opt": false,
+            "packages": [],
+            "libs": [],
+            "compile-args": "-Wall -DNDEBUG -O3",
+            "link-args": "-Wall",
+            "whole-build-args" :"-Wall -DNDEBUG -O3"
+        }
+    },
+    "run-from": ".",
+    "run-args": "",
+    
+    "doc": {
+        "short": "Defines a C++ project.",
+        "long": "Defines the operations for building and maintaining a C++ project, including building and testing."
+    },
+    "commands": [
+        {
+            "name": "clean",
+            "recipe": [
+                "clean"
+            ],
+            "doc": {
+                "short": "Clean the tree.",
+                "long": "Deletes all intermediate files generated from the build. Essentially, put the tree into a fresh state.",
+                "args": [
+                    {
+                        "name": "<config>",
+                        "short": "Desired build configuration to clean.",
+                        "long": "Selects the build configuration whose artifacts are intended to be cleaned. Typically used to specify debug/release builds. Default is *, which specifies all configurations."
+                    }
+                ]
+            }
+        },
+        {
+            "name": "build",
+            "recipe": [
+                "build"
+            ],
+            "doc": {
+                "short": "Build the project.",
+                "long": "Build the C++ project, according to the json.",
+                "args": [
+                    {
+                        "name": "<config>",
+                        "short": "Desired build configuration.",
+                        "long": "Selects the build configuration overrides in the project. Typically used to specify debug/release builds. Default is specified in json."
+                    }
+                ]
+            }
+        },
+        {
+            "name": "run",
+            "recipe": [
+                "run"
+            ],
+            "doc": {
+                "short": "Run the project.",
+                "long": "Runs the project using starting path and arguments specified in the json.",
+                "args": [
+                    {
+                        "name": "<config>",
+                        "short": "Desired configuration to run.",
+                        "long": "Selects the configuration whose build is to be run. Default is the same as the default build configuration."
+                    }
+                ]
+            }
+        },
+        {
+            "name": "test",
+            "recipe": [
+                "test",
+                "test_report"
+            ],
+            "doc": {
+                "short": "Test the project.",
+                "long": "Runs the project test suite, and reports its findings.",
+                "args": {
+                }
+            }
+        }
+    ]
+}
+

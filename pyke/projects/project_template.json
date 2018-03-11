@@ -1,0 +1,88 @@
+{
+    "format-version": "1.0",
+    "commands": [
+        {
+            "name": "describe",
+            "recipe": [
+                "describe"
+            ],
+            "doc": {
+                "short": "Describe the project.",
+                "long": "Display a discription of the project and its commands.",
+                "args": [
+                    {
+                        "name": "terse",
+                        "short": "(default) specify a more abbreviated description",
+                        "long": "Request the short form description of a project. This is the default setting."
+                    },
+                    {
+                        "name": "verbose",
+                        "short": "specify a more detailed description",
+                        "long": "Request the long-form description of a project, including available commands and dependency information."
+                    }
+                ]
+            }
+        },
+        {
+            "name": "config",
+            "recipe": [
+                "config"
+            ],
+            "doc": {
+                "short": "Apply a configuration set to the json.",
+                "long": "Finds the configuration block in the \"configurations\" block of the json, if they exist, and applies the values in the configuration block to the top-level json entries. Single values are replaced, and lists are appended. Typically used to specify debug / release attributes.",
+                "args": [
+                    {
+                        "name": "<configuration>",
+                        "short": "name of the configuration block"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "set",
+            "recipe": [
+                "set"
+            ],
+            "doc": {
+                "short": "Set (override) a value in the json.",
+                "long": "Set a value to a top-level attribute in the project json. This value is set after all loading is done, and after configuration attributes are applied, replacng a value if it already exists. The value is not saved back to file. Typically used to set a version number.\n\nUse like:\n\"pyke fracto: set: version, \"2.1.0\"; build: release\"",
+                "args": [
+                    {
+                        "name": "<name>",
+                        "short": "name of the attribute"
+                    },
+                    {
+                        "name": "<value>",
+                        "short": "new value for the attribute"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "add",
+            "recipe": [
+                "add"
+            ],
+            "doc": {
+                "short": "Add to a value in the json.",
+                "long": "Appends any number of values to a top-level list attribute in the project json, or creates a list as appropriate. These values are added after all loading is done, and after configuration attributes are applied. The values are not saved back to file. Might be used to set an instrumented library, for example.\n\nUse like:\n\"pyke fracto: add: libs, qmath-dbg.l, qmath-complex-dbg.l; build: debug\"",
+                "args": [
+                    {
+                        "name": "<name>",
+                        "short": "name of the attribute"
+                    },
+                    {
+                        "name": "<value>",
+                        "short": "new value for the attribute"
+                    },
+                    {
+                        "name": "<value>",
+                        "short": "(optional) new value for the attribute"
+                    }
+                ]
+            }
+        }
+    ]
+}
+

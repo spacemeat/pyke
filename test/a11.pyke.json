@@ -1,0 +1,39 @@
+{
+    "format_version": "1.0",
+
+    "projects" : [
+        {
+            "name": "a11-p1",
+            "version": "1.0"
+        },
+        {
+            "name": "a11-p2",
+            "version": "1.0",
+            "depends-on": [
+                "a1-p2"
+            ]
+        },
+        {
+            "name": "a11-p3",
+            "version": "1.0",
+            "depends-on": [
+                "a1-p1"
+            ]
+        },
+        {
+            "name": "a11-p4",
+            "version": "1.0",
+            "depends-on": [
+                "a1-p3"
+            ]
+        },
+        {
+            "name": "a11-p5",
+            "version": "1.0",
+            "depends-on": [
+                "a12-p1"
+            ]
+        }
+    ]
+}
+

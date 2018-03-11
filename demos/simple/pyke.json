@@ -1,0 +1,74 @@
+{
+    "format_version": "1.0",
+
+    "projects" : [
+        {
+            "name": "simple_lib",
+            "type": "cpp_project",
+            "output-type": "lib",
+            "output-name": "simple_static",
+            "sources": [
+                "simple_lib_a.cpp",
+                "simple_lib_b.cpp"
+            ],
+            "configurations": {
+                "debug": {
+                    "version": "1.0.0.d"
+                },
+                "release": {
+                    "version": "1.0.0.r"
+                }
+            }
+        },
+        {
+            "name": "simple_so",
+            "type": "cpp_project",
+            "output-type": "so",
+            "output-name": "simple_shared",
+            "sources": [
+                "simple_so_a.cpp",
+                "simple_so_b.cpp"
+            ],
+            "configurations": {
+                "debug": {
+                    "version": "1.0.0.d"
+                },
+                "release": {
+                    "version": "1.0.0.r"
+                }
+            }
+        },
+        {
+            "name": "simple_exe",
+            "type": "cpp_project",
+            "depends-on": [
+                "simple_lib",
+                "simple_so"
+            ],
+            "output-name": "simple",
+            "sources": [
+                "simple.cpp",
+                "simple_ui.cpp"
+            ],
+            "resources": ["simple.glade"],
+            "packages": [
+                "libpng16",
+                "zlib",
+                "gtkmm-3.0"
+            ],
+            "libs": [
+                "simple_static",
+                "simple_shared"
+            ],
+            "configurations": {
+                "debug": {
+                    "version": "1.0.0.d"
+                },
+                "release": {
+                    "version": "1.0.0.r"
+                }
+            }
+        }
+    ]
+}
+

@@ -1,0 +1,14 @@
+{
+    "format_version": "1.0",
+    "depends-on": [
+        "a1",
+        "a2"
+    ],
+    "projects": [
+        {
+            "name": "aproj",
+            "version": "1.0"
+        }
+    ]
+}
+
