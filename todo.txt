@@ -10,3 +10,5 @@ add rebuild alias
 
 copy res/* to bin/config/res/*
 
+-fsanitize=address for debug builds
+-fsanitize-address-use-after-scaope

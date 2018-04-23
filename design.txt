@@ -1,0 +1,73 @@
+Pyke2 workflow:
+
+template:
+{   "cpp_project": {
+        "target_type": "exe",
+        "src_dir": "./src",
+        ...
+        "configs": [
+            {
+                "name": "debug,d",
+                "dbg": true,
+                "opt": 0,
+                "wpo": false,
+                ...
+            },
+            {
+                "name": "release,r",
+                "dbg": false,
+                "opt": 3,
+                "wpo": true,
+                ...
+            }
+        ],
+        ...
+    },
+
+
+
+commands look like:
+pyke frac-it: clean: debug, release; build: debug, release; then mandel: clean: debug, release; build: debug, release
+pyke simulate: frac-it: c:d,r;b:d,r;; mandel: c:d,r;b;d,r;;;
+pyke list-projects: frac-it, mandel;
+pyke list-projects: *;
+pyke list-projects: *: cpp-project;;
+pyke list-projects: *: cpp-*;;
+pyke version
+
+
+load defaults
+    load ~/pyke-templates
+
+for each arg-project
+    get all project files until command is found
+        while not found
+            if exists ./pyke.json
+                load ./pyke-templates, apply over top
+                cp = load ./pyke.json
+                if cp contains project
+                    pause search
+                    break
+                if json contains refs
+                    for each ref
+                        cd ./refpath
+                        recurse search
+                        cd ..
+            cd ..
+
+    if project found
+        p = project from template values
+        apply json project values
+        
+        for each c = arg-command
+            execute p.c(arg-args)
+                add dependency projects as generated
+                for each dp in dependency projects
+                    if dependency is not loaded
+                        resume recursive search
+                    if dependency is not loaded
+                        throw
+                    execute dp
+                execute command with args
+
+
