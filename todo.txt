@@ -1,10 +1,11 @@
-find all includes of all includes
-(use precompiler if you must)
-or at least check for including .hpp
-
 chain clean commands
 
 add -aggro to clean to fully wipe directories
+
+add verbosity to all commands
+
+completely rekajigger the command line to allow for selection of project, operation, config, 
+    and additional switches / overrides
 
 add rebuild alias
 
@@ -12,3 +13,13 @@ copy res/* to bin/config/res/*
 
 -fsanitize=address for debug builds
 -fsanitize-address-use-after-scaope
+
+Rename generated run script to be named per-project, so no stompy-stompy.
+
+pkg-config commad line options support in .json. (--static, etc)
+
+Allow $VAR expansion in string fields (for paths).
+
+Extend header validation to all headers, using cpp to get all of them.
+
+Handle paths with spaces in'em

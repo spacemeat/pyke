@@ -30,18 +30,50 @@ class cpp_data:
         self.whole_program = json_data['whole-program']
         self.whole_opt = json_data['whole-opt']
         self.depends_on = project.depends_on
+
+
+class cpp_source:
+    def __init__(self, src_entry, path, doto_path, simulate):
+        self.simulate = simulate
+        self.src_entry = src_entry
+
+        self.src_path = path
+        self.src_exists = os.path.exists(self.src_path)
+        self.src_mtime = os.path.getmtime(self.src_path) if self.src_exists else 0
+
+        self.doto_path = doto_path
+        self.doto_exists = os.path.exists(self.doto_path)
+        self.doto_mtime = os.path.getmtime(self.doto_path) if self.doto_exists else 0
+
+        self.is_includes_resolved = False
+        self.included_files = []
+
+    def is_up_to_date(self, target_mtime):
+        for inc in self.included_files:
+            if os.path.getmtime(inc) > target_mtime:
+                return False
         
+        if self.src_mtime > target_mtime:
+            return False
+        
+        return True
+
 
 class cpp_tool(tool):
     def __init__(self, json_dir, simulate=False):
         self.path = json_dir
         self.simulate = simulate
-        self.include_quote_regex = re.compile(r'^\#\s*include\s*\"([A-Za-z0-9_\.\-\(\)\:]+)\".*$')
-        self.include_angle_regex = re.compile(r'^\#\s*include\s*\<([A-Za-z0-9_\.\-\(\)\:]+)\>.*$')
+  #      self.include_quote_regex = re.compile(r'^\#\s*include\s*\"([A-Za-z0-9_\.\-\(\)\:]+)\".*$')
+  #      self.include_angle_regex = re.compile(r'^\#\s*include\s*\<([A-Za-z0-9_\.\-\(\)\:]+)\>.*$')
 
         self.include_quote_dirs = []
         self.include_angle_dirs = []
-        self._compute_include_search_dirs()
+
+        self.resolved_includes = {}
+        self.included_files = {}
+  #      self._compute_include_search_dirs()
+
+        self.sources = {}
         
         
     def _compute_include_search_dirs(self):
@@ -106,6 +138,15 @@ class cpp_tool(tool):
         # TODO: apply -iquote dirs to include_quote_dirs
         self.include_angle_dirs = [os.path.join(self.path, d) for d in self.cpp_data.include_dirs] + self.include_angle_dirs
 
+        for src in self.cpp_data.sources:
+            src_path = self.make_src_path(src)
+            doto_path = self.make_doto_path(src)
+            self.sources[src_path] = cpp_source(src, src_path, doto_path, self.simulate)
+
+        self.intermediate_dir = os.path.normpath(os.path.join(self.path, self.cpp_data.intermediate_dir))
+        self.output_dir = os.path.normpath(os.path.join(self.path, self.cpp_data.output_dir))
+        self.output_path = os.path.normpath(os.path.join(self.output_dir, self._make_output_name()))
+
     
     def set_is_simulating(self, is_sim):
         self.simulate = is_sim
@@ -120,7 +161,7 @@ class cpp_tool(tool):
                 raise
         
     
-    def get_output_name(self):
+    def _make_output_name(self):
         if self.cpp_data.output_type == "lib":
             return "lib{}.a".format(self.cpp_data.output_name)
             
@@ -137,26 +178,20 @@ class cpp_tool(tool):
             return self.cpp_data.output_name
 
 
-    def get_src_path(self, src_entry):
-        return os.path.join(self.path, self.cpp_data.source_dir, src_entry)
+    def make_src_path(self, src_entry):
+        return os.path.normpath(os.path.join(self.path, self.cpp_data.source_dir, src_entry))
 
     
-    def get_doto_subpath(self, src_entry):
+    def get_doto_entry(self, src_entry):
         base, _ = os.path.splitext(src_entry)
         return ''.join((base, ".o"))
     
 
-    def get_doto_path(self, src_entry):
+    def make_doto_path(self, src_entry):
         base, _ = os.path.splitext(src_entry)
-        return os.path.join(self.path, self.cpp_data.intermediate_dir, ''.join((base, ".o")))
+        return os.path.normpath(os.path.join(self.path, self.cpp_data.intermediate_dir, ''.join((base, ".o"))))
         
         
-    def get_intermediate_dir(self):
-        return os.path.join(self.path, self.cpp_data.intermediate_dir)
-        
-        
-    def get_output_path(self):
-        return os.path.join(self.path, self.cpp_data.output_dir, self.get_output_name())
         
         
     def _make_std(self):
@@ -167,7 +202,8 @@ class cpp_tool(tool):
         
     
     def _make_src(self):
-        src = [os.path.join(self.path, self.cpp_data.source_dir, src) for src in self.cpp_data.sources]
+        src = [path.src_path for path in self.sources]
+#        src = [os.path.join(self.path, self.cpp_data.source_dir, src) for src in self.cpp_data.sources]
         return " ".join(src)
 
 
@@ -203,7 +239,7 @@ class cpp_tool(tool):
     
 
     def _make_dotos(self):
-        objs = [self.get_doto_path(src) for src in self.cpp_data.sources]
+        objs = [self.make_doto_path(src) for src in self.cpp_data.sources]
         return ' '.join(objs)
         
         
@@ -221,147 +257,108 @@ class cpp_tool(tool):
             return "`pkg-config --libs {}`".format(" ".join(packages))
         else:
             return ""
-
+            
 
     def _resolve_includes(self, src_path):
-        resolved = []
-        unresolved = []
-        # NOTE: See https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html
-        # for a description of all the gcc include dir flags (-I, -iquote, etc)
-        qdirs = [os.path.dirname(src_path)]
-        qdirs.extend(self.include_quote_dirs)
-        
-        def search_angle_dirs(inc_path, quote=False):
-            for base in self.include_angle_dirs:
-                full_path = os.path.join(base, inc_path)
-                if os.path.exists(full_path):
-                    resolved.append((inc_path, quote, full_path))
-                    return
-            unresolved.append(inc_path)
+        cpp_cmd = "cpp -M {std} {includes} {packages} {src}".format(
+            std = self._make_std(),
+            includes = self._make_include_dirs(),
+            packages = self._make_package_includes(),
+            src = src_path)
+        print (t.make_syscommand(cpp_cmd))
+        comp_proc = subprocess.run(cpp_cmd, input='', 
+            stdout=subprocess.PIPE, shell=True, universal_newlines=True)            
+        if comp_proc.returncode != 0:
+            self.sources[src_path].is_includes_resolved = False
+            raise PykeError('{0} resolving #includes for {1}'.format(
+                t.make_error('Error'),
+                t.make_file_name(src_path)))
 
-        def search_quote_dirs(inc_path):
-            for base in qdirs:
-                full_path = os.path.join(base, inc_path)
-                if os.path.exists(full_path):
-                    resolved.append((inc_path, True, full_path))
-                    return
-            search_angle_dirs(inc_path, quote=True)
-    
-        with open(src_path) as f:
-            for line in f:
-                inc_full_path = ""
-                m = self.include_quote_regex.match(line)
-                if m:
-                    inc_path = m.group(1)
-                    search_quote_dirs(inc_path)
-                else:
-                    m = self.include_angle_regex.match(line)
-                    if m:
-                        inc_path = m.group(1)
-                        search_angle_dirs(inc_path)
-            
-        return (resolved, unresolved)
+        self.sources[src_path].is_includes_resolved = True
+        self.sources[src_path].included_files = [f for d in comp_proc.stdout.splitlines()[1:]    # each line of input can have n paths
+                                                   for f in str(d).rstrip(" \\").split()]        # clean and split each line to list paths
 
 
     def _validate_src(self, src_entry):
-        src = self.get_src_path(src_entry)
+        src = self.make_src_path(src_entry)
         print ("Validating {0}:".format(
             t.make_file_name(src)))
-        res, unres = self._resolve_includes(src)
-        for dirr in res:
-            print ("{0} found at {1}".format(
-                t.make_include(dirr[0]), 
-                t.make_file_name(dirr[2])))
-        for dirr in unres:
-            print ("{0} not found.".format(
-                t.make_include(dirr)))
-        if len(unres) > 0:
-            raise PykeError("{0} failed validation.".format(
+        self._resolve_includes(src)
+        if not self.sources[src].is_includes_resolved:
+            raise PykeError("{0} has #include paths that cannot be resolved.".format(
                 t.make_file_name(src_entry)))
-        return (res, unres)
         
 
     def _build_all_objects(self, force=False):
         fail = False
-        for src in self.cpp_data.sources:
+        for _, source in self.sources.items():
             try:
-                self._build_object(src, force)
+                self._build_object(source.src_path, force)
             except PykeError as pe:
                 print (t.make_error("PykeError raised:"))
                 print (pe)
                 fail = True
-        
         if fail:
             raise PykeError("One or more objects failed to build.")
     
 
-    def _build_object(self, src_entry, force=False):
-        doto = self.get_doto_path(src_entry)
-        doto_dir, doto_file = os.path.split(doto)
+    def _build_object(self, src_path, force=False):
+        source = self.sources[src_path]
+        doto_dir, doto_file = os.path.split(source.doto_path)
         
         print ()
         title_bw = "Building {}".format(doto_file)
         title_co = "Building {}".format(t.make_file_name(doto_file))
         t.print_title(title_co, len(title_bw))
 
-        src = self.get_src_path(src_entry)
-        if not os.path.exists(src):
+        src_entry = self.sources[src_path].src_entry
+        if not os.path.exists(src_path):
             raise PykeError("{0} not found".format(
-                t.make_file_name(src)))
+                t.make_file_name(src_path)))
 
-        # Check for mtimes of include deps
-        deps_are_newer = False
-        res, unres = self._validate_src(src_entry)
+        self._validate_src(src_path)
         
         self._ensure_dir_exists(doto_dir)
 
-        if os.path.exists(doto):
-            doto_mtime = os.path.getmtime(doto)
-            for filee in (f[2] for f in res if f[1]):
-                if os.path.getmtime(filee) > doto_mtime:
-                    deps_are_newer = True
-        
         if (force or
-            deps_are_newer or
-            not os.path.exists(doto) or
-            os.path.getmtime(src) > os.path.getmtime(doto)):
+            not os.path.exists(source.doto_path) or
+            not source.is_up_to_date(source.doto_mtime)):
 
             include_dirs = self._make_include_dirs()
             config = self.cpp_data.compile_args
             if self.cpp_data.output_type == 'so':
                 config = ''.join((config, ' -fPIC'))
             
+            if os.path.exists(source.doto_path):
+                os.remove(source.doto_path)
+            
             gcc_cmd = "g++ {std} -c {config} {src} {includes} {packages} -o {doto}".format(
                 std = self._make_std(),
                 packages = self._make_package_includes(),
                 config = config,
                 includes = include_dirs,
-                src = src,
-                doto = doto)
+                src = src_path,
+                doto = source.doto_path)
 
-            if os.path.exists(doto):
-                os.remove(doto)
-            
             print (t.make_syscommand(gcc_cmd))
             comp_proc = subprocess.run(gcc_cmd, stdout=subprocess.PIPE, shell=True)
             if comp_proc.returncode != 0:
                 raise PykeError('{0} building {1}'.format(
                     t.make_error('Error'),
-                    t.make_file_name(doto)))
+                    t.make_file_name(source.doto_path)))
             else:
                 print ("{0} built {1}.".format(
-                    t.make_file_name(doto),
+                    t.make_file_name(source.doto_path),
                     t.make_success('successfully')))
             
         else:
             print ("{0} is up to date.".format(
-                t.make_file_name(doto)))
+                t.make_file_name(source.doto_path)))
                 
     
     def _link_objects(self, force=False):
         print ()
-        output_path = self.get_output_path()
-        output_dir, output_name = os.path.split(output_path)
+        output_dir, output_name = os.path.split(self.output_path)
         
         title_bw = "Building {}".format(output_name)
         title_co = "Building {}".format(t.make_file_name(output_name))
@@ -371,17 +368,17 @@ class cpp_tool(tool):
 
         if self.cpp_data.output_type == "lib":
             gcc_cmd = "ar cvq -o {outfile} {objs}".format(
-                outfile = output_path,
+                outfile = self.output_path,
                 objs = self._make_dotos())
             
         elif self.cpp_data.output_type == "so":
-            _, soname = os.path.split(output_path)
+            _, soname = os.path.split(self.output_path)
             soname = soname[0:soname.rindex('.')]
             gcc_cmd = "g++ {std} -shared -Wl,-soname,{name} {config} -o {outfile} {objs} {packages} {libs} {libdirs}".format(
                 std = self._make_std(),
                 name = soname,
                 config = self.cpp_data.link_args,
-                outfile = output_path,
+                outfile = self.output_path,
                 objs = self._make_dotos(),
                 packages = self._make_package_libs(),
                 libs = self._make_libs(),
@@ -391,13 +388,13 @@ class cpp_tool(tool):
             gcc_cmd = "g++ {std} {config} -o {outfile} {objs} {libdirs} {libs} {packages}".format(
                 std = self._make_std(),
                 config = self.cpp_data.link_args,
-                outfile = output_path,
+                outfile = self.output_path,
                 objs = self._make_dotos(),
                 libs = self._make_libs(),
                 libdirs = self._make_lib_dirs(),
                 packages = self._make_package_libs())
         
-        objs = [self.get_doto_path(src) for src in self.cpp_data.sources]
+        objs = [self.make_doto_path(src) for src in self.cpp_data.sources]
         newest_obj_time = max([os.path.getmtime(obj) for obj in objs])
         
         project_deps = [p.tool.get_output_path() for _, p in self.cpp_data.depends_on.items()]
@@ -405,34 +402,33 @@ class cpp_tool(tool):
             newest_obj_time = max(newest_obj_time, max([os.path.getmtime(p) for p in project_deps]))
         
         if (force or
-            not os.path.exists(output_path) or
-            newest_obj_time > os.path.getmtime(output_path)):
+            not os.path.exists(self.output_path) or
+            newest_obj_time > os.path.getmtime(self.output_path)):
 
-            if os.path.exists(output_path):
-                os.remove(output_path)
+            if os.path.exists(self.output_path):
+                os.remove(self.output_path)
         
             print (t.make_syscommand(gcc_cmd))
             comp_proc = subprocess.run(gcc_cmd, stdout=subprocess.PIPE, shell=True)
             if comp_proc.returncode != 0:
                 raise PykeError('{0} linking {1}'.format(
                     t.make_error('Error'),
-                    t.make_file_name(output_path)))
+                    t.make_file_name(self.output_path)))
             else:
                 print ("{0} linked {1}.".format(
-                    t.make_file_name(output_path),
+                    t.make_file_name(self.output_path),
                     t.make_success('successfully')))
         else:
             print ("{0} is up to date.".format(
-                t.make_file_name(output_path)))
+                t.make_file_name(self.output_path)))
 
 
     def _build_so_links(self, force=False):
-        output_path = self.get_output_path()
-        mod_name = output_path[0:output_path.rindex('.')]
+        mod_name = self.output_path[0:self.output_path.rindex('.')]
         if not os.path.lexists(mod_name):
             print ("Making soft link {}".format(t.make_file_name(mod_name)))
             os.unlink(mod_name)
-            os.symlink(output_path, mod_name)
+            os.symlink(self.output_path, mod_name)
         else:
             print ("{} is up to date.".format(
                 t.make_file_name(mod_name)))
@@ -441,15 +437,14 @@ class cpp_tool(tool):
         if not os.path.lexists(mod_name):
             print ("Making soft link {}".format(t.make_file_name(mod_name)))
             os.unlink(mod_name)
-            os.symlink(output_path, mod_name)
+            os.symlink(self.output_path, mod_name)
         else:
             print ("{} is up to date.".format(
                 t.make_file_name(mod_name)))
 
     
     def _build_lib(self, force=False):
-        output_path = self.get_output_path()
-        output_dir = os.path.dirname(output_path)
+        output_dir = os.path.dirname(self.output_path)
         self._ensure_dir_exists(output_dir)
         
         if self.cpp_data.whole_program:
@@ -459,7 +454,7 @@ class cpp_tool(tool):
                 wholeBuildArgs = self.cpp_data.whole_build_args,
                 packageIncludes = self._make_package_includes(),
                 includeDirs = self._make_include_dirs(),
-                outfile = output_path,
+                outfile = self.output_path,
                 src = self._make_src(),
                 libs = self._make_libs(),
                 libdirs = self._make_lib_dirs(),
@@ -472,8 +467,7 @@ class cpp_tool(tool):
         
     
     def _build_so(self, force=False):
-        output_path = self.get_output_path()
-        output_dir = os.path.dirname(output_path)
+        output_dir = os.path.dirname(self.output_path)
         self._ensure_dir_exists(output_dir)
         
         if self.cpp_data.whole_program:
@@ -484,7 +478,7 @@ class cpp_tool(tool):
                 wholeBuildArgs = self.cpp_data.whole_build_args,
                 packageIncludes = self._make_package_includes(),
                 includeDirs = self._make_include_dirs(),
-                outfile = output_path,
+                outfile = self.output_path,
                 src = self._make_src(),
                 libs = self._make_libs(),
                 libdirs = self._make_lib_dirs(),
@@ -499,8 +493,7 @@ class cpp_tool(tool):
         
     
     def _build_exe(self, force=False):
-        output_path = self.get_output_path()
-        output_dir = os.path.dirname(output_path)
+        output_dir = os.path.dirname(self.output_path)
         self._ensure_dir_exists(output_dir)
 
         if self.cpp_data.whole_program:
@@ -510,7 +503,7 @@ class cpp_tool(tool):
                 wholeBuildArgs = self.cpp_data.whole_build_args,
                 packageIncludes = self._make_package_includes(),
                 includeDirs = self._make_include_dirs(),
-                outfile = output_path,
+                outfile = self.self.output_path,
                 src = self._make_src(),
                 libs = self._make_libs(),
                 libdirs = self._make_lib_dirs(),
@@ -536,11 +529,10 @@ class cpp_tool(tool):
         
         try:
             with open(script_path, 'w') as f:
-                output_path = self.get_output_path()
-                output_dir = os.path.dirname(output_path)
+                output_dir = os.path.dirname(self.output_path)
                 if len(dep_d) > 0:
                     f.write('export LD_LIBRARY_PATH="$LD_LIBRARY_PATH;{}"\n'.format(sodirs))
-                f.write('{}\n'.format(output_path))
+                f.write('{}\n'.format(self.output_path))
         except IOError as e:
             raise PykeError(e)
             
@@ -552,27 +544,46 @@ class cpp_tool(tool):
 
     def is_up_to_date(self):
         for src in self.cpp_data.sources:
-            full_src = self.get_src_path(src)
+            full_src = self.make_src_path(src)
             src_mtime = os.path.get_mtime(full_src)
             try:
-                res, unres = self._resolve_includes(full_src)
-                # res contains [(label, quote, path),...]
-                # unres contains [label, ...]
-                for incf in res:
-                    if os.path.get_mtime(incf[2]) > src_mtime:
+                self._resolve_includes(full_src)
+                doto_path = self.make_doto_path(src)
+                doto_mtime = 0.0
+                ouput_path = self.get_output_path()
+                output_mtime = 0.0
+
+                if os.path.exists(doto_path):
+                    doto_mtime = os.path.getmtime(doto_path)
+
+                if os.path.exists(output_path):
+                    output_mtime = os.path.getmtime(output_path)
+
+                comparator = doto_mtime
+                if self.cpp_data.whole_program:
+                    comparator = outut_mtime
+
+                # If any include files are newer than the doto, we need to build.
+                for incf in self.included_files[full_src]:
+                    if os.path.get_mtime(incf) > comparator:
+                        print ("{0} is out of date by {1} (and possibly others).".format(
+                            t.make_file_name(src), t.make_file_name(incf)))
                         return False
                 
                 if self.cpp_data.whole_program:
-                    output_mtime = os.path.getmtime(self.get_output_path())
                     if src_mtime > output_mtime:
+                        print ("{0} is out of date by {1}.".format(
+                            t.make_file_name(src), t.make_file_name(output_path)))
                         return False
                 else:
-                    doto = self.get_doto_path(src)
-                    doto_mtime = os.path.getmtime(doto)
                     if src_mtime > doto_mtime:
+                        print ("{0} is out of date by {1}.".format(
+                            t.make_file_name(doto_path), t.make_file_name(full_src)))
                         return False
                         
-                    if doto_mtime > os.path.getmtime(self.get_output_path()):
+                    if doto_mtime > output_mtime:
+                        print ("{0} is out of date by {1}.".format(
+                            t.make_file_name(output_path), t.make_file_name(doto_path)))
                         return False
                 
             except IOError as e:
@@ -586,23 +597,19 @@ class cpp_tool(tool):
     def clean_project(self):
         print ("Cleaning object files from {}:".format(
             t.make_dir(self.get_intermediate_dir())))
-        for src in self.cpp_data.sources:
-            obj_path = self.get_doto_path(src)
-            if os.path.exists(obj_path):
-                print ("\tCleaning {0}".format(self.get_doto_subpath(src)))
-                os.remove(obj_path)
+        for source in self.sources:
+            if source.doto_exists:
+                print ("\tCleaning {0}".format(t.make_file_name(source.doto_path)))
+                os.remove(source.doto_path)
         
-        output_dir = os.path.join(self.path, self.cpp_data.output_dir)
         print ("Cleaning target files from {}:".format(
-            t.make_dir(output_dir)))
-        output_name = self.get_output_name()
-        output_path = os.path.join(self.path, self.cpp_data.output_dir, output_name)
-        if os.path.exists(output_path):
-            print ("\tCleaning {0}".format(output_name))
-            os.remove(output_path)
+            t.make_dir(self.output_dir)))
+        if os.path.exists(self.output_path):
+            print ("\tCleaning {0}".format(os.path.basename(self.output_path)))
+            os.remove(self.output_path)
     
         if self.cpp_data.output_type == "so":
-            mod_name = output_path[0:output_path.rindex('.')]
+            mod_name = self.output_path[0:self.output_path.rindex('.')]
             if os.path.lexists(mod_name):
                 print ("\tCleaning {}".format(mod_name))
                 os.unlink(mod_name)
