@@ -3,3 +3,5 @@ bin/
 obj/
 *.glade~
 *.pyc
+Pyke.egg-info/*
+.vscode/*

@@ -1,0 +1,420 @@
+{
+  "Usage value originate": {
+    "initial": {
+      "--test": {
+        "testValue": 1
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": 1,
+      "--test": {
+        "testValue": 1
+      }
+    }
+  },
+  "Mod value originate": {
+    "initial": {
+    },
+  
+    "modifiers": [
+      {
+        "--test": {
+          "testValue": 1
+        }
+      }
+    ],
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": 1,
+      "--test": {
+        "testValue": 1
+      }
+    }
+  },
+  "Usage value override": {
+    "initial": {
+      "testValue": 0,
+  
+      "--test": {
+        "testValue": 1
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": 1,
+      "--test": {
+        "testValue": 1
+      }
+    }
+  }, 
+  "Usage array override": {
+    "initial": {
+      "testValue": ["0"],
+      "--test": {
+        "testValue": ["1"]
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": ["1"],
+      "--test": {
+        "testValue": ["1"]
+      }
+    }
+  },
+  "Usage array add to empty": {
+    "initial": {
+      "testValue": [],
+      "--test": {
+        "+ testValue": ["2"]
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": ["2"],
+      "--test": {
+        "+ testValue": ["2"]
+      }
+    }
+  },
+  "Usage array add": {
+    "initial": {
+      "testValue": ["0"],
+      "--test": {
+        "+ testValue": ["1"]
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": ["0", "1"],
+      "--test": {
+        "+ testValue": ["1"]
+      }
+    }
+  },
+  "Usage array subtract": {
+    "initial": {
+      "testValue": ["0", "1"],
+      "--test": {
+        "- testValue": ["0"]
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": ["1"],
+      "--test": {
+        "- testValue": ["0"]
+      }
+    }
+  },
+  "Usage array subtract and add": {
+    "initial": {
+      "testValue": ["0", "1"],
+      "--test": {
+        "- testValue": ["0"],
+        "+ testValue": ["2"]
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": ["1", "2"],
+      "--test": {
+        "- testValue": ["0"],
+        "+ testValue": ["2"]
+      }
+    }
+  }, 
+  "Usage then usage of usage": {
+    "initial": {
+      "--test": {
+        "--testTest": {
+          "testValue": 1
+        }
+      }
+    },
+  
+    "usages": ["test", "testTest"],
+  
+    "result": {
+      "testValue": 1,
+      "--test": {
+        "--testTest": {
+          "testValue": 1
+        }
+      },
+      "--testTest": {
+        "testValue": 1
+      }
+    }
+  },
+  "Modify then usage then usage of usage": {
+    "initial": {
+    },
+  
+    "modifiers": [
+      {
+        "--test": {
+          "--testTest": {
+            "testValue": 1
+          }
+        }
+      }
+    ],
+  
+    "usages": ["test", "testTest"],
+  
+    "result": {
+      "testValue": 1,
+      "--test": {
+        "--testTest": {
+          "testValue": 1
+        }
+      },
+      "--testTest": {
+        "testValue": 1
+      }
+    }
+  },
+  "Modify then usage then usage": {
+    "initial": {
+      "testValue": 0,
+      "--test": {
+        "testValue": 1
+      }
+    },
+  
+    "modifiers": [
+      {
+        "--testTest": {
+          "testValue": 2
+        }
+      }
+    ],
+  
+    "usages": ["test", "testTest"],
+  
+    "result": {
+      "testValue": 2,
+      "--test": {
+        "testValue": 1
+      },
+      "--testTest": {
+        "testValue": 2
+      }
+    }
+  },
+  "Usage override twice": {
+    "initial": {
+      "--test": {
+        "testValue": 1
+      }
+    },
+  
+    "usages": ["test", "test"],
+  
+    "result": {
+      "testValue": 1,
+      "--test": {
+        "testValue": 1
+      }
+    }
+  },
+  "Usage add twice": {
+    "initial": {
+      "testValue": ["a"],
+      "--test": {
+        "+ testValue": ["b"]
+      }
+    },
+  
+    "usages": ["test", "test"],
+  
+    "result": {
+      "testValue": ["a", "b"],
+      "--test": {
+        "+ testValue": ["b"]
+      }
+    }
+  },
+  "Alias use left": {
+    "initial": {
+      "--test|t": {
+        "testValue": 1
+      }
+    },
+  
+    "usages": ["test"],
+  
+    "result": {
+      "testValue": 1,
+      "--test|t": {
+        "testValue": 1
+      }
+    }
+  },
+  "Alias use right": {
+    "initial": {
+      "--test|t": {
+        "testValue": 1
+      }
+    },
+  
+    "usages": ["t"],
+  
+    "result": {
+      "testValue": 1,
+      "--test|t": {
+        "testValue": 1
+      }
+    }
+  },
+  "Resolve group 1": {
+    "initial": {
+      "--test:grp": {
+        "testValue": 1
+      },
+      "--bar:grp": {
+        "testValue": 2
+      },
+      "usageGroupDefaults": ["grp:test"]
+    },
+    
+    "result": {
+      "testValue": 1,
+      "--test:grp": {
+        "testValue": 1
+      },
+      "--bar:grp": {
+        "testValue": 2
+      },
+      "usageGroupDefaults": ["grp:test"]
+    }
+  },
+  "Resolve group 2": {
+    "initial": {
+      "--bar:grp": {
+        "testValue": 1
+      },
+      "--test:grp": {
+        "testValue": 2
+      },
+      "usageGroupDefaults": ["grp:test"]
+    },
+  
+    "result": {
+      "testValue": 2,
+      "--bar:grp": {
+        "testValue": 1
+      },
+      "--test:grp": {
+        "testValue": 2
+      },
+      "usageGroupDefaults": ["grp:test"]
+    }
+  },
+  "Resolve group with two usages": {
+    "initial": {
+      "--t0:grp": {
+        "testValue0": 0
+      },
+      "--t1:grp": {
+        "testValue1": 1
+      },
+      "--t2:grp": {
+        "testValue2": 2
+      },
+      "usageGroupDefaults": ["grp:t0:t2"]
+    },
+  
+    "result": {
+      "testValue0": 0,
+      "testValue2": 2,
+      "--t0:grp": {
+        "testValue0": 0
+      },
+      "--t1:grp": {
+        "testValue1": 1
+      },
+      "--t2:grp": {
+        "testValue2": 2
+      },
+      "usageGroupDefaults": ["grp:t0:t2"]
+    }
+  },
+  "No need to resolve selected group": {
+    "initial": {
+      "--test:grp": {
+        "testValue": 1
+      },
+      "--bar:grp": {
+        "testValue": 2
+      },
+      "usageGroupDefaults": ["grp:test"]
+    },
+  
+    "usages": ["bar"],
+  
+    "result": {
+      "testValue": 2,
+      "--test:grp": {
+        "testValue": 1
+      },
+      "--bar:grp": {
+        "testValue": 2
+      },
+      "usageGroupDefaults": ["grp:test"]
+    }
+  },
+  "Inherited group defaults": {
+    "initial": {
+      "--t0:grp0": {
+        "testValue0": 0,
+        "+ usageGroupDefaults": ["grp1:t1"]
+      },
+      "--t1:grp1": {
+        "testValue1": 1,
+        "+ usageGroupDefaults": ["grp2:t2"]
+      },
+      "--t2:grp2": {
+        "testValue2": 2
+      },
+      "usageGroupDefaults": ["grp0:t0"]
+    },
+    
+    "result": {
+      "testValue0": 0,
+      "testValue1": 1,
+      "testValue2": 2,
+      "--t0:grp0": {
+        "testValue0": 0,
+        "+ usageGroupDefaults": ["grp1:t1"]
+      },
+      "--t1:grp1": {
+        "testValue1": 1,
+        "+ usageGroupDefaults": ["grp2:t2"]
+      },
+      "--t2:grp2": {
+        "testValue2": 2
+      },
+      "usageGroupDefaults": ["grp0:t0", "grp1:t1", "grp2:t2"]
+    }
+  }
+
+}

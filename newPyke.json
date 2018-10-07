@@ -1,0 +1,33 @@
+{
+    "default-usages": ["project:foo"],
+    "+ pykeExtDirs": ["pyke"],
+
+    "--bar:proejct": {
+        "version": "0.3.0",
+        "name": "bar",
+        "+ sources": ["bar.cpp"],
+        "+ is": ["c++", "so"]
+    },
+
+    "--foo:project": {
+        "version": "0.1.0",
+        "name": "foo",
+        "+ sources": ["foo.cpp"],
+        "+ resources": ["foo.png"],
+        "+ packages": ["gtkmm3"],
+        "+ is": ["c++", "exe"],
+        "+ depends-on": [
+            "bar"
+        ],
+        "+ bar-uses": [
+            "%{edition}"
+        ],
+        "--debug": {
+            "intermediate-dir": "obj/debugO3",
+            "- compile-args": ["-Og"],
+            "+ compile-args": ["-O3"],
+            "- whole-build-args": ["-Og"],
+            "+ whole-build-args": ["-O3"]
+        }
+    }
+}

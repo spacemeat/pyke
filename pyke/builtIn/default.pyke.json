@@ -1,0 +1,14 @@
+{
+  "name": "(name unspecified)",
+  "type": "project",
+  "version": "0.0.0",
+  "pykeFileSearchDirs": [],
+  "depends-on": [],
+  "pykeExtDirs": [],
+  "! describe|d": {
+    "doc": {
+      "short": "Describe the project.",
+      "long": "Display a discription of the project and its commands."
+    }
+  }
+}

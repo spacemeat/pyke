@@ -1,5 +1,6 @@
 import os
 import json
+from JsonData import JsonData
 from terminal import terminal as t
 from timer import timer
 import inspect
@@ -15,32 +16,11 @@ import inspect
 #"pyke fracto: config: debug; set: version, 2.1.0; build"
 
 
-def get_json_val(coll, key, default):
-    if key in coll:
-        return coll[key]
-    else:
-        return default
-
-
-def _merge_json(dest_json, src_json):
-    #print (src_json)
-    for key, value in src_json.items():
-        if key in dest_json:
-            if isinstance(dest_json[key], list) and isinstance(value, list):
-                for item in value:
-                    dest_json[key].append(item)
-            elif isinstance(dest_json[key], dict) and isinstance(value, dict):
-                _merge_json(dest_json[key], value)
-            else:
-                dest_json[key] = value
-        else:
-            dest_json[key] = value
-    
-
 class project():
     def __init__(self, path, json_data = {}):
         self.path = path
         self.name = get_json_val(json_data, "name", "<nu>")
+        self.applied_configs = []
         self.project_type = get_json_val(json_data, "type", "project")
         self.depends_on = dict()
 
@@ -51,7 +31,6 @@ class project():
         self.json_data = dict()
         self._apply_template()
         self._apply_json_additive(json_data)
-        self._apply_default_configuration()
         
         self.json_commands = dict()
         self.map_json_commands()
@@ -156,13 +135,14 @@ class project():
     def _run_op_config(self, command):
         if 'configurations' not in self.json_data:
             raise ValueError("No configurations defined in {0}.".format(t.make_project_name(self.name)))
-
+        
         for config_cmds in command.children:
             name = config_cmds.name
             self._apply_config(name)
         
 
     def _apply_config(self, name):
+        print ("Available configurations: {}".format(self.json_data['configurations'].keys()))
         if name not in self.json_data['configurations']:
             raise ValueError("No configuration named {0} defined in {1}.".format(
                 t.make_configuration(name),
@@ -170,6 +150,7 @@ class project():
         print ("Applying configuration {}.".format(
             t.make_configuration(name)))
         self._apply_json_additive(self.json_data['configurations'][name])
+        self.applied_configs.append(name)
             
     
     def _run_op_set(self, command):

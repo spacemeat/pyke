@@ -1,0 +1,146 @@
+{
+  "name": "c++_project",
+  "type": "c++",
+  "version": "0.0.0",
+  "+ depends-on": [],
+  "output-type": "exe",
+  "multithreaded": true,
+  "whole-program": false,
+  "whole-opt": false,
+  "+ include-dirs": ["inc"],
+  "use-std-include-dirs": true,
+  "source-dir": "src",
+  "resource-dir": "res",
+  "+ lib-dirs": [],
+  "intermediate-dir": "obj",
+  "output-dir": "bin",
+  "edition-marker": "",
+  "+ sources": [],
+  "+ resources": [],
+  "+ packages": [],
+  "+ libs": [],
+  "+ usageGroupDefaults": [
+    "platform:linux-gnu"
+  ],
+  "--linux-gnu:platform": {
+    "compile-tool": "g++",
+    "archive-tool": "ar",
+    "link-tool": "g++",
+    "whole-build-tool": "g++",
+    "compile-cmds": [      
+      "%{compile-tool} %{use-std} %{compile-args} %{c++Src} %{includes} %{packages-include} -o %{include-dirs} %{objectPath}"
+    ],
+    "archive-cmds": [
+      "%{archive-tool} %{ar-args} -o %{outputPath} %{objectPaths}"
+    ],
+    "link-cmds": [      
+      "%{link-tool} %{use-std} %{link-args} -o %{outputPath} %{objectPaths} %{packages-link} %{libs} %{lib-dirs}"
+    ],
+    "whole-build-cmds": [
+      "%{whole-build-tool} %{use-std} %{whole-build-args} %{includes} %{packages-include} %{include-dirs} -o %{outputPath} %{objectPaths} %{packages-link} %{libs} %{lib-dirs}"
+    ],
+    "+ compile-args": [
+      "-Wall",
+      "-c"
+    ],
+    "+ link-args": ["-Wall"],
+    "+ whole-build-args": ["-Wall"],
+    "+ usageGropuDefaults": [
+      "c++Std:c++14",
+      "kind:exe",
+      "edition:debug"
+    ],
+    "--c++11|11:c++Std": {
+      "use-std": "c++11"
+    },
+    "--c++14|14:c++Std": {
+      "use-std": "c++14"
+    },
+    "--c++17|17:c++Std": {
+      "use-std": "c++17"
+    },
+    "--lib|l:kind": {
+      "output-type": "lib",
+      "output-name": "lib%{name}%{edition-marker}.a",
+      "+ ar-args": "cvq"
+    },
+    "--so|s:kind": {
+      "output-type": "so",
+      "output-name": "lib%{name}%{edition-marker}.so.%{version-major}.%{version-minor}",
+      "+ compile-args": [
+        "-fPIC"
+      ],
+      "+ link-args": [
+        "-shared",
+        "-Wl,soname,%{soname}"
+      ],
+      "+ whole-build-args": [
+        "-fPIC",
+        "-shared",
+        "-Wl,soname,%{soname}"
+      ]
+    },
+    "--exe|e:kind": {
+      "output-type": "exe",
+      "output-name": "%{name}%{edition-marker}",
+      "! run|r": {
+        "doc": {
+          "short": "Run the resulting executable.",
+          "long": "Runs the built executable in place, making sure to properly reference any dependent libraries."
+        }
+      }
+    },
+    "--debug|d:edition": {
+      "edition": "debug",
+      "output-dir": "bin/debug",
+      "edition-marker": ".d",
+      "+ lib-dirs": [
+        "bin/debug"
+      ],
+      "intermediate-dir": "obj/debug",
+      "+ compile-args": [
+        "-g",
+        "-Og",
+        "-fno-inline"
+      ],
+      "+ whole-build-args": [
+        "-g",
+        "-Og",
+        "-fno-inline"
+      ]
+    },
+    "--release|r:edition": {
+      "edition": "release",
+      "output-dir": "bin/release",
+      "edition-marker": ".r",
+      "+ lib-dirs": [
+        "bin/release"
+      ],
+      "intermediate-dir": "obj/release",
+      "+ compile-args": [
+        "-DNDEBUG",
+        "-O3"
+      ],
+      "+ whole-build-args": [
+        "-DNDEBUG",
+        "-O3"
+      ]
+    }
+  },
+  "doc": {
+    "short": "Defines a C++ project.",
+    "long": "Defines the operations for building and maintaining a C++ project. The full suite of tools for building, deploying, and testing a C++ project can be found here."
+  },
+  "! clean|c": {
+    "doc": {
+      "short": "Clean the tree.",
+      "long": "Deletes all intermediate files generated from the build. Essentially, put the tree into a fresh state."
+    }
+  },
+  "! build|b": {
+    "doc": {
+      "short": "Build the project.",
+      "long": "Build the C++ project, according to the json."
+    }
+  }
+}

@@ -1,29 +1,42 @@
 import time
-from terminal import terminal as t
+from .terminal import terminal as t
 
 
 class task_timer():
-    def __init__(self, on = True):
+    def __init__(self, startingLabel = "start", on = True):
+        self.startingLabel = startingLabel
         self.is_timer_on = on
         self.timer_marks = []
-        self.timer_marks.append(("start", time.perf_counter()))
+        self.depth = 0
+        self.running_timers = []
+        if on:
+            self.start(self.startingLabel)
     
 
-    def reset(self):
-        if self.is_timer_on == False:
-            self.is_timer_on = True
-            self.timer_marks = []
-            self.timer_marks.append(("start", time.perf_counter()))
-        
-
-    def mark(self, mark):
+    def start(self, label):
         tm = time.perf_counter()
-        self.timer_marks.append((mark, tm))
-        print ("{0}Mark '{1}': Time since last mark: {2:.3f} s{3}".format(
-            t.push_state({ 'fg-color' : 'system-dk-magenta', 'bold' : 'off' }),
-            t.make_timer_mark(mark),
-            tm - self.timer_marks[-2][1],
-            t.pop_states()))
+        self.running_timers.append((label, tm))
+        self.depth += 1
+
+
+    def done(self):
+        tm = time.perf_counter()
+        if len(self.running_timers) == 0:
+            raise RuntimeError('done() called with no tiers running.')
+
+        label, st = self.running_timers.pop()
+        self.depth -= 1
+        self.timer_marks.append((label, st, tm - st, self.depth))
+
+#    def mark(self, label):
+#        tm = time.perf_counter()
+#        self.timer_marks.append((self.label, tm))
+#        self.label = label
+#        print ("{0}Mark '{1}': Time since last mark: {2:.3f} s{3}".format(
+#            t.push_state({ 'fg-color' : 'system-dk-magenta', 'bold' : 'off' }),
+#            t.make_timer_mark(mark),
+#            tm - self.timer_marks[-2][1],
+#            t.pop_states()))
 
 
     def report(self):
@@ -31,15 +44,12 @@ class task_timer():
         print ("{0:>40}  {1}".format("Operation", "Time"))
         print ("{0:>40}  {1}".format("---------", "----"))
         print (t.push_state({ 'fg-color' : 'system-lt-magenta', 'bold' : 'off' }))
-        for i in range(1, len(self.timer_marks)):
-            print ("{0:>40}  {1:.3f} s".format(self.timer_marks[i][0],
-                self.timer_marks[i][1] - self.timer_marks[i - 1][1]))
+        for i in range(0, len(self.timer_marks)):
+            label, start, duration, depth = self.timer_marks[i]
+            print ("{0:>40}  {1:.3f} s".format(label, duration))
         print (t.pop_states())
         print ("{0:>40}  {1}".format("---------", "----"))
         print ("{0:>40}  {1:.3f} s".format("Total time:",
-            self.timer_marks[-1][1] - self.timer_marks[0][1]))
+            self.timer_marks[0][2]))
         print (t.pop_states())
-    
-
-timer = task_timer()
 

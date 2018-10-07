@@ -1,0 +1,32 @@
+{
+    "cow": {},
+    "dog": {
+        "happy": {}
+    },
+    "cat": {
+        "happy": {
+            "sounds": [
+                "purr",
+                "mrowf"
+            ],
+            "actions": {
+                "head": "bump",
+                "paws": "biscuits",
+                "tail": "flop",
+                "bod": "streeeeeetch"
+            }
+        },
+        "sad": {
+            "sounds": [
+                "mewl",
+                "quiet"
+            ],
+            "actions": {
+                "head": "low",
+                "paws": "bored",
+                "tail": "droopy",
+                "bod": "lazy"
+            }
+        }
+    }
+}

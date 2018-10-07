@@ -1,0 +1,67 @@
+    $ pyke verbosity=terse project=myproject op=use:x64,debug op=clean op=build
+           ^^ default      ^^ default is 'project'
+                                   ^^ default is value of 'default-project' in the json, or whatever project is first
+                                                                    ^^ alias 'c'
+                                                       ^^ 'x64' is added by default, if on such a system (and on)
+                                                           ^^ 'debug' is defined by the project's 'default-configuration'
+                                             ^^ if project is defined, default is 'op'
+                                                                 ^^ a project can define operation aliases
+                                                                 ^^ default is still 'op', so this works
+
+Which compresses down to:
+    $ pyke c b
+
+    
+    $ pyke verbosity=terse project=myproject:(x64:sse3),debug op=clean,build
+    $ pyke myproject:(x64:sse3),debug c b
+    $ pyke c b
+
+
+
+
+    $ pyke set: verbosity=terse use: myproject x64 debug do: clean build
+           ^^ set: is implied by k=v formulation
+    $ pyke verbosity=terse use: myproject x64 debug do: clean build
+           ^^ keys and values can have aliases
+    $ pyke v=t use: myproject x64 debug do: clean build
+           ^^ verbosity is 'terse' by default
+    $ pyke use: myproject x64 debug do: clean build
+           ^^ use: is default command
+    $ pyke myproject x64 debug do: clean build
+           ^^ pyke.json/defaultUses can be set to 'myproject'
+    $ pyke x64 debug do: clean build
+           ^^ 'x64' implied by this machine's arch (let's pretend it's an x64 machine)
+    $ pyke debug do: clean build
+           ^^ 'debug' can have an alias 
+    $ pyke d do: clean build
+              ^^ 'do' is the next expected mode
+    $ pyke d : clean build
+                ^^ commands can have aliases
+    $ pyke d : c b
+    
+
+Operations:
+STOMP:
+a.json ! b.json
+a.json b.json
+Replaces nodes in a with nodes in b, at top levels (doesn't merge). Arrays are replaced. Strings are replaced. KVPs in b that have no counterpart in a are added.
+
+ADD:
+a.json + b.json
+Merges like keys' values. For arrays, this appends array entries, a.append(*b). For dicts, this further merges child nodes. For strings, ' '.join(a, b). ???Numbers are added. ???Bools are or'd.
+
+SUBTRACT:
+a.json - b.json
+Removes like keys' values. For arrays, this removes array entries. For dicts, this further removes child nodes. For strings, a = a.remove(b). ???Numbers, bools, ?
+
+
+-----------------------------------
+NO.
+
+It looks like this:
+
+pyke verbosity=terse --myproject --x64 --debug clean build
+pyke --myproject --c++14 --debug clean build
+pyke --c++14 --debug clean build
+pyke clean build
+pyke c b

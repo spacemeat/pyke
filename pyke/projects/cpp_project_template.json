@@ -44,8 +44,6 @@
                 "bin/release"
             ],
             "intermediate-dir": "obj/release",
-            "whole-program": false,
-            "whole-opt": false,
             "packages": [],
             "libs": [],
             "compile-args": "-Wall -DNDEBUG -O3",

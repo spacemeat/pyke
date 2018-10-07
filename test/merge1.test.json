@@ -1,0 +1,57 @@
+{
+    "cow": {
+        "happy": {
+            "sounds": [
+                "moo",
+                "moooooo"
+            ],
+            "actions": {
+                "head": "chew",
+                "paws": "stand",
+                "tail": "flop",
+                "bod": "poop"
+            }
+        }
+    },
+    "dog": {
+        "happy": {
+            "sound": [
+                "arf",
+                "woof",
+                "bark"
+            ]
+        },
+        "sad": {
+            "actions": {
+                "head": "low",
+                "paws": "front",
+                "tail": "droopy",
+                "bod": "tired"
+            }
+        }
+    },
+    "cat": {
+        "happy": {
+            "sounds": [
+                "purr",
+                "purrrrrrr"
+            ],
+            "actions": {
+                "head": "bump",
+                "paws": "biscuits",
+                "tail": {
+                    "base": ["pivot"],
+                    "tip": ["flip", "twit"]
+                },
+                "whiskers": "twitch"
+            }
+        }
+    },
+    "pig": {
+        "happy": {
+            "sounds": [
+                "You're under arrest!"
+            ]
+        }
+    }
+}

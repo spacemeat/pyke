@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 # TODO: Finish this out. This is not ready yet.
-raise ValueError("Not implemented")
+#raise ValueError("Not implemented")
 
 setup(name='Pyke',
       version='1.0',

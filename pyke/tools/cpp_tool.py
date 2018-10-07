@@ -7,7 +7,7 @@ from error import PykeError
 from .tool import tool
 
 class cpp_data:
-    def __init__(self, project, json_data, configuration = None):
+    def __init__(self, project, json_data):
         self.version = json_data['version']
         self.output_type = json_data['output-type']
         self.use_std = json_data['use-std']
@@ -30,7 +30,7 @@ class cpp_data:
         self.whole_program = json_data['whole-program']
         self.whole_opt = json_data['whole-opt']
         self.depends_on = project.depends_on
-
+        self.applied_configs = project.applied_configs
 
 class cpp_source:
     def __init__(self, src_entry, path, doto_path, simulate):
@@ -523,23 +523,45 @@ class cpp_tool(tool):
         dep_p = [p for _, p in self.cpp_data.depends_on.items()]
         dep_d = [os.path.dirname(p.tool.get_output_path()) for p in dep_p if p.tool.cpp_data.output_type == 'so']
         sodirs = ';'.join(dep_d)
-        
-        script_path = os.path.join(self.path, 'run.sh')
-        print ("Making run script {}".format(t.make_file_name(script_path)))
-        
-        try:
-            with open(script_path, 'w') as f:
-                output_dir = os.path.dirname(self.output_path)
-                if len(dep_d) > 0:
-                    f.write('export LD_LIBRARY_PATH="$LD_LIBRARY_PATH;{}"\n'.format(sodirs))
-                f.write('{}\n'.format(self.output_path))
-        except IOError as e:
-            raise PykeError(e)
+
+        def write_script(debug):
+            debug_mark = ''
+            debug_cmd = ''
+
+            if debug:
+                debug_mark = '.d'
+                debug_cmd = 'gdb '
+
+            script_path = os.path.join(self.path, 'run.{}{}.sh'.format(
+                os.path.basename(self.output_path), 
+                debug_mark))
+            print ("Making run script {}".format(t.make_file_name(script_path)))
             
-        try:
-            os.chmod(script_path, 0o755)
-        except OSError as e:
-            raise PykeError(e)
+            try:
+                with open(script_path, 'w') as f:
+                    output_dir = os.path.dirname(self.output_path)
+                    if len(dep_d) > 0:
+                        f.write('export LD_LIBRARY_PATH="$LD_LIBRARY_PATH;{}"\n'.format(sodirs))
+                    if debug:
+                        f.write('{}{} "$@"\n'.format(debug_cmd, self.output_path))
+                    else:
+                        f.write('{} "$@"\n'.format(self.output_path))
+            except IOError as e:
+                raise PykeError(e)
+                
+            try:
+                os.chmod(script_path, 0o755)
+            except OSError as e:
+                raise PykeError(e)
+
+        debug = False
+        for config in self.cpp_data.applied_configs:
+            if config == 'debug':
+                debug = True
+            elif config == 'release':
+                debug = False
+
+        write_script(debug)
 
 
     def is_up_to_date(self):
