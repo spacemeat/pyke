@@ -1,7 +1,7 @@
 import os
 import json
 from pyke.terminal import terminal as t
-from pyke.timer import task_timer as Timer
+from pyke.timer import timer
 import inspect
 
 class Project:
@@ -9,18 +9,23 @@ class Project:
     self.dependencyProjects = []
     self.path = path
     self.data = data
+    """
     self.commands = []
     for k in self.data.data:
       if k.startswith('!'):
         command = k[1:].strip()
         self.commands.append(command)
-  
+    """
 
   def doCommand(self, command):
-    if self.data.get('verbosity') == 'debug':
-      print (f'Starting command "{command}"')
-    if self.doCommandOverride(command) == False:
-      raise PykeError(f'No command "{t.make_command_name(command)}" was found.')
+    timer.start(f'Command: {command}')
+    try:
+      if self.data.get('verbosity') == 'debug':
+        print (f'Starting command "{command}"')
+      if self.doCommandOverride(command) == False:
+        raise PykeError(f'No command "{t.make_command_name(command)}" was found.')
+    finally:
+      timer.done()
 
 
   def doCommandOverride(self, command):
@@ -68,13 +73,28 @@ class Project:
     elif verbosity == 'verbose':
       print ('Pass any number of these commands once usages are set. Each will be run in sequence:')
     
-    for command in self.commands:
-      commandKey = ''.join(['!', command])
-      if self.data.get(commandKey):
-        if verbosity == 'terse':
-          print (f'  {t.make_command(command)}: {self.data.get(commandKey).get("short", "<no desc>")}')
-        elif verbosity == 'verbose':
-          print (f'  {t.make_command(command)}: {self.data.get(commandKey).get("long", "<no desc>")}')
+    commandsSeen = set()
+    for commandName, command in self.data.commands.items():
+      if commandName in commandsSeen:
+        continue
+
+      for co in command.aliases:
+        commandsSeen.add(co)
+
+      commandAliases = f'  {" | ".join([f"{al}" for al in command.aliases])}'
+
+      subTree = command.subTree
+      docTree = subTree.get('doc', {})
+      if verbosity == 'terse':
+        desc = docTree.get('short', '')
+        if desc == '':
+          desc = docTree.get('long', '<no desc>')
+        print (f'  {t.make_command(commandAliases)}: {desc}')
+      elif verbosity == 'verbose':
+        desc = docTree.get('long', '')
+        if desc == '':
+          desc = docTree.get('short', '<no desc>')
+        print (f'  {t.make_command(commandAliases)}: {desc}')
     print('')
 
 

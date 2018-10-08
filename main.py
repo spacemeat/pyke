@@ -3,7 +3,7 @@ import sys
 import importlib
 from pyke.PykeError import PykeError
 from pyke.terminal import terminal as t
-from pyke.timer import task_timer as Timer
+from pyke.timer import timer
 from pyke.FileFinder import FileFinder
 from pyke.ObjectData import ObjectData, Usage
 import pyke.FileFinder
@@ -15,10 +15,6 @@ def printUsage():
 
 def makeNewProject(path, data):
   peeDirs = []
-#  peeDir = os.path.join(os.path.dirname(__file__), "projects")
-#  if peeDir not in sys.path:
-#    peeDirs.append(peeDir)
-
   for peeDir in data.get('pykeExtDirs', []):
     if not os.path.isabs(peeDir):
       peeDir = os.path.join(os.path.dirname(path), peeDir)
@@ -43,71 +39,69 @@ def makeNewProject(path, data):
 
 
 def main(args):
-  timer = Timer("pyke")
+  timer.start("pyke")
+  try:
+    shouldPrintUsage = False
 
-  shouldPrintUsage = False
+    # prime FileFinder's search list
+    FileFinder.includeSearchDirectory(os.getcwd())
 
-  # prime FileFinder's search list
-  FileFinder.includeSearchDirectory(os.getcwd())
+    pykeEnvDirs = [d for d in 
+      os.environ.get('PYKE_DIRS', '').split(os.pathsep) 
+      if d != '']
+    for peDir in pykeEnvDirs:
+      FileFinder.includeSearchDirectory(peDir)
 
-  pykeEnvDirs = [d for d in 
-    os.environ.get('PYKE_DIRS', '').split(os.pathsep) 
-    if d != '']
-  for peDir in pykeEnvDirs:
-    FileFinder.includeSearchDirectory(peDir)
+    pykeBuiltInDir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), 'pyke/builtIn'))
+    FileFinder.includeSearchDirectory(pykeBuiltInDir)
 
-  pykeBuiltInDir = os.path.abspath(
-      os.path.join(os.path.dirname(__file__), 'pyke/builtIn'))
-  FileFinder.includeSearchDirectory(pykeBuiltInDir)
+    data = ObjectData()
+    data.use('default')
+    data.use('')
 
-  data = ObjectData()
-  data.use('default')
-  data.use('')
+    project = None
 
-  project = None
+    if data.get('verbosity') == 'debug':
+      print (str(FileFinder()))
 
-  if data.get('verbosity') == 'debug':
-    print (str(FileFinder()))
+    # parse command line
+    for statement in args:
+      if '=' in statement:
+        operands = statement.split('=')
+        typ = operands[0]
+        val = operands[1]
+        data.setValue(typ, val)
 
-  # parse command line
-  for statement in args:
-    if '=' in statement:
-      operands = statement.split('=')
-      typ = operands[0]
-      val = operands[1]
-      data.setValue(typ, val)
-    elif statement.startswith('--'):
-      pykeFileJson = getPykeFileJson()
-      usage = statement[2:]
-      data.use(usage)
-    elif statement.startswith(':'):
-      _, *groups = statement.split(':')
-      groups = [g for g in groups if g != '']
-      if len(groups) > 0:
-        for group in groups:
-          data.resolveGroupDefault(group)
+      elif statement.startswith('--'):
+        pykeFileJson = getPykeFileJson()
+        usage = statement[2:]
+        data.use(usage)
+
+      elif statement.startswith(':'):
+        _, *groups = statement.split(':')
+        groups = [g for g in groups if g != '']
+        if len(groups) > 0:
+          for group in groups:
+            data.resolveGroupDefault(group)
+        else:
+          data.resolveAllGroupDefaults()
+
       else:
-        data.resolveAllGroupDefaults()
-    else:
-      command = statement
-      try:
-        if project == None:
-          project = makeNewProject(data.pykeFilePath, data)
-        project.doCommand(command)
-      except PykeError as e:
-        print (f'{t.make_error("Error:")} {str(e)}')
-        shouldPrintUsage = True
-        break
+        command = statement
+        try:
+          if project == None:
+            project = makeNewProject(data.pykeFilePath, data)
+          project.doCommand(command)
 
-  if shouldPrintUsage:
-    printUsage()
-  
-  timer.done()
-  timer.report()
+        except PykeError as e:
+          print (f'{t.make_error("Error:")} {str(e)}')
+          shouldPrintUsage = True
+          break
 
-  # print (str(data))
+    if shouldPrintUsage:
+      printUsage()
 
-"""
-if __name__ == '__main__':
-    main(args)
-"""
+  finally:
+    timer.done()
+    timer.report()

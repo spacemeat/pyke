@@ -1,11 +1,20 @@
-chain clean commands
+Switch from .terminal to ansiTerm
 
-add -aggro to clean to fully wipe directories
+Finish conversion to c++_pykeProject, excise project, cpp_project
+
+Finish conversion for c++_tool
+
+Rejigger tests (again), add E2E tests
+
+Maybe hoist ObjectData to its own package
+
+Clean up docstrings, etc
+
+propagate commands to dependent projects
+
+add -wrath to clean to fully wipe directories
 
 add verbosity to all commands
-
-completely rekajigger the command line to allow for selection of project, operation, config, 
-    and additional switches / overrides
 
 add rebuild alias
 
@@ -16,10 +25,10 @@ copy res/* to bin/config/res/*
 
 Rename generated run script to be named per-project, so no stompy-stompy.
 
-pkg-config commad line options support in .json. (--static, etc)
+pkg-config command line options support in .json. (--static, etc)
 
-Allow $VAR expansion in string fields (for paths).
+Allow $var expansion in string fields (for paths, etc).
 
-Extend header validation to all headers, using cpp to get all of them.
+Allow %var expansion in string fields.
 
-Handle paths with spaces in'em
+Handle paths with spaces in'em :(

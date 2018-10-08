@@ -2,6 +2,7 @@ import json
 from .PykeError import PykeError
 from .FileFinder import FileFinder
 from .terminal import terminal as t
+from .timer import timer
 
 import pdb
 
@@ -14,11 +15,18 @@ class Usage:
     self.aliases = aliases
 
 
+class Command:
+  def __init__(self, subTree, aliases):
+    self.subTree = subTree
+    self.aliases = aliases
+
+
 class ObjectData:
   def __init__(self, data = {}):
     self.data = data
     self.usages = {}
     self.usagesUsed = set()
+    self.commands = {}
     self.merge(data)
     self.groupsSelected = set()
     self.pykeFilePath = ''
@@ -76,49 +84,57 @@ class ObjectData:
       # Now use any automatically used usages. Usages.
       for whatUsageUses in jsonData.get("use", []):
         self.use(whatUsageUses)
-    
-    if usage in self.usagesUsed:
-      if self.data.get('verbosity') == 'debug':
-        print (f'Already used --{usage}.')
+
+    if usage == '':
+      timer.start('Usage: pyke.json')
     else:
-      if self.data.get('verbosity') == 'debug':
-        print (f'Using "{usage}"')
-      if usage not in self.usages:
-        if usage == '':
-          filename = 'pyke.json'
+      timer.start(f'Usage: {usage}')
+    try:
+      if usage in self.usagesUsed:
+        if self.data.get('verbosity') == 'debug':
+          print (f'Already used --{usage}.')
+      else:
+        if self.data.get('verbosity') == 'debug':
+          print (f'Using "{usage}"')
+        if usage not in self.usages:
+          if usage == '':
+            filename = 'pyke.json'
+          else:
+            filename = f'{usage}.pyke.json'
+          if finder == None:
+            finder = FileFinder()
+          for path in finder.find(filename, self.data.get('verbosity')):
+            jsonData = {}
+            with open(path) as f:
+              jsonData = json.loads(f.read())
+            useJson(jsonData)
+
+            if usage == '':
+              self.pykeFilePath = path
+            # Only use the first one we encounter; if we
+            # are overriding one from up the tree, we have
+            # to specify it in the 'is' value (handled
+            # above).
+            break
         else:
-          filename = f'{usage}.pyke.json'
-        if finder == None:
-          finder = FileFinder()
-        for path in finder.find(filename, self.data.get('verbosity')):
-          jsonData = {}
-          with open(path) as f:
-            jsonData = json.loads(f.read())
+          jsonData = self.usages[usage].subTree
           useJson(jsonData)
 
-          if usage == '':
-            self.pykeFilePath = path
-          # Only use the first one we encounter; if we
-          # are overriding one from up the tree, we have
-          # to specify it in the 'is' value (handled
-          # above).
-          break
-      else:
-        jsonData = self.usages[usage].subTree
-        useJson(jsonData)
+        if usage in self.usages:
+          for al in self.usages[usage].aliases:
+            self.usagesUsed.add(al)
 
+
+      # If this usage belongs to a group, mark that group
+      # as having been used.
+      # Note: self.usages may be changed by useJson() above
       if usage in self.usages:
-        for al in self.usages[usage].aliases:
-          self.usagesUsed.add(al)
+        self.merge(self.usages[usage].subTree)
+        for group in self.usages[usage].groups:
+          self.groupsSelected.add(group)
 
-
-    # If this usage belongs to a group, mark that group
-    # as having been used.
-    # Note: self.usages may be changed by useJson() above
-    if usage in self.usages:
-      self.merge(self.usages[usage].subTree)
-      for group in self.usages[usage].groups:
-        self.groupsSelected.add(group)
+    finally:
+      timer.done()
 
 
   def merge(self, operand):
@@ -218,6 +234,22 @@ class ObjectData:
           else:
             usage = Usage(v, set(*groups), aliases)
             self.usages[al] = usage
+
+      elif k.startswith('!'):
+        k = k[1:]
+        aliases = []
+        if '|' in k:
+          aliases = [al.strip() for al in k.split('|')]
+        if len(aliases) == 0:
+          aliases.append(k)
+        for al in aliases:
+          if al in self.commands:
+            for ali in aliases:
+              if al not in self.commands[ali].aliases:
+                self.commands[ali].aliases.append(al)
+          else:
+            self.commands[al] = (Command(v, aliases))
+
 
     # gather any new include search directories
     searchDirs = self.data.get('pykeFileSearchDirs', [])
