@@ -1,7 +1,8 @@
 import os
 import json
-from pyke.terminal import terminal as t
+from ansiTerm.ansiTerm import ansiTerm as t
 from pyke.timer import timer
+from pyke.PykeError import PykeError
 import inspect
 
 class Project:
@@ -20,10 +21,10 @@ class Project:
   def doCommand(self, command):
     timer.start(f'Command: {command}')
     try:
-      if self.data.get('verbosity') == 'debug':
-        print (f'Starting command "{command}"')
+      if self.data.get('verbosity') == 'verbose':
+        t.print (f'Starting command "<!command>{command}<!/>"')
       if self.doCommandOverride(command) == False:
-        raise PykeError(f'No command "{t.make_command_name(command)}" was found.')
+        raise PykeError(f'No command "<!command>{command}<!/>" was found.')
     finally:
       timer.done()
 
@@ -52,10 +53,10 @@ class Project:
     if verbosity == 'verbose':
         print ('=' * 60)
     
-    print ("Project {0}\nat {1}\nType: {2}\nVersion: {3}\n".format(
-        t.make_project_name(self.data.get("name")),
-        t.make_project_path(self.path),
-        t.make_project_type(self.data.get("type")),
+    t.print ("Project <!project>{0}<!/>\nat {1}\nType: <!usage>{2}<!/>\nVersion: {3}\n".format(
+        self.data.get("name"),
+        t.makePath(self.path),
+        self.data.get("type"),
         self.data.get('version')))
     
     if 'doc' in self.data.data:
@@ -81,7 +82,7 @@ class Project:
       for co in command.aliases:
         commandsSeen.add(co)
 
-      commandAliases = f'  {" | ".join([f"{al}" for al in command.aliases])}'
+      commandAliases = f'  {" | ".join([f"<!command>{al}<!/>" for al in command.aliases])}'
 
       subTree = command.subTree
       docTree = subTree.get('doc', {})
@@ -89,12 +90,12 @@ class Project:
         desc = docTree.get('short', '')
         if desc == '':
           desc = docTree.get('long', '<no desc>')
-        print (f'  {t.make_command(commandAliases)}: {desc}')
+        t.print (f'  {commandAliases}: {desc}')
       elif verbosity == 'verbose':
         desc = docTree.get('long', '')
         if desc == '':
           desc = docTree.get('short', '<no desc>')
-        print (f'  {t.make_command(commandAliases)}: {desc}')
+        t.print (f'  {commandAliases}: {desc}')
     print('')
 
 
@@ -117,7 +118,7 @@ class Project:
       
       usageIsUsed = name in self.data.usagesUsed
 
-      print (f'  {"* " if usageIsUsed else "  "}{" | ".join([f"--{al}" for al in usage.aliases])}')
+      t.print (f'  {"* " if usageIsUsed else "  "}{" | ".join([f"--<!usage>{al}<!/>" for al in usage.aliases])}')
     print('')
 
 

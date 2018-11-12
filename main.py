@@ -1,12 +1,61 @@
 import os
 import sys
 import importlib
+from ansiTerm.ansiTerm import ansiTerm as t
 from pyke.PykeError import PykeError
-from pyke.terminal import terminal as t
+from pyke.terminal import terminal
 from pyke.timer import timer
 from pyke.FileFinder import FileFinder
 from pyke.ObjectData import ObjectData, Usage
 import pyke.FileFinder
+
+
+def setTerminalStyles():
+  t.setStyle('initial', {
+    'bg-color': 'gs-0',
+    'fg-color': 'system-dk-white',
+    'bold': 'off'
+  })
+
+  t.setStyle('pathDir', {
+    'fg-color': 'system-dk-cyan'
+  })
+
+  t.setStyle('pathBasename', {
+    'fg-color': 'system-lt-cyan'
+  })
+
+  t.setStyle('shellCommand', {
+    'fg-color': 'system-lt-black'
+  })
+
+  t.setStyle('usage', {
+    'fg-color': 'system-dk-yellow'
+  })
+
+  t.setStyle('command', {
+    'fg-color': 'system-lt-blue'
+  })
+
+  t.setStyle('project', {
+    'fg-color': 'system-lt-yellow'
+  })
+
+  t.setStyle('warning', {
+    'fg-color': 'system-lt-yellow'
+  })
+
+  t.setStyle('error', {
+    'fg-color': 'system-lt-red'
+  })
+
+  t.setStyle('timerReportDark', {
+    'fg-color': 'system-dk-magenta'
+  })
+
+  t.setStyle('timerReportLight', {
+    'fg-color': 'system-lt-magenta'
+  })
 
 
 def printUsage():
@@ -39,7 +88,11 @@ def makeNewProject(path, data):
 
 
 def main(args):
+  setTerminalStyles()
+  print (t.pushState('initial'))
+
   timer.start("pyke")
+
   try:
     shouldPrintUsage = False
 
@@ -95,7 +148,7 @@ def main(args):
           project.doCommand(command)
 
         except PykeError as e:
-          print (f'{t.make_error("Error:")} {str(e)}')
+          t.print(f'<!error>Error:<!/> {e}')
           shouldPrintUsage = True
           break
 
@@ -104,4 +157,8 @@ def main(args):
 
   finally:
     timer.done()
-    timer.report()
+    timer.report(data.get('verbosity', "terse") == "verbose")
+    print (t.popStates())
+
+    #print (data)
+    #print (os.environ)

@@ -1,20 +1,22 @@
 {
+  "pykeVersion": "0.3.0",
   "name": "c++_project",
   "type": "c++",
   "version": "0.0.0",
-  "+ depends-on": [],
-  "output-type": "exe",
+  "+ dependsOn": [],
+  "outputType": "exe",
   "multithreaded": true,
-  "whole-program": false,
-  "whole-opt": false,
-  "+ include-dirs": ["inc"],
-  "use-std-include-dirs": true,
-  "source-dir": "src",
-  "resource-dir": "res",
-  "+ lib-dirs": [],
-  "intermediate-dir": "obj",
-  "output-dir": "bin",
-  "edition-marker": "",
+  "wholeProgram": false,
+  "wholeOpt": false,
+  "+ includeDirs": ["%{projectDir}/inc"],
+  "useStdIncludeDirs": true,
+  "sourceDir": "%{projectDir}/src",
+  "resourceDir": "%{projectDir}/res",
+  "+ libDirs": [],
+  "intermediateDir": "%{projectDir}/obj",
+  "outputDir": "%{projectDir}/bin",
+  "outputPath": "%{outputDir}/%{outputName}",
+  "editionMarker": "",
   "+ sources": [],
   "+ resources": [],
   "+ packages": [],
@@ -23,28 +25,110 @@
     "platform:linux-gnu"
   ],
   "--linux-gnu:platform": {
-    "compile-tool": "g++",
-    "archive-tool": "ar",
-    "link-tool": "g++",
-    "whole-build-tool": "g++",
-    "compile-cmds": [      
-      "%{compile-tool} %{use-std} %{compile-args} %{c++Src} %{includes} %{packages-include} -o %{include-dirs} %{objectPath}"
+    "toolSet": "CPlusPlusLinuxGnu",
+    "objFileExtension": "o",
+    "preprocessTool": "cpp",
+    "compileTool": "g++",
+    "archiveTool": "ar",
+    "linkTool": "g++",
+    "wholeBuildTool": "g++",
+    "compileOutputName": "%{c++Src}%{editionMark}.%{objFileExtension}",
+    "compileOutputPath": "%{intermediateDir}/%{compileOutputName}",
+    "compileSoOutputPath": "%{compileOutputPath}",
+    "compileSExeutputPath": "%{compileOutputPath}",
+    "resolveIncludesCmds": [
+      "%{preprocessTool} -M %{useStd} %{includeDirsArg} %{packagesInclude} %{srcPath}"
     ],
-    "archive-cmds": [
-      "%{archive-tool} %{ar-args} -o %{outputPath} %{objectPaths}"
+    "compileCmds": [      
+      "%{compileTool} %{useStd} %{compileArgs} %[c++Src] %{includeDirsArg} %{packagesInclude} -o %{outputPath} %{srcPath}"
     ],
-    "link-cmds": [      
-      "%{link-tool} %{use-std} %{link-args} -o %{outputPath} %{objectPaths} %{packages-link} %{libs} %{lib-dirs}"
+    "archiveCmds": [
+      "%{archiveTool} %{arArgs} -o %{outputPath} %{objFilePathsArg}"
     ],
-    "whole-build-cmds": [
-      "%{whole-build-tool} %{use-std} %{whole-build-args} %{includes} %{packages-include} %{include-dirs} -o %{outputPath} %{objectPaths} %{packages-link} %{libs} %{lib-dirs}"
+    "linkCmds": [      
+      "%{linkTool} %{useStd} %{linkArgs} -o %{outputPath} %{objFilePathsArg} %{packagesLink} %{libsArg} %{libDirsArg}"
     ],
-    "+ compile-args": [
+    "wholeBuildCmds": [
+      "%{wholeBuildTool} %{useStd} %{wholeBuildArgs} %{includeDirsArg} %{packagesInclude} -o %{outputPath} %{objFilePathsArg} %{packagesLink} %{libsArg} %{libDirsArg}"
+    ],
+    "compileLibCmds": "%[compileCmds]",
+    "archiveLibCmds": "%[archiveCmds]",
+    "compileSoCmds": "%[compileCmds]",
+    "linkeSoCmds": "%[linkCmds]",
+    "compileExeCmds": "%[compileCmds]",
+    "linkeExeCmds": "%[linkCmds]",
+    "buildLibPlan": [ {
+        "systemCmds": [
+          "%[compileLibCmds]"
+        ],
+        "depChecks": [ {
+            "target": "%{compileLibOutputPath}",
+            "deps": [
+              "%[c++Src]"
+            ]
+        } ]
+      }, {
+        "systemCmds": [
+          "%{archiveCmds}"
+        ],
+        "depChecks": [ {
+          "target": "%{outputPath}",
+          "deps": [
+            "%{compileLibOutputPath}"
+          ]
+        } ]
+      }
+    ],
+    "buildSoPlan": [ {
+        "systemCmds": [
+          "%[compileSoCmds]"
+        ],
+        "depChecks": [ {
+            "target": "%{compileSoOutputPath}",
+            "deps": [
+              "%[c++Src]"
+            ]
+        } ]
+      }, {
+        "systemCmds": [
+          "%[linkSoCmds]"
+        ],
+        "depChecks": [ {
+          "target": "%{outputPath}",
+          "deps": [
+            "%{compileSoOutputPath}"
+          ]
+        } ]
+      }
+    ],
+    "buildExePlan": [ {
+        "systemCmds": [
+          "%[compileExeCmds]"
+        ],
+        "depChecks": [ {
+            "target": "%{compileExeOutputPath}",
+            "deps": [
+              "%[c++Src]"
+            ]
+        } ]
+      }, {
+        "systemCmds": [
+          "%[linkExeCmds]"
+        ],
+        "depChecks": [ {
+          "target": "%{outputPath}",
+          "deps": [
+            "%{compileExeOutputPath}"
+          ]
+        } ]
+      }
+    ],
+    "+ compileArgs": [
       "-Wall",
       "-c"
     ],
-    "+ link-args": ["-Wall"],
-    "+ whole-build-args": ["-Wall"],
+    "+ linkArgs": ["-Wall"],
+    "+ wholeBuildArgs": ["-Wall"],
     "+ usageGropuDefaults": [
       "c++Std:c++14",
       "kind:exe",
@@ -60,29 +144,38 @@
       "use-std": "c++17"
     },
     "--lib|l:kind": {
-      "output-type": "lib",
-      "output-name": "lib%{name}%{edition-marker}.a",
-      "+ ar-args": "cvq"
+      "outputType": "lib",
+      "outputName": "lib%{name}%{editionMark}.a",
+      "+ arArgs": "cvq",
+      "buildPlan": [
+        "%[buildLibPlan]"
+      ]
     },
     "--so|s:kind": {
-      "output-type": "so",
-      "output-name": "lib%{name}%{edition-marker}.so.%{version-major}.%{version-minor}",
-      "+ compile-args": [
+      "outputType": "so",
+      "outputName": "lib%{name}%{editionMark}.so.%{versionMajor}.%{versionMinor}",
+      "+ compileArgs": [
         "-fPIC"
       ],
-      "+ link-args": [
+      "+ linkArgs": [
         "-shared",
         "-Wl,soname,%{soname}"
       ],
-      "+ whole-build-args": [
+      "+ wholeBuildArgs": [
         "-fPIC",
         "-shared",
         "-Wl,soname,%{soname}"
+      ],
+      "buildPlan": [
+        "%[buildSoPlan]"
       ]
     },
     "--exe|e:kind": {
-      "output-type": "exe",
-      "output-name": "%{name}%{edition-marker}",
+      "outputType": "exe",
+      "outputName": "%{name}%{editionMark}",
+      "buildPlan": [
+        "%[buildExePlan]"
+      ],
       "! run|r": {
         "doc": {
           "short": "Run the resulting executable.",
@@ -90,20 +183,48 @@
         }
       }
     },
+    "--wholeProgram|wp": {
+      "compileSoCmds": "%[wholeBuildCmds]",
+      "compileSoOutputPath": "%{outputPath}",
+      "compileExeCmds": "%[wholeBuildCmds]",
+      "compileSExeutputPath": "%{outputPath}",
+      "buildSoPlan": [ {
+          "systemCmds": [
+              "%[compileSoCmds]"
+            ],
+            "depChecks": [ {
+                "target": "%{compileSoOutputPath}",
+                "deps": [
+                  "%[c++Src]"
+                ]
+            } ]
+      } ],
+      "buildExePlan": [ {
+          "systemCmds": [
+            "%[compileExeCmds]"
+          ],
+          "depChecks": [ {
+              "target": "%{compileExeOutputPath}",
+              "deps": [
+                "%[c++Src]"
+              ]
+          } ]
+      } ]
+    },
     "--debug|d:edition": {
       "edition": "debug",
-      "output-dir": "bin/debug",
-      "edition-marker": ".d",
-      "+ lib-dirs": [
-        "bin/debug"
+      "outputDir": "%{projectDir}/bin/debug",
+      "editionMark": ".d",
+      "+ libDirs": [
+        "%{projectDir}/bin/debug"
       ],
-      "intermediate-dir": "obj/debug",
-      "+ compile-args": [
+      "intermediateDir": "%{projectDir}/obj/debug",
+      "+ compileArgs": [
         "-g",
         "-Og",
         "-fno-inline"
       ],
-      "+ whole-build-args": [
+      "+ wholeBuildArgs": [
         "-g",
         "-Og",
         "-fno-inline"
@@ -111,17 +232,17 @@
     },
     "--release|r:edition": {
       "edition": "release",
-      "output-dir": "bin/release",
-      "edition-marker": ".r",
-      "+ lib-dirs": [
-        "bin/release"
+      "outputDir": "%{projectDir}/bin/release",
+      "editionMark": ".r",
+      "+ libDirs": [
+        "%{projectDir}/bin/release"
       ],
-      "intermediate-dir": "obj/release",
-      "+ compile-args": [
+      "intermediateDir": "%{projectDir}/obj/release",
+      "+ compileArgs": [
         "-DNDEBUG",
         "-O3"
       ],
-      "+ whole-build-args": [
+      "+ wholeBuildArgs": [
         "-DNDEBUG",
         "-O3"
       ]

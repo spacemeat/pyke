@@ -2,8 +2,9 @@
   "name": "(name unspecified)",
   "type": "project",
   "version": "0.0.0",
+  "projectDir": "%{pykeFilePath}",
   "pykeFileSearchDirs": [],
-  "depends-on": [],
+  "dependsOn": [],
   "pykeExtDirs": [],
   "! describe|d": {
     "doc": {

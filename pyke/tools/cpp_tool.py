@@ -276,7 +276,7 @@ class cpp_tool(tool):
 
         self.sources[src_path].is_includes_resolved = True
         self.sources[src_path].included_files = [f for d in comp_proc.stdout.splitlines()[1:]    # each line of input can have n paths
-                                                   for f in str(d).rstrip(" \\").split()]        # clean and split each line to list paths
+        for f in str(d).rstrip(" \\").split()]        # clean and split each line to list paths
 
 
     def _validate_src(self, src_entry):

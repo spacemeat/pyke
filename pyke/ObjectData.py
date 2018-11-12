@@ -1,7 +1,9 @@
 import json
+import re
+import os
 from .PykeError import PykeError
 from .FileFinder import FileFinder
-from .terminal import terminal as t
+from ansiTerm.ansiTerm import ansiTerm as t
 from .timer import timer
 
 import pdb
@@ -30,14 +32,44 @@ class ObjectData:
     self.merge(data)
     self.groupsSelected = set()
     self.pykeFilePath = ''
+    self.envStringRepl = re.compile(r'\$\{\s*(\w+?)\s*\}')
+    self.envListRepl   = re.compile(r'\$\[\s*(\w+?)\s*\]')
+    self.valStringRepl = re.compile(r'\%\{\s*(\w+?)\s*\}')
+    self.valListRepl   = re.compile(r'\%\[\s*(\w+?)\s*\]')
   
 
   def __str__(self):
     return json.dumps(self.data, indent=4)
 
   
+  def _expandEnvVar(self, match):
+    envVar = match.group(1)
+    return os.environ.get(envVar, envVar)
+
+
+  def _expandValVar(self, match):
+    return self.data.get(match.group(1), '')
+
+
   def get(self, key, defv = None):
-    return self.data.get(key, defv)
+    value = self.data.get(key, defv)
+
+    if isinstance(value, str):
+      # expand ${foo}
+      if self.envStringRepl.search(value):
+        value = self.envStringRepl.sub(self._expandEnvVar, value)
+
+      # expand %{foo}
+      while self.valStringRepl.search(value):
+        value = self.valStringRepl.sub(self._expandValVar, value)
+    
+    elif isinstance(value, list):
+      print (f'get: {key} : []')
+
+      # look for:
+      # expand $[]
+      # expand %[]
+    return value
   
 
   def setValue(self, key, value):
@@ -110,7 +142,7 @@ class ObjectData:
             useJson(jsonData)
 
             if usage == '':
-              self.pykeFilePath = path
+              self.data['pykeFilePath'] = path
             # Only use the first one we encounter; if we
             # are overriding one from up the tree, we have
             # to specify it in the 'is' value (handled
