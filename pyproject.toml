@@ -1,0 +1,44 @@
+[build-system]
+requires = [
+	'setuptools>=64',
+	'wheel'
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyke"
+dynamic = ["version"]
+dependencies = [
+	"typing_extensions==4.9.0"
+]
+requires-python = ">=3.10"
+authors = [
+	{name = "Trevor Schrock", email = "spacemeat@gmail.com"},
+]
+maintainers = [
+	{name = "Trevor Schrock", email = "spacemeat@gmail.com"},
+]
+description = "A python-based build system for automating build and deployment tasks."
+readme = "README.md"
+license = {text = "MIT License"}
+keywords = ["C", "C++", "build"]
+classifiers = [
+	"Development Status :: 3 - Alpha",
+	"Intended Audience :: Developers",
+	"Programming Language :: Python :: 3.10",
+	"Programming Language :: C",
+	"Programming Language :: C++",
+	"Environment :: Console",
+	"License :: OSI Approved :: MIT License",
+	"Topic :: Software Development :: Build Tools"
+]
+
+[project.urls]
+Repository = "https://github.com/spacemeat/pyke.git"
+
+[project.scripts]
+pyke="pyke.pyke:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
