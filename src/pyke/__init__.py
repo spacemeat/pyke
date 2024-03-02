@@ -1,1 +1,4 @@
-from pyke.pyke import CompilePhase, LinkPhase, use_phases
+'''
+Defining the pyke module.
+'''
+from pyke.pyke import CompilePhase, LinkPhase, CompileAndLinkPhase, use_phases

@@ -6,7 +6,6 @@ from enum import Enum
 import importlib.util
 import importlib.machinery
 import os
-import re
 from pathlib import Path
 import subprocess
 import sys
@@ -14,14 +13,20 @@ from typing import Optional
 from typing_extensions import Self
 
 from . import ansi as a
+from .options import Options, OptionOp
+from .utilities import InvalidOptionKey
 
-c_success =       a.rgb_fg(0x33, 0xaf, 0x55)
-c_fail =          a.rgb_fg(0xff, 0x33, 0x33)
-c_phase_lt =      a.rgb_fg(0x33, 0x33, 0xff)
-c_phase_dk =      a.rgb_fg(0x23, 0x23, 0x7f)
-c_step_lt =       a.rgb_fg(0x33, 0xaf, 0xaf)
-c_step_dk =       a.rgb_fg(0x23, 0x5f, 0x5f)
-c_shell_cmd =     a.rgb_fg(0x31, 0x31, 0x32)
+c_success =         a.rgb_fg(0x33, 0xaf, 0x55)
+c_fail =            a.rgb_fg(0xff, 0x33, 0x33)
+c_phase_lt =        a.rgb_fg(0x33, 0x33, 0xff)
+c_phase_dk =        a.rgb_fg(0x23, 0x23, 0x7f)
+c_step_lt =         a.rgb_fg(0x33, 0xaf, 0xaf)
+c_step_dk =         a.rgb_fg(0x23, 0x5f, 0x5f)
+c_shell_cmd =       a.rgb_fg(0x31, 0x31, 0x32)
+c_key =             a.rgb_fg(0xff, 0x8f, 0x23)
+c_val_uninterp_dk = a.rgb_fg(0x5f, 0x13, 0x5f)
+c_val_uninterp_lt = a.rgb_fg(0xaf, 0x23, 0xaf)
+c_val_interp =      a.rgb_fg(0x33, 0x33, 0xff)
 
 def ensure_list(o):
     '''
@@ -33,7 +38,7 @@ def ensure_tuple(o):
     '''
     Places an object in a tuple if it isn't already.
     '''
-    return o if isinstance(0, tuple) else (o)
+    return o if isinstance(o, tuple) else (o,)
 
 def lget(l, idx, default=None):
     '''
@@ -70,11 +75,6 @@ class CircularDependencyError(Exception):
     Raised when a circular phase dependency is attempted.
     '''
 
-class InvalidOptionKey(Exception):
-    '''
-    Raised when an option is referenced which is not allowed for this phase.
-    '''
-
 class ResultCode(Enum):
     '''
     Encoded result of one step of an action. Values >= 0 are success codes.
@@ -87,6 +87,14 @@ class ResultCode(Enum):
     DEPENDENCY_ERROR = -3
     INVALID_OPTION = -4
 
+
+class ReturnCode(Enum):
+    ''' Encoded return code for program exit.'''
+    SUCCEEDED = 0
+    MAKEFILE_NOT_FOUND = 1
+    MAKEFILE_DID_NOT_LOAD = 2
+    INVALID_ARGS = 3
+    ACTION_FAILED = 4
 
 _verbosity = 1
 
@@ -122,14 +130,13 @@ class ActionResult:
     '''
     Result of an action.
     '''
-    def __init__(self, action: str, did_succeed: bool,
-                 step_results: StepResult | tuple[StepResult]):
+    def __init__(self, action: str, step_results: StepResult | tuple[StepResult]):
         self.action = action
-        self.did_succeed = did_succeed
         self.results = ensure_tuple(step_results)
 
     def __bool__(self):
-        return self.did_succeed
+        return all((bool(step) for step in self.results))
+
 
 def report_phase(phase: str, action: str):
     '''
@@ -178,9 +185,8 @@ def report_step_end(result: StepResult):
 
 class ActionStep:
     ''' Manages the creation of a StepResult using the "with" syntax. '''
-    def __init__(self, results_list, step_name: str, step_input: str, step_output: str,
+    def __init__(self, step_name: str, step_input: str, step_output: str,
                  cmd: Optional[str]):
-        self.results_list = results_list
         self.step_result = StepResult(step_name, step_input, step_output, cmd or '')
         report_step_start(self.step_result)
 
@@ -188,12 +194,10 @@ class ActionStep:
         return self.step_result
 
     def __exit__(self, *args):
-        self.results_list.append(self.step_result)
         report_step_end(self.step_result)
         return False
 
 
-re_interp_option = re.compile(r'{([a-zA-Z0-9_]+?)}')
 
 def input_is_newer(in_path: Path, out_path: Path):
     '''
@@ -215,7 +219,11 @@ def do_shell_command(cmd):
     return (res.returncode, res.stdout, res.stderr)
 
 
-_pyke_dir = ''
+_make_dir = ''
+
+
+
+
 
 class Phase:
     '''
@@ -232,22 +240,25 @@ class Phase:
     can define their own to support bespoke processes.
     '''
     def __init__(self, options: dict, dependencies: Self | list[Self] | None = None):
+        self.options = Options()
+        self.options |= {
+            'name': 'unnamed',
+            'verbosity': 0,
+            'project_anchor': _make_dir,
+            'gen_anchor': _make_dir,
+            'use_ansi_colors': True,
+            'simulate': False,
+        }
+        self.options |= options
+
+        assert isinstance(options, dict)
+        self.default_action = 'report'
+        self.last_action_ordinal = -1
+        self.last_action_result = None
+
         if dependencies is None:
             dependencies = []
         dependencies = ensure_list(dependencies)
-
-        self.defaults = {
-            'name': 'unnamed',
-            'verbosity': '0',
-            'project_anchor': _pyke_dir,
-            'gen_anchor': _pyke_dir,
-        }
-        assert isinstance(options, dict)
-        self.options = options
-        self.option_overrides = []
-        self.default_action = 'terse_report'
-        self.last_action_ordinal = -1
-        self.last_action_result = None
         self.dependencies = []
         for dep in dependencies:
             self.set_dependency(dep)
@@ -257,7 +268,7 @@ class Phase:
         Apply optinos which take precedence over self.overrides. Intended to be 
         set temporarily, likely from the command line.
         '''
-        self.option_overrides.append(overrides)
+        self.options |= overrides
         for dep in self.dependencies:
             dep.push_option_overrides(overrides)
 
@@ -268,37 +279,19 @@ class Phase:
         for dep in reversed(self.dependencies):
             dep.pop_option_overrides(keys)
         for key in keys:
-            for overrides in reversed(self.option_overrides):
-                if key in overrides:
-                    del overrides[key]
-
-    def _interp_str(self, fstring: str, overrides: dict | None = None):
-        val = fstring
-        while re_interp_option.search(val, 0):
-            val = re_interp_option.sub(lambda m: str(self.sopt(m.group(1), overrides)), val)
-        return val
+            self.options.pop(key)
 
     def lopt(self, key: str, overrides: dict | None = None, interpolate: bool = True):
         '''
         Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         '''
-        default = self.defaults.get(key, None)
-        if default is None:
-            print (self.defaults)
-            raise InvalidOptionKey(f'Invalid option "{key}".')
-        if not isinstance(default, list):
-            raise InvalidOptionKey(f'Option "{key}" is not in list form.')
-
-        if overrides is None:
-            overrides = {}
-
-        opts_with_overrides = self.options.copy()
-        opts_with_overrides |= dict((k, v) for d in self.option_overrides for k, v, in d.items())
-        opts_with_overrides |= overrides
-        val = ensure_list(opts_with_overrides.get(key, default))
-        if interpolate:
-            return [self._interp_str(v, overrides) for v in val]
+        if overrides:
+            self.options |= overrides
+        val = self.options.get(key, interpolate)
+        if overrides:
+            for k in overrides.keys():
+                self.options.pop(k)
         return val
 
     def sopt(self, key: str, overrides: dict | None = None, interpolate: bool = True):
@@ -306,22 +299,12 @@ class Phase:
         Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         '''
-        default = self.defaults.get(key, None)
-        if default is None:
-            raise InvalidOptionKey(f'Invalid option "{key}".')
-        if not isinstance(default, str):
-            raise InvalidOptionKey(f'Option "{key}" is not in string form.')
-
-        if overrides is None:
-            overrides = {}
-
-        opts_with_overrides = self.options.copy()
-        opts_with_overrides |= dict((k, v) for d in self.option_overrides for k, v, in d.items())
-        opts_with_overrides |= overrides
-
-        val = str(opts_with_overrides.get(key, default))
-        if interpolate:
-            return self._interp_str(val, overrides)
+        if overrides:
+            self.options |= overrides
+        val = self.options.get(key, interpolate)
+        if overrides:
+            for k in overrides.keys():
+                self.options.pop(k)
         return val
 
     def __str__(self):
@@ -406,7 +389,7 @@ class Phase:
         action_ordinal = self._get_action_ordinal(action_ordinal)
         if self.last_action_ordinal == action_ordinal:
             self.last_action_result = ActionResult(
-                action, True,
+                action,
                 StepResult('', '', '', '', ResultCode.ALREADY_UP_TO_DATE,
                 f'{self.sopt("name")}.{action}'))
             return self.last_action_result
@@ -416,7 +399,7 @@ class Phase:
             res = dep.do(action, action_ordinal)
             if not res:
                 self.last_action_result = ActionResult(
-                    action, False,
+                    action,
                     StepResult('', '', '', '', ResultCode.DEPENDENCY_ERROR, dep))
                 return self.last_action_result
 
@@ -427,14 +410,11 @@ class Phase:
 
         except InvalidOptionKey as e:
             self.last_action_result = ActionResult(
-                action, False,
+                action,
                 StepResult('', '', '', '', ResultCode.INVALID_OPTION, e))
             report_error(self.sopt('name'), action, str(e))
 
-        is_success = False
-        if isinstance(self.last_action_result, ActionResult):
-            is_success = self.last_action_result.did_succeed
-        report_action_end(is_success)
+        report_action_end(bool(self.last_action_result))
 
         return self.last_action_result
 
@@ -443,31 +423,39 @@ class Phase:
         This is the default action for actions that a phase does not support.
         Goes nowhere, does nothing.
         '''
-        return ActionResult('', True, StepResult('', '', '', '', ResultCode.NO_ACTION))
+        return ActionResult('', StepResult('', '', '', '', ResultCode.NO_ACTION))
 
-    def do_action_terse_report(self):
+    def do_action_report(self):
         '''
         This gives a small description of the phase.
         '''
-        return ActionResult('terse_report', True,
-                            StepResult('report', '', '', '', ResultCode.NO_ACTION, str(self)))
+        report = ''
+        if _verbosity == 0:
+            report = f'phase: {self.sopt("name")}'
+        if _verbosity <= 1:
+            opts_str = ''
+            for k in self.options.keys():
+                vu = self.options.get(k, False)
+                vi = self.options.get(k)
 
-    def do_action_verbose_report(self):
-        '''
-        This gives a more detailed description of the phase.
-        '''
-        return ActionResult('verbose_report', True,
-                            StepResult('report', '', '', '', ResultCode.NO_ACTION,
-                                       f'{self} deps: {(dep for dep in self.dependencies)}'))
+                opts_str = ''.join((opts_str,
+                                    f'{c_key}{k}: '))
+                last_replace_idx = len(vu) - next(i for i, e in enumerate(reversed(vu))
+                    if e[1] == OptionOp.REPLACE) - 1
+                for i, vue in enumerate(vu):
+                    color = c_val_uninterp_dk if i < last_replace_idx else c_val_uninterp_lt
+                    indent = 0 if i == 0 else len(k) + 2
+                    op = vue[1].value
+                    opts_str = ''.join((opts_str,
+                                        f'{" " * indent}{color}{op} {vue[0]}{a.off}\n'))
 
-    def do_action_debug_report(self):
-        '''
-        This gives a debug view of the phase.
-        '''
-        return ActionResult('debug_report', True,
-                            StepResult('report', '', '', '', ResultCode.NO_ACTION,
-                                       f'{repr(self)} deps: '
-                                       f'{(str(dep) for dep in self.dependencies)}'))
+                opts_str = ''.join((opts_str,
+                                    f'{" " * (len(k) + 2)}{c_val_interp}= {vi}\n'))
+
+            report = f'{report}\n{opts_str}'
+            print (report)
+        return ActionResult(
+            'report', StepResult('report', '', '', '', ResultCode.NO_ACTION, str(self)))
 
 
 class BuildPhase(Phase):
@@ -475,8 +463,7 @@ class BuildPhase(Phase):
     Intermediate class to handle making command lines for various toolkits.
     '''
     def __init__(self, options, dependencies = None):
-        super().__init__(options, dependencies)
-        self.defaults |= {
+        options = {
             'toolkit': 'gnu',
             'language': 'c++',
             'language_version': '23',
@@ -492,17 +479,84 @@ class BuildPhase(Phase):
             'kind_optimization': '{{kind}_optimization}',
             'kind_flags': '{{kind}_flags}',
             'packages': [],
-            'multithreaded': 'True',
+            'multithreaded': 'true',
             'definitions': [],
             'additional_flags': [],
+            'incremental_build': 'true',
+
             'build_dir': 'build',
             'build_detail': '{kind}.{toolkit}',
             'obj_dir':'int',
             'exe_dir':'bin',
             'obj_anchor': '{gen_anchor}/{build_dir}/{build_detail}/{obj_dir}',
             'exe_anchor': '{gen_anchor}/{build_dir}/{build_detail}/{exe_dir}',
-        }
+
+            'src_dir': 'src',
+            'src_anchor': '{project_anchor}/{src_dir}',
+            'include_dirs': ['include'],
+            'obj_basename': '', # empty means to use the basename of sources[0]
+            'obj_name': '{obj_basename}.o',
+            'obj_path': '{obj_anchor}/{obj_name}',
+            'sources': [],
+
+            'lib_dirs': [],
+            'libs': [],
+            'shared_libs': [],
+            'exe_basename': 'sample',
+            'exe_path': '{exe_anchor}/{exe_basename}',
+        } | options
+        super().__init__(options, dependencies)
         self.default_action = 'build'
+
+    def get_source(self, src_idx):
+        '''
+        Gets the src_idxth source from options. Ensures the result is a Path.
+        '''
+        sources = self.lopt('sources')
+        return sources[src_idx]
+
+    def make_src_path(self, src_idx):
+        '''
+        Makes a full source path out of the src_idxth source from options.
+        '''
+        src = self.get_source(src_idx)
+        return Path(f"{self.sopt('src_anchor')}/{src}")
+
+    def make_obj_path_from_src(self, src_idx):
+        '''
+        Makes the full object path from a single source by index.
+        '''
+        src = self.get_source(src_idx)
+        basename = Path(src).stem
+        return Path(self.sopt('obj_path', {'obj_basename': basename}))
+
+    def get_all_src_paths(self):
+        '''
+        Generate te full path for each source file.
+        '''
+        sources = self.lopt('sources')
+        for i in range(len(sources)):
+            yield self.make_src_path(i)
+
+    def get_all_object_paths(self):
+        '''
+        Generate the full path for each target object file.
+        '''
+        sources = self.lopt('sources')
+        for i in range(len(sources)):
+            yield self.make_obj_path_from_src(i)
+
+    def get_all_src_and_object_paths(self):
+        '''
+        Generates (source path, object path)s for each source.
+        '''
+        return zip(self.get_all_src_paths(), self.get_all_object_paths())
+
+    def get_exe_path(self):
+        '''
+        Makes the full exe path from options.
+        '''
+        return Path(self.sopt('exe_path'))
 
     def make_build_command_prefix(self):
         '''
@@ -560,209 +614,19 @@ class BuildPhase(Phase):
     def _make_build_command_vs(self):
         pass
 
-
-class CompilePhase(BuildPhase):
-    '''
-    Phase class for building C/C++ files to objects.
-    '''
-    def __init__(self, options, dependencies = None):
-        super().__init__(options, dependencies)
-        self.defaults |= {
-            'build_operation': 'compile_to_object',
-            'src_dir': 'src',
-            'src_anchor': '{project_anchor}/{src_dir}',
-            'include_dirs': [],
-            'obj_basename': '', # empty means to use the basename of sources[0]
-            'obj_name': '{obj_basename}.o',
-            'obj_path': '{obj_anchor}/{obj_name}',
-            'sources': []
-        }
-        self.default_action = 'build'
-
-    def get_source(self, src_idx):
-        '''
-        Gets the src_idxth source from options. Ensures the result is a Path.
-        '''
-        sources = self.lopt('sources')
-        return sources[src_idx]
-
-    def make_src_path(self, src_idx):
-        '''
-        Makes a full source path out of the src_idxth source from options.
-        '''
-        src = self.get_source(src_idx)
-        return Path(f"{self.sopt('src_anchor')}/{src}")
-
-    def make_obj_path_from_src(self, src_idx):
-        '''
-        Makes the full object path from a single source by index.
-        '''
-        src = self.get_source(src_idx)
-        basename = Path(src).stem
-        return Path(self.sopt('obj_path', {'obj_basename': basename}))
-
-    def get_all_src_paths(self):
-        '''
-        Generate te full path for each source file.
-        '''
-        sources = self.lopt('sources')
-        for i in range(len(sources)):
-            yield self.make_src_path(i)
-
-    def get_all_object_paths(self):
-        '''
-        Generate the full path for each target object file.
-        '''
-        sources = self.lopt('sources')
-        for i in range(len(sources)):
-            yield self.make_obj_path_from_src(i)
-
-    def get_all_src_object_paths(self):
-        '''
-        Generates (source path, object path)s for each source.
-        '''
-        return zip(self.get_all_src_paths(), self.get_all_object_paths())
-
-    def do_action_clean(self):
-        '''
-        Cleans all object paths this phase builds.
-        '''
-        is_action_success = True
-        step_results = []
-
-        for _, obj_path in self.get_all_src_object_paths():
-            with ActionStep(step_results, 'deleting', '', str(obj_path),
-                            self.make_cmd_delete_file(obj_path)) as step:
-                if obj_path.exists():
-                    res, _, err = do_shell_command(step.shell_cmd)
-                    if res != 0:
-                        is_action_success = False
-                        step.set_result(ResultCode.COMMAND_FAILED, err)
-                    else:
-                        step.set_result(ResultCode.SUCCEEDED)
-                else:
-                    step.set_result(ResultCode.ALREADY_UP_TO_DATE)
-
-        return ActionResult('clean', is_action_success, tuple(step_results))
-
-    def do_action_build(self):
-        '''
-        Builds all object paths.
-        '''
-        is_action_success = True
-        step_results = []
-
-        prefix = self.make_build_command_prefix()
-
+    def make_compile_arguments(self):
+        ''' Constructs the inc_dirs portion of a gcc command.'''
         inc_dirs = self.lopt('include_dirs')
         proj_anchor = self.sopt('project_anchor')
         inc_dirs_cmd = ''.join((f'-I{proj_anchor}/{inc} ' for inc in inc_dirs))
         if len(inc_dirs_cmd) > 0:
             inc_dirs_cmd = f'{inc_dirs_cmd} '
-
-        for src_path, obj_path in self.get_all_src_object_paths():
-            is_step_success = True
-            with ActionStep(step_results, 'creating', '', str(obj_path.parent),
-                            f'mkdir -p {obj_path.parent}') as step:
-                if not obj_path.parent.is_dir():
-                    res, _, err = do_shell_command(step.shell_cmd)
-                    if res != 0:
-                        is_step_success = False
-                        step.set_result(ResultCode.COMMAND_FAILED, err)
-                    else:
-                        step.set_result(ResultCode.SUCCEEDED)
-                else:
-                    step.set_result(ResultCode.ALREADY_UP_TO_DATE)
-
-            if is_step_success:
-                with ActionStep(step_results, 'compiling', str(src_path), str(obj_path),
-                                f'{prefix}-c {inc_dirs_cmd}-o {obj_path} {src_path}') as step:
-                    if not src_path.exists():
-                        is_step_success = False
-                        step.set_result(ResultCode.MISSING_INPUT, src_path)
-                    else:
-                        if not obj_path.exists() or input_is_newer(src_path, obj_path):
-                            res, _, err = do_shell_command(step.shell_cmd)
-                            if res != 0:
-                                is_step_success = False
-                                step.set_result(ResultCode.COMMAND_FAILED, err)
-                            else:
-                                step.set_result(ResultCode.SUCCEEDED)
-                        else:
-                            step.set_result(ResultCode.ALREADY_UP_TO_DATE)
-
-            is_action_success = is_action_success and is_step_success
-
-        return ActionResult('build', is_action_success, tuple(step_results))
-
-
-class LinkPhase(BuildPhase):
-    '''
-    Phase class for linking object files to build executable binaries.
-    '''
-    def __init__(self, options, dependencies = None):
-        super().__init__(options, dependencies)
-        self.defaults |= {
-            'build_operation': 'link_to_executable',
-            'lib_dirs': [],
-            'libs': [],
-            'shared_libs': [],
-            'exe_name': 'sample',
-            'exe_path': '{exe_anchor}/{exe_name}',
+        return {
+            'inc_dirs': inc_dirs_cmd
         }
 
-    def get_object_paths(self):
-        '''
-        Gets the object file paths from each dependency.
-        '''
-        obj_paths = []
-        for dep in self.dependencies:
-            obj_paths.extend(dep.get_all_object_paths())
-        return obj_paths
-
-    def make_exe_path(self):
-        '''
-        Makes the full exe path from options.
-        '''
-        return Path(self.sopt('exe_path'))
-
-    def do_action_clean(self):
-        '''
-        Cleans all object paths this phase builds.
-        '''
-        exe_path = self.make_exe_path()
-
-        is_action_success = True
-        step_results = []
-
-        with ActionStep(step_results, 'deleting', '', str(exe_path),
-                        self.make_cmd_delete_file(exe_path)) as step:
-            if exe_path.exists():
-                res, _, err = do_shell_command(step.shell_cmd)
-                if res != 0:
-                    is_action_success = False
-                    step.set_result(ResultCode.COMMAND_FAILED, err)
-                else:
-                    step.set_result(ResultCode.SUCCEEDED)
-            else:
-                step.set_result(ResultCode.ALREADY_UP_TO_DATE)
-
-        return ActionResult('clean', is_action_success, tuple(step_results))
-
-    def do_action_build(self):
-        '''
-        Builds all object paths.
-        '''
-        is_action_success = True
-        step_results = []
-
-        prefix = self.make_build_command_prefix()
-
-        object_paths = self.get_object_paths()
-        exe_path = self.make_exe_path()
-
-        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
-
+    def make_link_arguments(self):
+        ''' Constructs the linking arguments of a gcc command.'''
         lib_dirs = self.lopt('lib_dirs')
         lib_dirs_cmd = ''.join((f'-L{lib_dir} ' for lib_dir in lib_dirs))
 
@@ -777,46 +641,286 @@ class LinkPhase(BuildPhase):
         if len(shared_libs_cmd) > 0:
             shared_libs_cmd = f'-Wl,-Bdynamic {shared_libs_cmd} -Wl,-rpath,$ORIGIN -Wl,-z,origin'
 
-        with ActionStep(step_results, 'creating', '', str(exe_path.parent),
-                        f'mkdir -p {exe_path.parent}') as step:
-            if not exe_path.parent.is_dir():
+        return {
+            'lib_dirs': lib_dirs_cmd,
+            'static_libs': static_libs_cmd,
+            'shared_libs': shared_libs_cmd,
+        }
+
+    def do_step_delete_file(self, path):
+        '''
+        Perfoems a file deletion operation as an action step.
+        '''
+        step_results = None
+        with ActionStep('deleting', '', str(path),
+                        self.make_cmd_delete_file(path)) as step:
+            step_results = step
+            if path.exists():
                 res, _, err = do_shell_command(step.shell_cmd)
                 if res != 0:
-                    is_action_success = False
                     step.set_result(ResultCode.COMMAND_FAILED, err)
                 else:
                     step.set_result(ResultCode.SUCCEEDED)
             else:
                 step.set_result(ResultCode.ALREADY_UP_TO_DATE)
+        return step_results
 
-        missing_objs = []
-        if is_action_success:
-            with ActionStep(step_results, 'linking', '[*src]', str(exe_path),
-                            (f'{prefix}-o {exe_path} {object_paths_cmd}{lib_dirs_cmd}'
-                             f'{static_libs_cmd}{shared_libs_cmd}')) as step:
-                for obj_path in object_paths:
-                    if not obj_path.exists():
-                        missing_objs.append(obj_path)
-                if len(missing_objs) > 0:
-                    is_action_success = False
-                    step.set_result(ResultCode.MISSING_INPUT, missing_objs)
+    def do_step_create_directory(self, new_dir):
+        '''
+        Performs a directory creation operation as an action step.
+        '''
+        step_results = None
+        with ActionStep('creating', '', str(new_dir),
+                        f'mkdir -p {new_dir}') as step:
+            step_results = step
+            if not new_dir.is_dir():
+                res, _, err = do_shell_command(step.shell_cmd)
+                if res != 0:
+                    step.set_result(ResultCode.COMMAND_FAILED, err)
                 else:
-                    exe_exists = exe_path.exists()
-                    must_build = not exe_exists
-                    for obj_path in object_paths:
-                        if not exe_exists or input_is_newer(obj_path, exe_path):
-                            must_build = True
-                    if must_build:
-                        res, _, err = do_shell_command(step.shell_cmd)
-                        if res != 0:
-                            is_action_success = False
-                            step.set_result(ResultCode.COMMAND_FAILED, err)
-                        else:
-                            step.set_result(ResultCode.SUCCEEDED)
-                    else:
-                        step.set_result(ResultCode.ALREADY_UP_TO_DATE)
+                    step.set_result(ResultCode.SUCCEEDED)
+            else:
+                step.set_result(ResultCode.ALREADY_UP_TO_DATE)
+        return step_results
 
-        return ActionResult('build', is_action_success, tuple(step_results))
+    def do_step_compile_src_to_object(self, prefix, args, src_path, obj_path):
+        '''
+        Perform a C or C++ source compile operation as an action step.
+        '''
+        step_results = None
+        with ActionStep('compiling', str(src_path), str(obj_path),
+                        f'{prefix}-c {args["inc_dirs"]}-o {obj_path} {src_path}') as step:
+            step_results = step
+            if not src_path.exists():
+                step.set_result(ResultCode.MISSING_INPUT, src_path)
+            else:
+                if not obj_path.exists() or input_is_newer(src_path, obj_path):
+                    res, _, err = do_shell_command(step.shell_cmd)
+                    if res != 0:
+                        step.set_result(ResultCode.COMMAND_FAILED, err)
+                    else:
+                        step.set_result(ResultCode.SUCCEEDED)
+                else:
+                    step.set_result(ResultCode.ALREADY_UP_TO_DATE)
+        return step_results
+
+    def do_step_link_objects_to_exe(self, prefix, args, exe_path, object_paths):
+        '''
+        Perform a C or C++ source compile operation as an action step.
+        '''
+        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
+
+        step_results = None
+        missing_objs = []
+        with ActionStep('compiling', '[*objs]', str(exe_path),
+                        (f'{prefix}-o {exe_path} {object_paths_cmd}{args["lib_dirs"]}'
+                         f'{args["static_libs"]}{args["shared_libs"]}')) as step:
+            step_results = step
+            for obj_path in object_paths:
+                if not obj_path.exists():
+                    missing_objs.append(obj_path)
+            if len(missing_objs) > 0:
+                step.set_result(ResultCode.MISSING_INPUT, missing_objs)
+            else:
+                exe_exists = exe_path.exists()
+                must_build = not exe_exists
+                for obj_path in object_paths:
+                    if not exe_exists or input_is_newer(obj_path, exe_path):
+                        must_build = True
+                if must_build:
+                    res, _, err = do_shell_command(step.shell_cmd)
+                    if res != 0:
+                        step.set_result(ResultCode.COMMAND_FAILED, err)
+                    else:
+                        step.set_result(ResultCode.SUCCEEDED)
+                else:
+                    step.set_result(ResultCode.ALREADY_UP_TO_DATE)
+        return step_results
+
+    def do_step_compile_srcs_to_exe(self, prefix, args, src_paths, exe_path):
+        '''
+        Perform a multiple C or C++ source compile to executable operation as an action step.
+        '''
+        src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
+
+        step_results = None
+        missing_srcs = []
+        with ActionStep('compiling', '[*srcs]', str(exe_path),
+                        f'{prefix} {args["inc_dirs"]}-o {exe_path} '
+                        f'{src_paths_cmd}{args["lib_dirs"]}'
+                        f'{args["static_libs"]}{args["shared_libs"]}') as step:
+            step_results = step
+            for src_path in src_paths:
+                if not src_path.exists():
+                    missing_srcs.append(src_path)
+            if len(missing_srcs) > 0:
+                step.set_result(ResultCode.MISSING_INPUT, missing_srcs)
+            else:
+                exe_exists = exe_path.exists()
+                must_build = not exe_exists
+                for src_path in src_paths:
+                    if not exe_exists or input_is_newer(src_path, exe_path):
+                        must_build = True
+                if must_build:
+                    res, _, err = do_shell_command(step.shell_cmd)
+                    if res != 0:
+                        step.set_result(ResultCode.COMMAND_FAILED, err)
+                    else:
+                        step.set_result(ResultCode.SUCCEEDED)
+                else:
+                    step.set_result(ResultCode.ALREADY_UP_TO_DATE)
+        return step_results
+
+
+class CompilePhase(BuildPhase):
+    '''
+    Phase class for building C/C++ files to objects.
+    '''
+    def __init__(self, options, dependencies = None):
+        options = {
+            'build_operation': 'compile_to_object',
+        } | options
+        super().__init__(options, dependencies)
+        self.default_action = 'build'
+
+    def do_action_clean(self):
+        '''
+        Cleans all object paths this phase builds.
+        '''
+        step_results = []
+        for _, obj_path in self.get_all_src_and_object_paths():
+            step_results.append(self.do_step_delete_file(obj_path))
+
+        return ActionResult('clean', tuple(step_results))
+
+    def do_action_build(self):
+        '''
+        Builds all object paths.
+        '''
+        step_results = []
+        prefix = self.make_build_command_prefix()
+        args = self.make_compile_arguments()
+
+        for src_path, obj_path in self.get_all_src_and_object_paths():
+            step_results.append(self.do_step_create_directory(obj_path.parent))
+
+            if bool(step_results[-1]):
+                step_results.append(self.do_step_compile_src_to_object(
+                    prefix, args, src_path, obj_path))
+
+        return ActionResult('build', tuple(step_results))
+
+
+class LinkPhase(BuildPhase):
+    '''
+    Phase class for linking object files to build executable binaries.
+    '''
+    def __init__(self, options, dependencies = None):
+        options = {
+            'build_operation': 'link_to_executable',
+        } | options
+        super().__init__(options, dependencies)
+
+    def get_all_object_paths(self):
+        '''
+        Gets the object file paths from each dependency.
+        '''
+        for dep in self.dependencies:
+            for obj_path in dep.get_all_object_paths():
+                yield obj_path
+
+    def do_action_clean(self):
+        '''
+        Cleans all object paths this phase builds.
+        '''
+        exe_path = self.get_exe_path()
+
+        step_results = []
+        step_results.append(self.do_step_delete_file(exe_path))
+        return ActionResult('clean', tuple(step_results))
+
+    def do_action_build(self):
+        '''
+        Builds all object paths.
+        '''
+
+        step_results = []
+
+        object_paths = self.get_all_object_paths()
+        exe_path = self.get_exe_path()
+
+        prefix = self.make_build_command_prefix()
+        args = self.make_link_arguments()
+
+        step_results.append(self.do_step_create_directory(exe_path.parent))
+        if bool(step_results[-1]):
+            step_results.append(self.do_step_link_objects_to_exe(
+                prefix, args, exe_path, object_paths))
+
+        return ActionResult('build', tuple(step_results))
+
+
+class CompileAndLinkPhase(BuildPhase):
+    '''
+    Phase class for linking object files to build executable binaries.
+    '''
+    def __init__(self, options, dependencies = None):
+        options = {
+            'build_operation': 'compile_to_executable',
+        } | options
+        super().__init__(options, dependencies)
+
+    def do_action_clean(self):
+        '''
+        Cleans all object paths this phase builds.
+        '''
+        exe_path = self.get_exe_path()
+
+        step_results = []
+
+        if self.sopt('incremental_build') != 'false':
+            for _, obj_path in self.get_all_src_and_object_paths():
+                step_results.append(self.do_step_delete_file(obj_path))
+
+        step_results.append(self.do_step_delete_file(exe_path))
+
+        return ActionResult('clean', tuple(step_results))
+
+    def do_action_build(self):
+        '''
+        Builds all object paths.
+        '''
+        step_results = []
+        exe_path = self.get_exe_path()
+
+        prefix = self.make_build_command_prefix()
+        c_args = self.make_compile_arguments()
+        l_args = self.make_link_arguments()
+
+        if self.sopt('incremental_build') != 'false':
+            for src_path, obj_path in self.get_all_src_and_object_paths():
+                step_results.append(self.do_step_create_directory(obj_path.parent))
+
+                if bool(step_results[-1]):
+                    step_results.append(self.do_step_compile_src_to_object(
+                        prefix, c_args, src_path, obj_path))
+
+            if all((bool(res) for res in step_results)):
+                object_paths = self.get_all_object_paths()
+
+                step_results.append(self.do_step_create_directory(exe_path.parent))
+                if bool(step_results[-1]):
+                    step_results.append(self.do_step_link_objects_to_exe(
+                        prefix, l_args, exe_path, object_paths))
+        else:
+            src_paths = self.get_all_src_paths()
+
+            step_results.append(self.do_step_create_directory(exe_path.parent))
+            if bool(step_results[-1]):
+                step_results.append(self.do_step_compile_srcs_to_exe(
+                    prefix, c_args | l_args, src_paths, exe_path))
+
+        return ActionResult('build', tuple(step_results))
 
 
 _using_phases = []
@@ -832,22 +936,23 @@ def use_phases(phases: Phase | list[Phase] | tuple[Phase]):
     _using_phases.extend(phases)
 
 
-def run_pyke_file(pyke_path):
+def run_make_file(pyke_path, cache_make):
+    ''' Loads and runs the user-created make file.'''
     if pyke_path.exists:
+        sys.dont_write_bytecode = not cache_make
         spec = importlib.util.spec_from_file_location('pyke', pyke_path)
         if spec:
             module = importlib.util.module_from_spec(spec)
             loader = spec.loader
             if loader:
                 loader.exec_module(module)
+                sys.dont_write_bytecode = cache_make
                 return
-
         print (f'"{pyke_path}" could not be loaded.')
-        sys.exit(2)
-
+        sys.exit(ReturnCode.MAKEFILE_DID_NOT_LOAD.value)
     else:
         print (f'"{pyke_path}" was not found.')
-        sys.exit(1)
+        sys.exit(ReturnCode.MAKEFILE_NOT_FOUND.value)
 
 
 def print_version():
@@ -860,103 +965,131 @@ def print_help():
     ''' Send help.'''
     print (
     '''
-    Runs an action on a phase's dependencies, followed by the phase itself. The phase,
-    action, and any overrides are extracted from args. The following arguments are available:
-    -v, --version: Prints the version information for pyke, and exits.
-    -h, --help: Prints a help document.
-    -m, --module: Specifies the module (pyke file) to be run. Must precede any arguments that
-        are not -v of -h. Actions are performed relative to the module's directory, unless an
-        option override (-o anchor:[dir]) is given, in which case they are performed relative to
-        the given working directory. Immediately after running the module, the active phase
-        is selected as the last phase added to use_phase()/use_phases(). This can be overridden
-        by -p.
-        If no -m argument is given, pyke will look for and run ./pyke.py.
-    -o, --override: Specifies an option override in all phases for subsequenet actions. If the
-        option is given as a key:value pair, the override is set; if it is only a key (with no
-        separator ':') the override is clear. Option overrides are kept as a stack; if you set
-        an override n times, you must clear it n times to restore the original value. Note,
-        you can set and clear individual overrides out of order:
-        $ pyke -o kind:debug -o kind:release -o exe_basename:whodunnit -o kind
-        will end up overriding "kind" to "debug" and "exe_basename" to "whodunnit", like one
-        might hope.
-    -p, --phase: Specifies the active phase to use for subsequent option overrides and actions.
-    action: Arguments given without switches specify actions to be taken on the active phase's
-        dependencies, and then the active phase itself, in depth-first order. Any action on any
-        phase which doesn't support it is quietly ignored.
+Runs an action on a phase's dependencies, followed by the phase itself. The phase,
+action, and any overrides are extracted from args. The following arguments are available:
+-v, --version: Prints the version information for pyke, and exits.
+-h, --help: Prints a help document.
+-c, --cache_makefile: Allows the makefile's __cache__ to be generated. This might speed up
+    complex builds, but they'd hvae to be really complex. Must precede any arguments that 
+    are not -v, -h, or -m.
+-m, --module: Specifies the module (pyke file) to be run. Must precede any arguments that
+    are not -v, -h, or -c. Actions are performed relative to the module's directory, unless an
+    option override (-o anchor:[dir]) is given, in which case they are performed relative to
+    the given working directory. Immediately after running the module, the active phase
+    is selected as the last phase added to use_phase()/use_phases(). This can be overridden
+    by -p.
+    If no -m argument is given, pyke will look for and run ./make.py.
+-o, --override: Specifies an option override in all phases for subsequenet actions. If the
+    option is given as a key:value pair, the override is set; if it is only a key (with no
+    separator ':') the override is clear. Option overrides are kept as a stack; if you set
+    an override n times, you must clear it n times to restore the original value. Note,
+    you can set and clear individual overrides out of order:
+    $ pyke -o kind:debug -o kind:release -o exe_basename:whodunnit -o kind
+    will end up overriding "kind" to "debug" and "exe_basename" to "whodunnit", like one
+    might hope.
+-p, --phase: Specifies the active phase to use for subsequent option overrides and actions.
+action: Arguments given without switches specify actions to be taken on the active phase's
+    dependencies, and then the active phase itself, in depth-first order. Any action on any
+    phase which doesn't support it is quietly ignored.
 
-    Returns the version number.
-    $ pyke -v
+Returns the version number.
+$ pyke -v
 
-    Looks for ./pyke.py && loads the last phase in _using_phases && runs the default action.
-    $ pyke
-    $ pyke -m .
+Looks for ./make.py && loads the last phase in _using_phases && runs the default action.
+$ pyke
+$ pyke -m .
 
-    Looks for ./simple_test.py && loads the last phase in _using_phases && runs the default action.
-    $ pyke -m ./simple_test.py
+Looks for ./simple_test.py && loads the last phase in _using_phases && runs the default action.
+$ pyke -m ./simple_test.py
 
-    Looks for ../../pyke.py && loads the last phase in _using_phases && runs the default
-    action from the current directory. This will emplace build targets relative to ../../.
-    $ pyke -m ../../
+Looks for ../../make.py && loads the last phase in _using_phases && runs the default
+action from the current directory. This will emplace build targets relative to ../../.
+$ pyke -m ../../
 
-    Looks for ../../pyke.py && loads the last phase in _using_phases && runs the default
-    action from the current directory. This will emplace build targets relative to ./.
-    $ pyke -m../../ -o anchor:$PWD
+Looks for ../../make.py && loads the last phase in _using_phases && runs the default
+action from the current directory. This will emplace build targets relative to ./.
+$ pyke -m../../ -o anchor:$PWD
 
-    Looks for ./pyke.py && loads && runs the default action, overriding the options in the loaded
-    phase and all dependent phases.
-    $ pyke -o kind:debug -o verbosity:0
+Looks for ./make.py && loads && runs the default action, overriding the options in the loaded
+phase and all dependent phases.
+$ pyke -o kind:debug -o verbosity:0
 
-    Looks for ./pyke.py && loads the phase named "alt_project" && runs its default action.
-    $ pyke -p alt_project
+Looks for ./make.py && loads the phase named "alt_project" && runs its default action.
+$ pyke -p alt_project
 
-    Looks for ./pyke.py && loads the last phase && runs the action named "build"
-    $ pyke build
+Looks for ./make.py && loads the last phase && runs the action named "build"
+$ pyke build
 
-    Looks for ./pyke.py && loads && overrides the "time_run" option && runs the "clean", "build", 
-    and "run" actions successively, given the success of each previous action.
-    $ pyke -o time_run:true clean build run
+Looks for ./make.py && loads && overrides the "time_run" option && runs the "clean", "build", 
+and "run" actions successively, given the success of each previous action.
+$ pyke -o time_run:true clean build run
 
-    Looks for ./pyke.py && loads && runs the "clean" and "build" actions && then overrides the
-    "time_run" option and runs the "run" action.
-    $ pyke clean build -otime_run:true run
+Looks for ./make.py && loads && runs the "clean" and "build" actions && then overrides the
+"time_run" option and runs the "run" action.
+$ pyke clean build -otime_run:true run
     ''')
 
 def main():
+    '''Entrypoint for pyke.'''
     current_dir = os.getcwd()
-    pyke_file = 'pyke.py'
-    global _pyke_dir
+    make_file = 'make.py'
+    cache_make = False
+    global _make_dir
 
     idx = 1
-    arg = sys.argv[idx]
+    while idx < len(sys.argv):
+        arg = sys.argv[idx]
 
-    if arg in ['-v', '--version']:
-        print_version()
-        return 0
-    if arg in ['-h', '--help']:
-        print_help()
-        return 0
+        if arg in ['-v', '--version']:
+            print_version()
+            return ReturnCode.SUCCEEDED.value
 
-    if arg.startswith('-m') or arg == '--module':
-        pyke_file = ''
-        if len(arg) > 2:
-            pyke_file = sys.argv[idx][2:]
-        else:
+        if arg in ['-h', '--help']:
+            print_help()
+            return ReturnCode.SUCCEEDED.value
+
+        if arg in ['-c', '--cache_makefile']:
+            cache_make = True
             idx += 1
-            pyke_file = sys.argv[idx]
+            continue
 
-    pyke_path = Path(current_dir) / pyke_file
-    if not pyke_file.endswith('.py'):
-        pyke_path = pyke_path / 'pyke.py'
+        if arg.startswith('-m') or arg == '--module':
+            make_file = ''
+            if len(arg) > 2:
+                make_file = sys.argv[idx][2:]
+            else:
+                idx += 1
+                make_file = sys.argv[idx]
+            idx += 1
+            continue
 
-    _pyke_dir = str(pyke_path.parent)
-    run_pyke_file(pyke_path)
+        break
+
+    make_path = Path(current_dir) / make_file
+    if not make_file.endswith('.py'):
+        make_path = make_path / 'make.py'
+
+    _make_dir = str(make_path.parent)
+    run_make_file(make_path, cache_make)
 
     active_phase = _using_phases[-1]
     phase_map = {phase.sopt('name'): phase for phase in _using_phases}
 
-    idx += 1
     while idx < len(sys.argv):
         arg = sys.argv[idx]
+
+        if arg in ['-v', '--version']:
+            print_version()
+            return ReturnCode.SUCCEEDED.value
+
+        if arg in ['-h', '--help']:
+            print_help()
+            return ReturnCode.SUCCEEDED.value
+
+        if arg in ['-c', '--cache_makefile', '--module'] or arg.startswith('-m'):
+            print (f'{arg} must precede any of -p (--phase), -o (--override), '
+                   'or any action arguments.')
+            return ReturnCode.INVALID_ARGS.value
 
         if arg.startswith('-p') or arg == '--phase':
             phase_name = ''
@@ -974,20 +1107,20 @@ def main():
             else:
                 idx += 1
                 override = sys.argv[idx]
-            k, v = override.split(':')
-            if v:
+            if ':' in override:
+                k, v = override.split(':')
                 active_phase.push_option_overrides({k: v})
             else:
-                active_phase.pop_option_override([k])
+                active_phase.pop_option_overrides([override])
 
         else:
             action = arg
             if not active_phase.do(action):
-                return 255
+                return ReturnCode.ACTION_FAILED.value
 
         idx += 1
 
-    return 0
+    return ReturnCode.SUCCEEDED.value
 
 if __name__ == '__main__':
     main()
