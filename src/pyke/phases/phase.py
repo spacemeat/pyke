@@ -8,11 +8,10 @@ from typing_extensions import Self
 
 from ..action import (StepResult, ActionResult, ResultCode,
                       report_action_start, report_action_end, report_error)
+from .. import ansi as a
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
                          InvalidOptionKey, CircularDependencyError)
-
-from .. import ansi as a
 
 class Phase:
     '''
@@ -35,7 +34,6 @@ class Phase:
             'verbosity': 0,
             'project_anchor': WorkingSet.makefile_dir,
             'gen_anchor': WorkingSet.makefile_dir,
-            'use_ansi_colors': True,
             'simulate': False,
             'colors_24bit': {
                 'success':          {'form': 'rgb24', 'fg': [0x33, 0xaf, 0x55] },
