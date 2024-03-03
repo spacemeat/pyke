@@ -1,7 +1,7 @@
 ''' Options class and friends.'''
 
 import copy
-from enum import Enum, auto
+from enum import Enum
 from .utilities import (re_interp_option, InvalidOptionOperation)
 
 class OptionOp (Enum):
@@ -61,6 +61,10 @@ class Options:
     def __iter__(self):
         ''' Iterates over the options.'''
         return iter(self.opts.items())
+
+    def clone(self):
+        ''' Return a deep copy of this options object.'''
+        return copy.deepcopy(self)
 
     def iter(self):
         ''' Returns an iterator over the options.'''

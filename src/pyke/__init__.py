@@ -1,4 +1,7 @@
-'''
+"""
 Defining the pyke module.
-'''
-from pyke.pyke import CompilePhase, LinkPhase, CompileAndLinkPhase, use_phases
+"""
+
+import pyke.utilities
+from pyke.phases import CompileAndLinkPhase, CompilePhase, LinkPhase, Phase
+from pyke.pyke import use_phases
