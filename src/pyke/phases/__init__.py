@@ -1,4 +1,6 @@
-from pyke.phases.phase import Phase
-from pyke.phases.compile import CompilePhase
-from pyke.phases.link import LinkPhase
-from pyke.phases.compile_and_link import CompileAndLinkPhase
+''' The phases directory imports. '''
+
+from .phase import Phase
+from .compile import CompilePhase
+from .link import LinkPhase
+from .compile_and_link import CompileAndLinkPhase

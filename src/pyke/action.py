@@ -1,3 +1,5 @@
+''' Things concerning phase actions. '''
+
 from enum import Enum
 import sys
 from typing import Optional

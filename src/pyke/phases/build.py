@@ -1,3 +1,5 @@
+''' Contains the BuildPhase intermediate phase class. '''
+
 from pathlib import Path
 
 from ..action import ActionStep, ResultCode
@@ -318,4 +320,3 @@ class BuildPhase(Phase):
                 else:
                     step.set_result(ResultCode.ALREADY_UP_TO_DATE)
         return step_results
-
