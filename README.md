@@ -181,11 +181,11 @@ Currently, the supported actions in each built-in phase are:
 
 |phase class|actions
 |---|---
-|`Phase`|`report`
-|`BuildPhase`|`clean`; `build`
-|`CompilePhase`|`clean`; `build`
-|`LinkPhase`|`clean`; `build`
-|`CompileAndBuildPhase`|`clean`; `build`
+|Phase|report
+|BuildPhase|clean; build
+|CompilePhase|clean; build
+|LinkPhase|clean; build
+|CompileAndBuildPhase|clean; build
 
 These can be spcified on the command line. Multiple actions can be taken in succession; see below for CLI operation.
 
@@ -227,12 +227,16 @@ So how does one specify that an override *modifies* an option, instead of *repla
 |dict|-  |any|the entry is removed from the dict by key
 |dict|\|  |dict|the result is the union with the dict
 
+TODO: some examples here
+
 ### Viewing options
 
 The base `Phase` class defines the `report` action. This action prints the phases in depth-first dependency order, and each phase's full set of options in both raw, uninterpolated form, and fully interpolated form. This makes it easy to see what options are available, the type each is set to by default, and how interpolation and override operations are affecting the final result. It's handy for debugging a difficult build.
 
 ```bash
 $ pyke report
+```
+```
 phase: simple
 name: = ~~unnamed~~
       = simple
@@ -252,6 +256,8 @@ Each option is listed with all its stacked raw values, followed by the interpola
 
 ```bash
 $ pyke -o name:less_simple report
+```
+```
 phase: less_simple
 name: = ~~unnamed~~
       = ~~simple~~
@@ -289,6 +295,8 @@ One useful feature is that interpolations can be nested. `BuildPhase` uses this 
 
 ```bash
 $ pyke report
+```
+```
 ...
 kind: = release
      -> release
@@ -308,6 +316,8 @@ Now, when overriding `kind`, a different version the optimization flags (passed 
 
 ```bash
 $ pyke -o kind:debug report
+```
+```
 ...
 kind: = ~~release~~
       = debug
