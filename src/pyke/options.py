@@ -6,22 +6,24 @@ from .utilities import (re_interp_option, InvalidOptionOperation)
 
 class OptionOp (Enum):
     ''' The operations you can perform with option overrides.'''
-    REPLACE = '=' #auto()
-    APPEND = '+' #auto()
-    REMOVE = '-' #auto()
+    REPLACE = '='
+    APPEND = '+'    # append to lists/tuples, add to sets, union to dicts
+    EXTEND = '*'    # extend to lists/tuples
+    REMOVE = '-'    # remove by index from lists/tuples, by key from sets and dicts
+    UNION = '|'     # union of sets and dicts
+    INTERSECT = '&'     # intersection of sets
+    DIFF = '~'    # difference of sets
+    SYM_DIFF = '^' # sym_diff of sets
+
 
 class Option:
     ''' Represents a named option. Stores all its overrides.'''
-    def __init__(self,
-                 name: str,
-                 value):
+    def __init__(self, name: str, value):
         self.name = name
         self.value = []
         self.value.append((value, OptionOp.REPLACE))
 
-    def push_value_op(self,
-                      value,
-                      op: OptionOp = OptionOp.REPLACE):
+    def push_value_op(self, value, op: OptionOp = OptionOp.REPLACE):
         ''' Sets a value to this Option, as an override to previous values. '''
         self.value.append((value, op))
 
@@ -78,12 +80,9 @@ class Options:
         ''' Push an option override.'''
         if op is None:
             op = OptionOp.REPLACE
-            if k[-1] == '+':
-                op = OptionOp.APPEND
-                k = k[:-1]
-            elif k[-1] == '-':
-                op = OptionOp.REMOVE
-                k = k[:-1]
+            for eop in OptionOp:
+                if k[-1] == eop.value:
+                    op = eop
 
         if k not in self.opts:
             self.opts[k] = Option(k, v)
@@ -117,6 +116,17 @@ class Options:
                 val = [interp(ve) for ve in val]
                 return val
 
+            if isinstance(val, tuple):
+                val = (interp(ve) for ve in val)
+                return val
+
+            if isinstance(val, set):
+                new_val = set()
+                for vv in val:
+                    vv = interp(vv)
+                    new_val.add(vv)
+                return new_val
+
             if isinstance(val, dict):
                 new_val = {}
                 for vk, vv in val.items():
@@ -138,40 +148,75 @@ class Options:
         return computed
 
     def _apply_op(self, computed, override, op):
+        if op == OptionOp.REPLACE:
+            return override
+        
         if isinstance(computed, list):
-            if op == OptionOp.REPLACE:
-                return override
             if op == OptionOp.APPEND:
-                if isinstance(override, list):
-                    return [*computed, *override]
                 return [*computed, override]
+            if op == OptionOp.EXTEND:
+                if isinstance(override, (list, tuple)):
+                    return [*computed, *override]
             if op == OptionOp.REMOVE:
                 if isinstance(override, int):
                     return [e for i, e in enumerate(computed) if i != override]
-                if isinstance(override, list):
-                    if any((not isinstance(e, int) for e in override)):
-                        raise InvalidOptionOperation('')
-                    return [e for i, e in enumerate(computed) if i not in override]
-                raise InvalidOptionOperation('')
+                if isinstance(override, (list, tuple)):
+                    if all((isinstance(e, int) for e in override)):
+                        return [e for i, e in enumerate(computed) if i not in override]
+                raise InvalidOptionOperation('Remove from list operands must be by integer index.')
+
+        if isinstance(computed, tuple):
+            if op == OptionOp.APPEND:
+                return (*computed, override)
+            if op == OptionOp.EXTEND:
+                if isinstance(override, (list, tuple)):
+                    return (*computed, *override)
+            if op == OptionOp.REMOVE:
+                if isinstance(override, int):
+                    return (e for i, e in enumerate(computed) if i != override)
+                if isinstance(override, (list, tuple)):
+                    if all((isinstance(e, int) for e in override)):
+                        return (e for i, e in enumerate(computed) if i not in override)
+                raise InvalidOptionOperation('Remove from tuple operands must be by integer index.')
+
+        if isinstance(computed, set):
+            if op == OptionOp.APPEND:
+                return {*computed, override}
+            if op == OptionOp.REMOVE:
+                return computed - {override}
+            if op == OptionOp.UNION:
+                if isinstance(override, set):
+                    return computed | override
+                raise InvalidOptionOperation('Union operands must be sets.')
+            if op == OptionOp.INTERSECT:
+                if isinstance(override, set):
+                    return computed & override
+                raise InvalidOptionOperation('Intersect operands must be sets.')
+            if op == OptionOp.DIFF:
+                if isinstance(override, set):
+                    return computed - override
+                raise InvalidOptionOperation('Difference operands must be sets.')
+            if op == OptionOp.SYM_DIFF:
+                if isinstance(override, set):
+                    return computed ^ override
+                raise InvalidOptionOperation('Symmetric difference operands must be sets.')
 
         if isinstance(computed, dict):
-            if op == OptionOp.REPLACE:
-                return override
-            if op == OptionOp.APPEND:
+            if op == OptionOp.APPEND or op == OptionOp.UNION:
                 if not isinstance(override, dict):
-                    raise InvalidOptionOperation('')
+                    raise InvalidOptionOperation('Append/union operands to dicts must be dicts.')
                 return computed | override
             if op == OptionOp.REMOVE:
                 if isinstance(override, str):
                     return {k: v for k, v in computed.items() if k != override}
-                if isinstance(override, list):
-                    if any((not isinstance(e, str) for e in override)):
-                        raise InvalidOptionOperation('')
-                    return {k: v for k, v, in computed.items() if k not in override}
-                raise InvalidOptionOperation('')
+                if isinstance(override, (list, tuple, set)):
+                    if all((isinstance(e, str) for e in override)):
+                        return {k: v for k, v, in computed.items() if k not in override}
+                raise InvalidOptionOperation('Remove operands from dicts must be lists, tuples, or sets.')
 
         if op != OptionOp.REPLACE:
-            raise InvalidOptionOperation('')
+            raise InvalidOptionOperation('Override operators cannot be applied to this option'
+                                         f'of type {type(computed)}.')
         return override
 
 

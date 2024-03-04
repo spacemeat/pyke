@@ -204,7 +204,7 @@ def main():
                 idx += 1
                 override = sys.argv[idx]
             if ':' in override:
-                k, v = override.split(':')
+                k, v = override.split(':', 1)
                 active_phase.push_option_overrides({k: v})
             else:
                 active_phase.pop_option_overrides([override])

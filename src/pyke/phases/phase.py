@@ -259,6 +259,8 @@ class Phase:
                 vu = self.options.get(k, False)
                 vi = self.options.get(k)
 
+                assert(isinstance(vu, list))
+
                 opts_str = ''.join((opts_str,
                                     f'{c("key")}{k}: '))
                 last_replace_idx = len(vu) - next(i for i, e in enumerate(reversed(vu))
@@ -272,7 +274,7 @@ class Phase:
                                         f'{" " * indent}{color}{op} {vue[0]}{a.off}\n'))
 
                 opts_str = ''.join((opts_str,
-                                    f'{" " * (len(k) + 2)}{c("val_interp")}= {vi}\n'))
+                                    f'{" " * (len(k) + 1)}{c("val_interp")}-> {vi}\n'))
 
             report = f'{report}\n{opts_str}'
             print (report)

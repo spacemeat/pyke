@@ -63,6 +63,7 @@ class BuildPhase(Phase):
         Gets the src_idxth source from options. Ensures the result is a Path.
         '''
         sources = self.lopt('sources')
+        assert isinstance(sources, list)
         return sources[src_idx]
 
     def make_src_path(self, src_idx):
@@ -85,6 +86,7 @@ class BuildPhase(Phase):
         Generate te full path for each source file.
         '''
         sources = self.lopt('sources')
+        assert isinstance(sources, list)
         for i in range(len(sources)):
             yield self.make_src_path(i)
 
@@ -93,6 +95,7 @@ class BuildPhase(Phase):
         Generate the full path for each target object file.
         '''
         sources = self.lopt('sources')
+        assert isinstance(sources, list)
         for i in range(len(sources)):
             yield self.make_obj_path_from_src(i)
 
