@@ -103,7 +103,7 @@ So in the example above, first `make.py` imports the important pyke symbols. The
 
 ### So how does pyke know where to find the sources? Or the headers?
 
-Every `Phase`-derived class defines its own default options, which give a default configuration for its actions. As an example, one option in `CompileAndLinkPhase` is `src_dir`, which specifies the directory relative to the project root where source files can be located. The default is `src`, which also happens to be where `simple`'s source files are stored. Similarly, `simple`'s headers are stored in `include`, and `CompileAndLinkPhase` has another option named `include_dirs` which contains `[include]`. Note that this is a list of length one, holding the default directory where include files are to be found. When it comes time to build with, say, `gcc`, the `include_dirs` value becomes `-Iinclude`, and the source files are given as source arguments to `gcc`. There is more to the story of how directories are determined, but this suffices for the moment.
+Every `Phase`-derived class defines its own default options, which give a default configuration for its actions. As an example, one option in `CompileAndLinkPhase` is `src_dir`, which specifies the directory relative to the project root (actually, an achor directory, but mnore on that later) where source files can be located. The default is `src`, which also happens to be where `simple`'s source files are stored. Similarly, `simple`'s headers are stored in `include`, and `CompileAndLinkPhase` has another option named `include_dirs` which contains `[include]`. Note that this is a list of length one, holding the default directory where include files are to be found. When it comes time to build with, say, `gcc`, the `include_dirs` value becomes `-Iinclude`, and the source files are given as source arguments to `gcc`. There is more to the story of how directories are determined, but this suffices for the moment.
 
 Every option can have its default value modified or replaced. If your source files are stored in a different directory (say, `source` instead of `src`), you can add `'src_dir': 'source'` to the phase definition, and pyke will find the files.
 
@@ -178,7 +178,7 @@ As mentioned, dependencies among phases are set in the makefile. There are sever
 * When options are set to a phase, they override already-set options in that phase, *and all the dependent phases as well*. This enables one to set an option such as `'kind': 'debug'` in, say, a link phase, and have that propagate to the dependent compile phases to produce a debug build.
 * When an `action` such as `clean` or `build` is called on a phase, that action is first called on each of that phase's dependency phases, and so on up the graph. The actions are then performed on the way back, in depth-first order. A phase which doesn't implement a particular action simply ignores it.
 
-> Note that the confluence of `Phase` class heierarchies and `Phase` dependencies must be carefully considered. Derived phases inherit options polymorphically, and the most derived phase that can perform a particular action will the the one to do so; dependent phases *all* inherit option overrides from their dependents, and *all* perform any action called to their dependents, if *any* phase in their class heierarchy can do so.
+> Note that the confluence of `Phase` class heierarchies and `Phase` dependencies must be carefully considered. Derived phases inherit options polymorphically, and the most derived phase that can perform a particular action will be the one to do so; dependent phases *all* inherit option overrides from their dependents, and *all* perform any action called to their dependents, if *any* phase in their class heierarchy can do so.
 
 ## Actions
 
@@ -194,7 +194,7 @@ Currently, the supported actions in each built-in phase are:
 |CFamilyBuildPhase|clean; build
 |CompilePhase|clean; build
 |LinkPhase|clean; build
-|CompileAndCFamilyBuildPhase|clean; build
+|CompileAndLinkPhase|clean; build
 
 These can be spcified on the command line. Multiple actions can be taken in succession; see below for CLI operation.
 
@@ -205,7 +205,7 @@ Options do not have to be strings. They can be any Python type, really, with the
 - Options should be *convertible* to strings.
 - Options must be copyable (via `copy.deepcopy()`).
 
-We've already seen list-type options, and there are several of those. Custom ANSI colors for output are stored as dictionaries. And of course, any phase class you create can use any new option types you desire, as long as they meet the above criteria.
+We've already seen list-type options, and there are several of those in the built-in phase classes. Custom ANSI colors for output are stored as dictionaries of dictionaries. And of course, any phase class you create can use any new option types you desire, as long as they meet the above criteria.
 
 ### Overrides are stacked
 
@@ -213,7 +213,7 @@ When an option is applied to a phase which already has as option by the same nam
 
 ### Override operators
 
-So how does one specify that an override *modifies* an option, instead of *replacing* it? When specifying the name of the option to set, you can append the name with '+' or '-' to specify adding / extending or removing. Only a few option types get special behavior for this syntax:
+So how does one specify that an override *modifies* an option, instead of *replacing* it? When specifying the name of the option to set, you can append the name with '+' or '-' or another operator to specify the modifier. A few option types get special behavior for this syntax:
 
 |original type|operator|override type|effect
 |---|---|---|---
@@ -226,7 +226,7 @@ So how does one specify that an override *modifies* an option, instead of *repla
 |tuple|*  |list\|tuple|the override elements extend the list
 |tuple|-  |int|the override specifies an index to remove from the list
 |tuple|-  |list[int]\|tuple[int]|the override specifies a collection of indices to remove from the list
-|set|+, \||any|the override is added to the set
+|set|+, \||any non-set|the override is added to the set
 |set|-  |any|the override is removed from the set
 |set|\|  |set|the result is unioned with the set 
 |set|&  |set|the result is intersected with the set
@@ -245,7 +245,7 @@ The base `Phase` class defines the `report` action. This action prints the phase
 ```
 $ pyke report
 phase: simple
-name: = compile_and_link
+name: = unnamed
       = simple
      -> simple
 verbosity: = 0
@@ -259,12 +259,12 @@ simulate: = False
 ...
 ```
 
-Each option is listed with all its stacked raw values, followed by the interpolated value. Notice above that the default name, "compile_and_link", is overridden by a replacement operation (`=`) with "simple". You can also easily see how command-line overrides are affecting the results. More on how to set them below, but it looks like this:
+Each option is listed with all its stacked raw values, followed by the interpolated value. Notice above that the default name, `unnamed`, is overridden by a replacement operation (`=`) with `simple`. You can also easily see how command-line overrides are affecting the results. More on how to set them below, but overriding the `name` option with `less_simple` looks like this:
 
 ```
 $ pyke -o name:less_simple report
 phase: less_simple
-name: = compile_and_link
+name: = unnamed
       = simple
       = less_simple
      -> less_simple
@@ -279,7 +279,7 @@ simulate: = False
 ...
 ```
 
-Here again, `name` has been overridden a second, this time by the command line.
+Here again, `name` has been overridden a second time, and has a third value on its stack.
 
 The detailed report is what you get at `report_verbosity` level `2`. If you want to see only the interpolated values, you can override the `report_verbosity` option to `1`:
 
@@ -380,7 +380,7 @@ p.push_option_override(                 # appending to sources
 p.use_phases(phase)
 ```
 
-(This is obviously a contrived example, but the showcases the `push_option_override` call.)
+(This is obviously a contrived example, but it showcases the `push_option_override` call.)
 
 ### Overriding on the command line
 
@@ -401,62 +401,57 @@ String values can be in quotes if they need to be disambiguated from punctuation
 $ pyke -o "my_set_of_one:{foo,}" ...
 ``` -->
 
-As discussed, each override is a push onto an override stack. Option overrides can be popped by omitting the ':<value>' from the -o argument. This might be relevant if performing multple actions, but only want an option set for some:
-
-```bash
-$ pyke -o verbosity:2 clean -o verbosity build
-```
-
 ### Base pyke options
 
-There are a few options that are universal to pyke, regardless of the type of project it is running. Here are the options you can set to adjust its behavior.
+There are a few options that are uiversal to pyke, regardless of the type of project it is running. Here are the eoptions you can set to adjust its behavior:
 
 |option|default|usage
 |---|---|---
 |name|phase|The name of the phase. You should likely override this.
 |report_verbosity|2|The verbosity of reporting. 0 just reports the phase by name; 1 reports the phase's interpolated options; 2 reports the raw and interpolated options.
 |verbosity|0|The verbosity of non-reporting actions. 0 is silent, unless there are errors; 1 is an abbreviated report; 2 is a full report with all commands run.
-|project_anchor|<project root>|This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
-|gen_anchor|<project root>|This is an anchor directory for other directories to relate to when referencing generated build artifacts like object files or executables.
+|project_anchor|\<project root\>|This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
+|gen_anchor|\<project root\>|This is an anchor directory for other directories to relate to when referencing generated build artifacts like object files or executables.
 |simulate|False|This specifies that the build should simulate a run, and not generate real files. This is a near-future feature not yet working.
-|colors|{colors_24bit}|Specifies the name of a color palette to use in reports and other output. Colors are discussed below; you can set this value to '{colors_none}' to disable color output.
+|colors|{colors_24bit}|Specifies the name of a color palette to use in reports and other output. Colors are discussed below; you can set this value to `{colors_none}` to disable color output.
+
+When running pyke from a directory that is different from your makefile's directory, you can specify the makefile path with `-m`. This is discussed below, but by default both the project root directory (`project_anchor`) and generated output root directory (`gen_anchor`) are relative to the makefile's directory, regardless of where you invoke from. However, this behavior can be modified. By overriding `gen_anchor` to a different directory in your file system, you can cause all the generated outputs to be placed anywhere. The generated directory structure remains the same, just at a different root location. Note that intermediate files which are inputs of later phases, like compiled object files, are still resolved correctly, as *any* generated file is rooted by `gen_anchor`. Likewise, any file that is expected as part of the project inputs created by developers (anything you might check in to your project repository, say) is anchored by `project_anchor`. If you don't want your makefile to be situated at the project root, overriding `project_anchor` to the actual project root will line things up.
 
 ### C/C++ specific options
 
 Pyke began as a build tool for C and C++ style projects. The requisite classes are those that derive from `CFamilyBuildPhase`, and have lots of options for controlling the build. Note that since clang and gcc share much of the same command arguments, their toolchain-specific arguemts are often combined into a single definition.
 
 |option|default|usage
-|---|---|---
-|toolkit|gnu|Sets the system build tools to use. `gnu` uses gcc, `clang` uses Clang, `visualstudio` uses Visual Studio's compiler.
+|---|---
+|toolkit|gnu|Sets the system build tools to use. `gnu` uses gcc; `clang` uses clang; `visualstudio` uses Visual Studio's compiler.
 |language|C++|Sets the language.
 |language_version|23|Sets the language version.
-|gnuclang_warnings|['all', 'extra', 'error']|Sets warning flags. These are toolkit-specific.
 |kind|release|Release or debug build. See below for adding new kinds.
-|gnuclang_debug_debug_level|2|Debug level during debug builds. Sets n as passed by -g<n> to gnu/clang.
-|gnuclang_debug_optimization|g|Optimization level during debug builds. Sets n as passed by -O<n> to gnu/clang.
+|gnuclang_warnings|['all', 'extra', 'error']|Sets warning flags. These are toolkit-specific.
+|gnuclang_debug_debug_level|2|Debug level during debug builds. Sets n as passed by -g\<n\> to gnu/clang.
+|gnuclang_debug_optimization|g|Optimization level during debug builds. Sets n as passed by -O\<n\> to gnu/clang.
 |gnuclang_debug_flags|[-fno-inline, -fno-lto, -DDEBUG]|Additional flags passed to gnu/clang during debug builds.
-|gnuclang_release_debug_level|0|Debug level during release builds. Sets n as passed by -g<n> to gnu/clang.
-|gnuclang_release_optimization|2|Optimization level during release builds. Sets n as passed by -O<n> to gnu/clang.
+|gnuclang_release_debug_level|0|Debug level during release builds. Sets n as passed by -g\<n\> to gnu/clang.
+|gnuclang_release_optimization|2|Optimization level during release builds. Sets n as passed by -O\<n\> to gnu/clang.
 |gnuclang_release_flags|[-DNDEBUG]|Additional flags passed to gnu/clang during release builds.
-|visualstudio_debug_debug_level|Debug level during debug builds. Sets n as passed by [?] to Visual Studio.
-|visualstudio_debug_optimization|Optimization level during debug builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_warnings|[]|Sets warning flags. These are toolkit-specific.
+|visualstudio_debug_debug_level||Debug level during debug builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_debug_optimization||Optimization level during debug builds. Sets n as passed by [?] to Visual Studio.
 |visualstudio_debug_flags|[]|Additional flags passed to Visual Studio during debug builds.
-|visualstudio_release_debug_level|Debug level during release builds. Sets n as passed by [?] to Visual Studio.
-|visualstudio_release_optimization|Optimization level during release builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_release_debug_level||Debug level during release builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_release_optimization||Optimization level during release builds. Sets n as passed by [?] to Visual Studio.
 |visualstudio_release_flags|[]|Additional flags passed to Visual Studio during relase builds.
-|packages|[]|Specifies a list of packages which are passed into `pkg-config` for automatically specifying include directories and libraries.
-|multithreaded|true|Specifies a multithreaded program.
+|pkg_config|[]|Specifies a list of packages which are passed into `pkg-config` for automatically specifying include directories and libraries.
+|multithreaded|False|Specifies a multithreaded program.
 |definitions|[]|Specifies a set of macro definitions.
 |additional_flags|[]|Specifies a set of additional flags passed to the compiler.
-|incremental_build|true|If set, and using the `CompileAndLink` phase, forces the build to create individual object for each source, and link them in a separate step. Otherwise, the build will pass all the sources to the build tool at once, to create a binary target in one step.
-
+|incremental_build|True|If set, and using the `CompileAndLink` phase, forces the build to create individual object for each source, and link them in a separate step. Otherwise, the build will pass all the sources to the build tool at once, to create a binary target in one step.
 |build_dir|build|The default subdirectory to place all build results into.
 |build_detail|{kind}.{toolkit}|A default subdirectoy of {build} where more specific build results are placed.
 |obj_dir|int|A default subdirectory where intermediate files are placed.
 |exe_dir|bin|A default subdirectory where final executable files are plced.
 |obj_anchor|{gen_anchor}/{build_dir}/{build_detail}/{obj_dir}|The full directory layout of intermediate files.
 |exe_anchor|{gen_anchor}/{build_dir}/{build_detail}/{exe_dir}|The full directory layout of executable files.
-
 |src_dir|src|The default directory where source files can be found.
 |src_anchor|{project_anchor}/{src_dir}|The full directory layout where source files can be found.
 |include_dirs|[include]|The default directories where project headers are searched.
@@ -464,7 +459,6 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |obj_name|{obj_basename}.o|How to name the generated object file.
 |obj_path|{obj_anchor}/{obj_name}|The final full path of the generated object file.
 |sources|[]|A list of source files to compile in this phase.
-
 |lib_dirs|[]|A list of library directories.
 |libs|[]|A list of libraries to link with.
 |shared_libs|[]|A list of shared objects to link with.
@@ -507,9 +501,17 @@ The command line arguments are:
 
 ### Simulating the run
 
+This is a near-future feature. TBD.
+
 ### Adding new phases
 
+Of course, a benefit of a programmatic build system is extension. Building your own Phase classes shold be straightforward.
+
+
+
 #### Adding new actions
+
+### Adding new build kinds
 
 ### Setting colors
 
