@@ -41,10 +41,10 @@ class CFamilyBuildPhase(Phase):
             'kind_flags': '{{tool_args_{toolkit}}_{kind}_flags}',
             'warnings': '{{tool_args_{toolkit}}_warnings}',
             'pkg_config': [],
-            'multithreaded': 'true',
+            'posix_threads': False,
             'definitions': [],
             'additional_flags': [],
-            'incremental_build': 'true',
+            'incremental_build': True,
 
             'build_dir': 'build',
             'build_detail': '{kind}.{toolkit}',
@@ -185,32 +185,36 @@ class CFamilyBuildPhase(Phase):
         inc_dirs = self.lopt('include_dirs')
         proj_anchor = self.sopt('project_anchor')
         pkg_configs = self.lopt('pkg_config')
+        assert isinstance(pkg_configs, list)
 
         # TODO: make an option for {proj_anchor/{inc}
         inc_dirs = ''.join((f'-I{proj_anchor}/{inc} ' for inc in inc_dirs))
-        pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' + 
+        pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' +
                    ' '.join(pkg for pkg in pkg_configs) +
                    ')') if len(pkg_configs) > 0 else ''
 
-        pkg_inc_bits_cmd = ('$(pkg-config --cflags-only-other ' + 
+        pkg_inc_bits_cmd = ('$(pkg-config --cflags-only-other ' +
                    ' '.join(pkg for pkg in pkg_configs) +
                    ')') if len(pkg_configs) > 0 else ''
 
         return {
             'inc_dirs': inc_dirs + pkg_inc_cmd,
             'pkg_inc_bits': pkg_inc_bits_cmd,
+            'posix_threads': self.opt('posix_threads'),
         }
 
     def make_link_arguments(self):
         ''' Constructs the linking arguments of a gcc command.'''
         pkg_configs = self.lopt('pkg_config')
-        pkg_dirs_cmd = ('$(pkg-config --libs-only-L ' + 
+        assert isinstance(pkg_configs, list)
+
+        pkg_dirs_cmd = ('$(pkg-config --libs-only-L ' +
                    ' '.join(pkg for pkg in pkg_configs) +
                    ')') if len(pkg_configs) > 0 else ''
-        pkg_libs_cmd = ('$(pkg-config --libs-only-l ' + 
+        pkg_libs_cmd = ('$(pkg-config --libs-only-l ' +
                    ' '.join(pkg for pkg in pkg_configs) +
                    ')') if len(pkg_configs) > 0 else ''
-        pkg_libs_bits_cmd = ('$(pkg-config --libs-only-other ' + 
+        pkg_libs_bits_cmd = ('$(pkg-config --libs-only-other ' +
                    ' '.join(pkg for pkg in pkg_configs) +
                    ')') if len(pkg_configs) > 0 else ''
 
@@ -235,6 +239,7 @@ class CFamilyBuildPhase(Phase):
             'static_libs': static_libs_cmd,
             'shared_libs': shared_libs_cmd,
             'pkg_libs_bits': pkg_libs_bits_cmd,
+            'posix_threads': self.opt('posix_threads'),
         }
 
     def do_step_delete_file(self, path):
@@ -278,8 +283,10 @@ class CFamilyBuildPhase(Phase):
         Perform a C or C++ source compile operation as an action step.
         '''
         step_results = None
-        with ActionStep('compiling', str(src_path), str(obj_path),
-                        f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} {src_path}') as step:
+        with ActionStep(
+            'compiling', str(src_path), str(obj_path),
+            f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} '
+            f'{src_path}{" -pthread" if args["posix_threads"] else ""}') as step:
             step_results = step
             if not src_path.exists():
                 step.set_result(ResultCode.MISSING_INPUT, src_path)
@@ -302,9 +309,11 @@ class CFamilyBuildPhase(Phase):
 
         step_results = None
         missing_objs = []
-        with ActionStep('compiling', '[*objs]', str(exe_path),
-                        (f'{args["pkg_libs_bits"]} {prefix}-o {exe_path} {object_paths_cmd}{args["lib_dirs"]}'
-                         f'{args["static_libs"]}{args["shared_libs"]}')) as step:
+        with ActionStep(
+            'compiling', '[*objs]', str(exe_path),
+            f'{args["pkg_libs_bits"]} {prefix}-o {exe_path} {object_paths_cmd}'
+            f'{" -pthread" if args["posix_threads"] else ""}{args["lib_dirs"]}'
+            f'{args["static_libs"]}{args["shared_libs"]}') as step:
             step_results = step
             for obj_path in object_paths:
                 if not obj_path.exists():
@@ -337,6 +346,7 @@ class CFamilyBuildPhase(Phase):
         missing_srcs = []
         with ActionStep('compiling', '[*srcs]', str(exe_path),
                         f'{prefix} {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {exe_path} '
+                        f'{" -pthread" if args["posix_threads"] else ""}'
                         f'{args["pkg_libs_bits"]} {src_paths_cmd}{args["lib_dirs"]}'
                         f'{args["static_libs"]}{args["shared_libs"]}') as step:
             step_results = step

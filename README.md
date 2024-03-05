@@ -422,7 +422,7 @@ When running pyke from a directory that is different from your makefile's direct
 Pyke began as a build tool for C and C++ style projects. The requisite classes are those that derive from `CFamilyBuildPhase`, and have lots of options for controlling the build. Note that since clang and gcc share much of the same command arguments, their toolchain-specific arguemts are often combined into a single definition.
 
 |option|default|usage
-|---|---
+|---|---|---
 |toolkit|gnu|Sets the system build tools to use. `gnu` uses gcc; `clang` uses clang; `visualstudio` uses Visual Studio's compiler.
 |language|C++|Sets the language.
 |language_version|23|Sets the language version.
@@ -442,7 +442,7 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |visualstudio_release_optimization||Optimization level during release builds. Sets n as passed by [?] to Visual Studio.
 |visualstudio_release_flags|[]|Additional flags passed to Visual Studio during relase builds.
 |pkg_config|[]|Specifies a list of packages which are passed into `pkg-config` for automatically specifying include directories and libraries.
-|multithreaded|False|Specifies a multithreaded program.
+|posix_threads|False|Specifies a posix multithreaded program.
 |definitions|[]|Specifies a set of macro definitions.
 |additional_flags|[]|Specifies a set of additional flags passed to the compiler.
 |incremental_build|True|If set, and using the `CompileAndLink` phase, forces the build to create individual object for each source, and link them in a separate step. Otherwise, the build will pass all the sources to the build tool at once, to create a binary target in one step.
