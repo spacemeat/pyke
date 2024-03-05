@@ -56,7 +56,7 @@ import pyke as p
 
 phase = p.CompileAndLinkPhase({
     'name': 'simple',
-    'sources': ['a.c', 'b.c', 'c.c', 'main.c'],
+    'sources': ['a.cpp', 'b.cpp', 'c.cpp', 'main.cpp'],
     'exe_basename': '{name}',
 })
 
@@ -85,9 +85,9 @@ The project was quietly built in a subdirectory:
 │   └── abc.h
 ├── make.py
 └── src
-    ├── a.c
-    ├── b.c
-    ├── c.c
+    ├── a.cpp
+    ├── b.cpp
+    ├── c.cpp
     └── main.c
 ```
 
@@ -115,13 +115,13 @@ Every option can have its default value modified or replaced. If your source fil
 
 In a nutshell, a string value in an option can have all or part of it enclosed in `'{''}'`. This signifies an interpolation, which is simply to replace that portion of the string with the option given by the name in braces. The name is recursively looked up in the options table, its string values interpolated the same way, and returned to replace. Above, the executable name (`'exe_basename'`) is interpolated as `'{name}'`. The text is replaced by `simple`, the value of the `name` option.
 
-> It should be noted that most of these options so far are actually contained in a `Phase`-derived class called `BuildPhase`. This is because several different `BuildPhase`-derived classes make use of the same options. It works just the same, as derived phase class inherit their supers' options.
+> It should be noted that most of these options so far are actually contained in a `Phase`-derived class called `CFamilyBuildPhase`, which `CompileAndLinkPhase` derives from. This is because several other `CFamilyBuildPhase`-derived classes make use of the same options. It works just the same, as derived phase class inherit their supers' options.
 
 ## Phases
 
 Phases represent the transformation of files--inputs to outputs. Any useful build phase will have input files and output files. Some of these may be source, authored by developers. Some may be created by compiling source to object, linking objects to executables or libraries, cloning repos, or running code generation tools. When the outputs of one phase are the inputs of another, the one is a `dependency` of the other. Dependencies are set in the makefile explicitly, but their output->input mechanistry is automatic once set.
 
-A specific phase may be invoked on the command line with `-p phase`, but this is optional. If a phase is not specified, then the *last* phase passed to `pyke.use_phases()` is the default phase.
+A specific phase may be invoked on the command line with `-p <phase-name>`, referencing the `name` of the phase, but this is optional. If a phase is not specified, then the *last* phase passed to `pyke.use_phases()` in the makefile is the default phase.
 
 Each operation of a build may have a dedicated phase. C/C++ builds that are more complex than `simple` above are likely to have a `CompilePhase` instance dedicated to each single source file->object file transformation. Phases can be cloned, and their options as set at the time of cloning are copied with them. So, a template `CompilePhase` can be preset, and each clone made have its requisite source file set to `src`. Each `CompilePhase` object would then be set as a dependency of a `LinkPhase` object, which will automatically gather the generated object files from each `CompilePhase` for linking. Such an example makefile might look like this (with an additional few source files in a differnt directory, for spice):
 
@@ -134,7 +134,7 @@ c_to_o_phases = []
 
 proto = p.CompilePhase({})
 
-for src in ('a.c', 'b.c', 'c.c', 'main.c'):
+for src in ('a.cpp', 'b.cpp', 'c.cpp', 'main.cpp'):
     c_to_o_phases.append(proto.clone({'name': f'compile_{src}', 'sources': [src]}))
 
 proto = p.CompilePhase({
@@ -142,7 +142,7 @@ proto = p.CompilePhase({
     'obj_dir': 'int/exp',
 })
 
-for src in ('a.c', 'b.c'):
+for src in ('a.cpp', 'b.cpp'):
     c_to_o_phases.append(proto.clone({'name': f'compile_{src}', 'sources': [src]}))
 
 o_to_exe_phase = p.LinkPhase({
@@ -157,10 +157,19 @@ p.use_phases(o_to_exe_phase)
 
 Pyke comes with some built-in `Phase` classes--not many yet, but it's early still:
 * `class Phase`: Common base class for all other phases
-* `class BuildPhase(Phase)`: Common base class for building C and C++ projects.
-* `class CompilePhase(BuildPhase)`: Phase for compiling a single source file to a single object file.
-* `class LinkPhase(BuildPhase)`: Phase for linking objects together to form a final archive, shared object, or executable binary.
-* `class CompileAndLinkPhase(BuildPhase)`: Phase for combining compile and link operations into one phase, perhaps with a single call to the native build tool.
+* `class CFamilyBuildPhase(Phase)`: Common base class for building C and C++ projects.
+* `class CompilePhase(CFamilyBuildPhase)`: Phase for compiling a single source file to a single object file.
+* `class LinkPhase(CFamilyBuildPhase)`: Phase for linking objects together to form a final archive, shared object, or executable binary.
+* `class CompileAndLinkPhase(CFamilyBuildPhase)`: Phase for combining compile and link operations into one phase, perhaps with a single call to the native build tool.
+
+An easier view of the class heierarchy:
+```
+Phase
+├── CFamilyBuildPhase
+│   ├── CompilePhase
+│   ├── LinkPHase
+│   └── CompileAndLinkPhase
+```
 
 ### Dependencies
 
@@ -182,10 +191,10 @@ Currently, the supported actions in each built-in phase are:
 |phase class|actions
 |---|---
 |Phase|report
-|BuildPhase|clean; build
+|CFamilyBuildPhase|clean; build
 |CompilePhase|clean; build
 |LinkPhase|clean; build
-|CompileAndBuildPhase|clean; build
+|CompileAndCFamilyBuildPhase|clean; build
 
 These can be spcified on the command line. Multiple actions can be taken in succession; see below for CLI operation.
 
@@ -227,18 +236,16 @@ So how does one specify that an override *modifies* an option, instead of *repla
 |dict|-  |any|the entry is removed from the dict by key
 |dict|\|  |dict|the result is the union with the dict
 
-TODO: some examples here
+<!--TODO: some examples here-->
 
 ### Viewing options
 
 The base `Phase` class defines the `report` action. This action prints the phases in depth-first dependency order, and each phase's full set of options in both raw, uninterpolated form, and fully interpolated form. This makes it easy to see what options are available, the type each is set to by default, and how interpolation and override operations are affecting the final result. It's handy for debugging a difficult build.
 
-```bash
+```
 $ pyke report
-```
-```
 phase: simple
-name: = ~~unnamed~~
+name: = compile_and_link
       = simple
      -> simple
 verbosity: = 0
@@ -252,15 +259,13 @@ simulate: = False
 ...
 ```
 
-Each option is listed with all its stacked raw values, followed by the interpolated value. Notice above that the default name, "unnamed", is overridden by a replacement operation (`=`) with "simple". You can also easily see how command-line overrides are affecting the results. More on how to set them below, but it looks like this:
+Each option is listed with all its stacked raw values, followed by the interpolated value. Notice above that the default name, "compile_and_link", is overridden by a replacement operation (`=`) with "simple". You can also easily see how command-line overrides are affecting the results. More on how to set them below, but it looks like this:
 
-```bash
+```
 $ pyke -o name:less_simple report
-```
-```
 phase: less_simple
-name: = ~~unnamed~~
-      = ~~simple~~
+name: = compile_and_link
+      = simple
       = less_simple
      -> less_simple
 verbosity: = 0
@@ -274,16 +279,29 @@ simulate: = False
 ...
 ```
 
-Here again, `name` has been overridden, this time by the command line.
+Here again, `name` has been overridden a second, this time by the command line.
+
+The detailed report is what you get at `report_verbosity` level `2`. If you want to see only the interpolated values, you can override the `report_verbosity` option to `1`:
+
+```
+$ pyke -o report_verbosity:1
+phase: simple
+name: -> less_simple
+verbosity: -> 0
+project_anchor: -> /home/schrock/src/pyke/tests/simple_app
+gen_anchor: -> /home/schrock/src/pyke/tests/simple_app
+simulate: -> False
+...
+```
 
 ### Interpolation
 
 The details on interpolation are straighforward. They mostly just work how you might expect. A portion of a string value surrounded by `'{''}'` may contain a name, and that name is then used to get the option by that name. The option is converted to a string, if it isn't already (it probably is), and replaces the substring and braces inline, as previously explained. This means that interpolating an option which is a list will expand that list into the string:
-```bash
+```
 $ pyke -o "list_of_srcs:Sources: {sources}" report
 ...
 list_of_srcs: = Sources: {sources}
-              = Sources: ['a.c', 'b.c', 'c.c', 'main.c']
+              = Sources: ['a.cpp', 'b.cpp', 'c.cpp', 'main.cpp']
 ...
 ```
 
@@ -291,50 +309,199 @@ If the entire value of an option is interpolated, rather than a substring, then 
 
 #### Nested interpolated string
 
-One useful feature is that interpolations can be nested. `BuildPhase` uses this in places to help resolve selectable options. Look carefully at `kind_optimization`'s raw value below. It contains two '{''}' sets, one inside the other. The inner set is interpolated first, and then the outer set according to the new value.
+One useful feature is that interpolations can be nested. `CFamilyBuildPhase` uses this in places to help resolve selectable options. Look carefully at `kind_optimization`'s raw value below. It contains four '{''}' sets, two inside the outer, and one nested even deeper. The inner set is interpolated first, and then the outer set according to the new value.
 
-```bash
+```
 $ pyke report
-```
-```
 ...
 kind: = release
      -> release
 ...
-debug_optimization: = 0
-                   -> 0
+tool_args_gnu: = gnuclang
+              -> gnuclang
+tool_args_clang: = gnuclang
+                -> gnuclang
 ...
-release_optimization: = 2
-                     -> 2
+gnuclang_debug_optimization: = 0
+                            -> 0
 ...
-kind_optimization: = {{kind}_optimization}
+gnuclang_release_optimization: = 2
+                              -> 2
+...
+kind_optimization: = {{tool_args_{toolkit}}_{kind}_optimization}
                   -> 2
 ...
 ```
 
-Now, when overriding `kind`, a different version the optimization flags (passed as -O to gcc, say) will be automatically interpolated:
+So `kind_optimization` evolves as:
 
-```bash
+```
+kind_optimization: -> {{tool_args_{toolkit}}_{kind}_optimization}
+                   -> {{tool_args_gnu}_{kind}_optimization}
+                   -> {gnuclang_{kind}_optimization}
+                   -> {gnuclang_release_optimization}
+                   -> 2
+```
+
+Now, when overriding `kind`, a different version of the optimization flags (passed as -On to gcc, say) will be automatically interpolated:
+
+```
 $ pyke -o kind:debug report
-```
-```
 ...
-kind: = ~~release~~
+kind: = release
       = debug
      -> debug
 ...
-kind_optimization: = {{kind}_optimization}
+kind_optimization: = {{tool_args_{toolkit}}_{kind}_optimization}
                   -> 0
 ...
 ```
 
-### Overriding in make.py
+### Overriding in the makefile
+
+When constructing phase objects, the options you declare are technically overrides, if they happen to have the same name as options in any base class. They are treated by default as replacements, though you can provide operators.
+
+You can also explicitly override after phase creation:
+
+```python
+import pyke as p
+
+phase = p.CompileAndLinkPhase({
+    'name': 'simple_experiemtal',
+    'sources': ['a.cpp', 'b.cpp', 'c.cpp', 'main.cpp'],
+    'exe_basename': '{name}',
+    'include_dirs+': 'include/exp'      # appending to include_dirs
+})
+
+p.push_option_override(                 # appending to sources
+    'sources+', 
+    (f'exp/{src}' for src in ['try_this.cpp', 'maybe.cpp', 'what_if.cpp']))
+
+p.use_phases(phase)
+```
+
+(This is obviously a contrived example, but the showcases the `push_option_override` call.)
 
 ### Overriding on the command line
 
+As seen previously, overrides can be specified on the command line as well with `-o <option<op>:value>`. This can look similar to overrides in code (though you may need to enquote it):
+
+```bash
+$ pyke -o colors:colors_none build
+```
+<!--
+```
+$ pyke -o "sources+:[exp/try_this.c, exp/maybe.c, exp/what_if.c]" report
+```
+-->
+<!--
+String values can be in quotes if they need to be disambiguated from punctuation. The usual escapements work with '\'. Overrides you specify with '[',']' are treated as lists, '(',')' as tuples, '{','}' as sets, and '{'':''}' as dicts. Since option keys must only contain letters, numbers, and underscores, you can differentiate a single-valued set from an interpolation by inserting a comma:
+
+```bash
+$ pyke -o "my_set_of_one:{foo,}" ...
+``` -->
+
+As discussed, each override is a push onto an override stack. Option overrides can be popped by omitting the ':<value>' from the -o argument. This might be relevant if performing multple actions, but only want an option set for some:
+
+```bash
+$ pyke -o verbosity:2 clean -o verbosity build
+```
+
+### Base pyke options
+
+There are a few options that are universal to pyke, regardless of the type of project it is running. Here are the options you can set to adjust its behavior.
+
+|option|default|usage
+|---|---|---
+|name|phase|The name of the phase. You should likely override this.
+|report_verbosity|2|The verbosity of reporting. 0 just reports the phase by name; 1 reports the phase's interpolated options; 2 reports the raw and interpolated options.
+|verbosity|0|The verbosity of non-reporting actions. 0 is silent, unless there are errors; 1 is an abbreviated report; 2 is a full report with all commands run.
+|project_anchor|<project root>|This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
+|gen_anchor|<project root>|This is an anchor directory for other directories to relate to when referencing generated build artifacts like object files or executables.
+|simulate|False|This specifies that the build should simulate a run, and not generate real files. This is a near-future feature not yet working.
+|colors|{colors_24bit}|Specifies the name of a color palette to use in reports and other output. Colors are discussed below; you can set this value to '{colors_none}' to disable color output.
+
 ### C/C++ specific options
 
+Pyke began as a build tool for C and C++ style projects. The requisite classes are those that derive from `CFamilyBuildPhase`, and have lots of options for controlling the build. Note that since clang and gcc share much of the same command arguments, their toolchain-specific arguemts are often combined into a single definition.
+
+|option|default|usage
+|---|---|---
+|toolkit|gnu|Sets the system build tools to use. `gnu` uses gcc, `clang` uses Clang, `visualstudio` uses Visual Studio's compiler.
+|language|C++|Sets the language.
+|language_version|23|Sets the language version.
+|gnuclang_warnings|['all', 'extra', 'error']|Sets warning flags. These are toolkit-specific.
+|kind|release|Release or debug build. See below for adding new kinds.
+|gnuclang_debug_debug_level|2|Debug level during debug builds. Sets n as passed by -g<n> to gnu/clang.
+|gnuclang_debug_optimization|g|Optimization level during debug builds. Sets n as passed by -O<n> to gnu/clang.
+|gnuclang_debug_flags|[-fno-inline, -fno-lto, -DDEBUG]|Additional flags passed to gnu/clang during debug builds.
+|gnuclang_release_debug_level|0|Debug level during release builds. Sets n as passed by -g<n> to gnu/clang.
+|gnuclang_release_optimization|2|Optimization level during release builds. Sets n as passed by -O<n> to gnu/clang.
+|gnuclang_release_flags|[-DNDEBUG]|Additional flags passed to gnu/clang during release builds.
+|visualstudio_debug_debug_level|Debug level during debug builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_debug_optimization|Optimization level during debug builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_debug_flags|[]|Additional flags passed to Visual Studio during debug builds.
+|visualstudio_release_debug_level|Debug level during release builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_release_optimization|Optimization level during release builds. Sets n as passed by [?] to Visual Studio.
+|visualstudio_release_flags|[]|Additional flags passed to Visual Studio during relase builds.
+|packages|[]|Specifies a list of packages which are passed into `pkg-config` for automatically specifying include directories and libraries.
+|multithreaded|true|Specifies a multithreaded program.
+|definitions|[]|Specifies a set of macro definitions.
+|additional_flags|[]|Specifies a set of additional flags passed to the compiler.
+|incremental_build|true|If set, and using the `CompileAndLink` phase, forces the build to create individual object for each source, and link them in a separate step. Otherwise, the build will pass all the sources to the build tool at once, to create a binary target in one step.
+
+|build_dir|build|The default subdirectory to place all build results into.
+|build_detail|{kind}.{toolkit}|A default subdirectoy of {build} where more specific build results are placed.
+|obj_dir|int|A default subdirectory where intermediate files are placed.
+|exe_dir|bin|A default subdirectory where final executable files are plced.
+|obj_anchor|{gen_anchor}/{build_dir}/{build_detail}/{obj_dir}|The full directory layout of intermediate files.
+|exe_anchor|{gen_anchor}/{build_dir}/{build_detail}/{exe_dir}|The full directory layout of executable files.
+
+|src_dir|src|The default directory where source files can be found.
+|src_anchor|{project_anchor}/{src_dir}|The full directory layout where source files can be found.
+|include_dirs|[include]|The default directories where project headers are searched.
+|obj_basename||The base file name of the generated object file. An empty string means to use the basename of the first source in {sources}.
+|obj_name|{obj_basename}.o|How to name the generated object file.
+|obj_path|{obj_anchor}/{obj_name}|The final full path of the generated object file.
+|sources|[]|A list of source files to compile in this phase.
+
+|lib_dirs|[]|A list of library directories.
+|libs|[]|A list of libraries to link with.
+|shared_libs|[]|A list of shared objects to link with.
+|exe_basename|{name}|The file name of the generated executable file.
+|exe_path|{exe_anchor}/{exe_basename}|The final full path of the generated executable file.
+
 ## The CLI
+
+The general form of a pyke command is:
+
+```
+pyke [ -v | -h | [-c]? [-m makefile]? ]? [-o key[:value] | -p phase | [action]* ]*
+```
+
+Notably, -o, -p and action arguments are processed in command-line order. You can set the phase to use with -p, set some option overrides, perform actions on that phase, set a different phase, set more options, perform more actions, etc. (The last phase to be set to `use_phases` is the default phase.) For a complicated build this might be handy.
+
+The command line arguments are:
+`-v`, `--version`: Prints the version information for pyke, and exits.
+`-h`, `--help`: Prints a help document.
+`-c`, `--cache_makefile`: Allows the makefile's __cache__ to be generated. This might speed up
+    complex builds, but they'd hvae to be really complex. Must precede any arguments that 
+    are not -v, -h, or -m.
+`-m`, `--module`: Specifies the module (pyke file) to be run. Must precede any arguments that
+    are not -v, -h, or -c. Actions are performed relative to the module's directory, unless an
+    option override (-o anchor:[dir]) is given, in which case they are performed relative to
+    the given working directory. Immediately after running the module, the active phase
+    is selected as the last phase added to use_phase()/use_phases(). This can be overridden
+    by -p.
+    If no -m argument is given, pyke will look for and run ./make.py.
+`-o`, `--override`: Specifies an option override in all phases for subsequenet actions. If the
+    option is given as a key:value pair, the override is set; if it is only a key (with no
+    separator ':') the override is clear. Option overrides are kept as a stack; if you set
+    an override n times, you must clear it n times to restore the original value. 
+`-p`, `--phase`: Specifies the active phase to use for subsequent option overrides and actions.
+`action`: Arguments given without switches specify actions to be taken on the active phase's
+    dependencies, and then the active phase itself, in depth-first order. Any action on any
+    phase which doesn't support it is quietly ignored.
 
 ## Advanced Topics
 

@@ -8,27 +8,38 @@ from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError, inpu
 from .phase import Phase
 
 
-class BuildPhase(Phase):
+class CFamilyBuildPhase(Phase):
     '''
     Intermediate class to handle making command lines for various toolkits.
     '''
     def __init__(self, options, dependencies = None):
         options = {
+            'name': 'build_phase',
             'toolkit': 'gnu',
             'language': 'c++',
             'language_version': '23',
-            'warnings': ['all', 'extra', 'error'],
+            'gnuclang_warnings': ['all', 'extra', 'error'],
             'kind': 'release',
-            'debug_debug_level': '2',
-            'debug_optimization': '0',
-            'debug_flags': ['-fno-inline', '-fno-lto', '-DDEBUG'],
-            'release_debug_level': '0',
-            'release_optimization': '2',
-            'release_flags': ['-DNDEBUG'],
-            'kind_debug_level': '{{kind}_debug_level}',
-            'kind_optimization': '{{kind}_optimization}',
-            'kind_flags': '{{kind}_flags}',
-            'packages': [],
+            'tool_args_gnu': 'gnuclang',
+            'tool_args_clang': 'gnuclang',
+            'tool_args_visualstudio': 'visualstudio',
+            'gnuclang_debug_debug_level': '2',
+            'gnuclang_debug_optimization': 'g',
+            'gnuclang_debug_flags': ['-fno-inline', '-fno-lto', '-DDEBUG'],
+            'gnuclang_release_debug_level': '0',
+            'gnuclang_release_optimization': '2',
+            'gnuclang_release_flags': ['-DNDEBUG'],
+            'visualstudio_debug_debug_level': '',
+            'visualstudio_debug_optimization': '',
+            'visualstudio_debug_flags': [],
+            'visualstudio_release_debug_level': '',
+            'visualstudio_release_optimization': '',
+            'visualstudio_release_flags': [],
+            'debug_level': '{{tool_args_{toolkit}}_{kind}_debug_level}',
+            'optimization': '{{tool_args_{toolkit}}_{kind}_optimization}',
+            'kind_flags': '{{tool_args_{toolkit}}_{kind}_flags}',
+            'warnings': '{{tool_args_{toolkit}}_warnings}',
+            'pkg_config': [],
             'multithreaded': 'true',
             'definitions': [],
             'additional_flags': [],
@@ -120,7 +131,7 @@ class BuildPhase(Phase):
             return self._make_build_command_prefix_gnu()
         if toolkit == 'clang':
             return self._make_build_command_prefix_clang()
-        if toolkit == 'visual_studio':
+        if toolkit == 'visualstudio':
             return self._make_build_command_vs()
         raise UnsupportedToolkitError(f'Specified toolkit "{toolkit}" is not supported.')
 
@@ -152,16 +163,17 @@ class BuildPhase(Phase):
         compile_only = self.sopt('build_operation') == 'build_obj'
         c = '-c ' if compile_only else ''
 
-        warn = ''.join((f'-W{w} ' for w in self.lopt('warnings')))
+        warn = ''.join((f'-W{w} ' for w in self.lopt('gnuclang_warnings')))
 
-        g = f'-g{self.sopt("kind_debug_level")} '
-        o = f'-O{self.sopt("kind_optimization")} '
+        g = f'-g{self.sopt("debug_level")} '
+        o = f'-O{self.sopt("optimization")} '
+        kf = ' '.join(self.lopt('kind_flags'))
 
         defs = ''.join((f'-D{d} ' for d in self.lopt('definitions')))
 
         additional_flags = ''.join((str(flag) for flag in self.lopt('additional_flags')))
 
-        build_string = f'{prefix}{warn}{c}{g}{o}{defs}{additional_flags} '
+        build_string = f'{prefix}{warn}{c}{g}{o} {kf}{defs}{additional_flags} '
         return build_string
 
     def _make_build_command_vs(self):
@@ -171,20 +183,43 @@ class BuildPhase(Phase):
         ''' Constructs the inc_dirs portion of a gcc command.'''
         inc_dirs = self.lopt('include_dirs')
         proj_anchor = self.sopt('project_anchor')
-        inc_dirs_cmd = ''.join((f'-I{proj_anchor}/{inc} ' for inc in inc_dirs))
-        if len(inc_dirs_cmd) > 0:
-            inc_dirs_cmd = f'{inc_dirs_cmd} '
+        pkg_configs = self.lopt('pkg_config')
+
+        # TODO: make an option for {proj_anchor/{inc}
+        inc_dirs = ''.join((f'-I{proj_anchor}/{inc} ' for inc in inc_dirs))
+        pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' + 
+                   ' '.join(pkg for pkg in pkg_configs) +
+                   ')') if len(pkg_configs) > 0 else ''
+
+        pkg_inc_bits_cmd = ('$(pkg-config --cflags-only-other ' + 
+                   ' '.join(pkg for pkg in pkg_configs) +
+                   ')') if len(pkg_configs) > 0 else ''
+
         return {
-            'inc_dirs': inc_dirs_cmd
+            'inc_dirs': inc_dirs + pkg_inc_cmd,
+            'pkg_inc_bits': pkg_inc_bits_cmd,
         }
 
     def make_link_arguments(self):
         ''' Constructs the linking arguments of a gcc command.'''
+        pkg_configs = self.lopt('pkg_config')
+        pkg_dirs_cmd = ('$(pkg-config --libs-only-L ' + 
+                   ' '.join(pkg for pkg in pkg_configs) +
+                   ')') if len(pkg_configs) > 0 else ''
+        pkg_libs_cmd = ('$(pkg-config --libs-only-l ' + 
+                   ' '.join(pkg for pkg in pkg_configs) +
+                   ')') if len(pkg_configs) > 0 else ''
+        pkg_libs_bits_cmd = ('$(pkg-config --libs-only-other ' + 
+                   ' '.join(pkg for pkg in pkg_configs) +
+                   ')') if len(pkg_configs) > 0 else ''
+
         lib_dirs = self.lopt('lib_dirs')
         lib_dirs_cmd = ''.join((f'-L{lib_dir} ' for lib_dir in lib_dirs))
+        lib_dirs_cmd += pkg_dirs_cmd
 
         static_libs = self.lopt('libs')
         static_libs_cmd = ''.join((f'-l{lib} ' for lib in static_libs))
+        static_libs_cmd += pkg_libs_cmd
         if len(static_libs_cmd) > 0:
             static_libs_cmd = f'-Wl,-Bstatic {static_libs_cmd}'
 
@@ -198,6 +233,7 @@ class BuildPhase(Phase):
             'lib_dirs': lib_dirs_cmd,
             'static_libs': static_libs_cmd,
             'shared_libs': shared_libs_cmd,
+            'pkg_libs_bits': pkg_libs_bits_cmd,
         }
 
     def do_step_delete_file(self, path):
@@ -242,7 +278,7 @@ class BuildPhase(Phase):
         '''
         step_results = None
         with ActionStep('compiling', str(src_path), str(obj_path),
-                        f'{prefix}-c {args["inc_dirs"]}-o {obj_path} {src_path}') as step:
+                        f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} {src_path}') as step:
             step_results = step
             if not src_path.exists():
                 step.set_result(ResultCode.MISSING_INPUT, src_path)
@@ -266,7 +302,7 @@ class BuildPhase(Phase):
         step_results = None
         missing_objs = []
         with ActionStep('compiling', '[*objs]', str(exe_path),
-                        (f'{prefix}-o {exe_path} {object_paths_cmd}{args["lib_dirs"]}'
+                        (f'{args["pkg_libs_bits"]} {prefix}-o {exe_path} {object_paths_cmd}{args["lib_dirs"]}'
                          f'{args["static_libs"]}{args["shared_libs"]}')) as step:
             step_results = step
             for obj_path in object_paths:
@@ -299,8 +335,8 @@ class BuildPhase(Phase):
         step_results = None
         missing_srcs = []
         with ActionStep('compiling', '[*srcs]', str(exe_path),
-                        f'{prefix} {args["inc_dirs"]}-o {exe_path} '
-                        f'{src_paths_cmd}{args["lib_dirs"]}'
+                        f'{prefix} {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {exe_path} '
+                        f'{args["pkg_libs_bits"]} {src_paths_cmd}{args["lib_dirs"]}'
                         f'{args["static_libs"]}{args["shared_libs"]}') as step:
             step_results = step
             for src_path in src_paths:

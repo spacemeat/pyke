@@ -1,16 +1,18 @@
 ''' This is the compile phase of a multi-phase build.'''
 
 from ..action import ActionResult
-from .build import BuildPhase
+from .c_family_build import CFamilyBuildPhase
 
-class CompilePhase(BuildPhase):
+class CompilePhase(CFamilyBuildPhase):
     '''
     Phase class for building C/C++ files to objects.
     '''
     def __init__(self, options, dependencies = None):
         options = {
+            'name': 'compile',
+        } | options | {
             'build_operation': 'compile_to_object',
-        } | options
+        }
         super().__init__(options, dependencies)
         self.default_action = 'build'
 

@@ -30,7 +30,8 @@ class Phase:
     def __init__(self, options: dict, dependencies: Self | list[Self] | None = None):
         self.options = Options()
         self.options |= {
-            'name': 'unnamed',
+            'name': 'phase',
+            'report_verbosity': 2,
             'verbosity': 0,
             'project_anchor': WorkingSet.makefile_dir,
             'gen_anchor': WorkingSet.makefile_dir,
@@ -51,6 +52,17 @@ class Phase:
             'colors_named': {
             },
             'colors_none': {
+                'success':          {},
+                'fail':             {},
+                'phase_lt':         {},
+                'phase_dk':         {},
+                'step_lt':          {},
+                'step_dk':          {},
+                'shell_cmd':        {},
+                'key':              {},
+                'val_uninterp_dk':  {},
+                'val_uninterp_lt':  {},
+                'val_interp':       {},
             },
             'colors': '{colors_24bit}',
         }
@@ -201,6 +213,7 @@ class Phase:
         '''
 
         # set this on every do(), so each phase still controls its own verbosity
+        WorkingSet.report_verbosity = int(str(self.sopt('report_verbosity')))
         WorkingSet.verbosity = int(str(self.sopt('verbosity')))
 
         if cols := self.opt('colors'):
@@ -251,32 +264,38 @@ class Phase:
         This gives a small description of the phase.
         '''
         report = ''
-        if WorkingSet.verbosity == 0:
+        if WorkingSet.report_verbosity >= 0:
             report = f'phase: {self.sopt("name")}'
-        if WorkingSet.verbosity <= 1:
+            #pass
+        if WorkingSet.report_verbosity >= 1:
             opts_str = ''
             for k in self.options.keys():
                 vu = self.options.get(k, False)
                 vi = self.options.get(k)
 
-                assert(isinstance(vu, list))
+                assert isinstance(vu, list)
 
+                indent = 0
                 opts_str = ''.join((opts_str,
                                     f'{c("key")}{k}: '))
                 last_replace_idx = len(vu) - next(i for i, e in enumerate(reversed(vu))
                     if e[1] == OptionOp.REPLACE) - 1
-                for i, vue in enumerate(vu):
-                    color = (c("val_uninterp_dk") if i < last_replace_idx 
-                             else c("val_uninterp_lt"))
-                    indent = 0 if i == 0 else len(k) + 2
-                    op = vue[1].value if isinstance(vue[1], OptionOp) else ' '
-                    opts_str = ''.join((opts_str,
-                                        f'{" " * indent}{color}{op} {vue[0]}{a.off}\n'))
+                if WorkingSet.report_verbosity >= 2:
+                    for i, vue in enumerate(vu):
+                        color = (c("val_uninterp_dk") if i < last_replace_idx
+                                 else c("val_uninterp_lt"))
+                        op = vue[1].value if isinstance(vue[1], OptionOp) else ' '
+                        indent = 0 if i == 0 else len(k) + 2
+                        opts_str = ''.join((opts_str,
+                                            f'{" " * indent}{color}{op} {vue[0]}{a.off}\n'))
+                    indent = len(k) + 1
+                else:
+                    indent = 0
 
                 opts_str = ''.join((opts_str,
-                                    f'{" " * (len(k) + 1)}{c("val_interp")}-> {vi}\n'))
+                                    f'{" " * indent}{c("val_interp")}-> {vi}\n'))
 
-            report = f'{report}\n{opts_str}'
-            print (report)
+            report += f'\n{opts_str}'
+        print (report)
         return ActionResult(
             'report', StepResult('report', '', '', '', ResultCode.NO_ACTION, str(self)))

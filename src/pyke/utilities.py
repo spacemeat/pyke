@@ -100,15 +100,17 @@ class WorkingSet:
     ''' Keeps track of globally-available values.'''
     makefile_dir = ''
     colors = {}
+    report_verbosity = 2
     verbosity = 0
     using_phases = []
 
 def set_color(color):
     ''' Returns the ANSI color code for the specified thematic element.'''
-    color_desc = WorkingSet.colors.get(color, 'fail')
-    if color_desc['form'] == 'rgb24':
-        fg = color_desc.get('fg')
-        bg = color_desc.get('bg')
-        return (f'{a.rgb_fg(*fg) if fg else ""}'
-                f'{a.rgb_bg(*bg) if bg else ""}')
+    color_desc = WorkingSet.colors.get(color)
+    if color_desc is not None:
+        if color_desc.get('form') == 'rgb24':
+            fg = color_desc.get('fg')
+            bg = color_desc.get('bg')
+            return (f'{a.rgb_fg(*fg) if fg else ""}'
+                    f'{a.rgb_bg(*bg) if bg else ""}')
     return ''
