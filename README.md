@@ -22,6 +22,14 @@ Eventually there will be a plugin interface for separate extension projects. Thi
 
 ## Installing pyke
 
+Pyke is very nearly ready for its first submission to PyPI. Until then, clone this repo and:
+
+```bash
+$ git clone git@github.com:spacemeat/pyke
+$ cd pyke
+$ pip install .
+```
+<!--
 Couldn't be easier. You need to be running python3.10 at least, and have pip installed. To install it globally:
 
 ```bash
@@ -31,7 +39,7 @@ or,
 ```bash
 $ pip install --user pyke
 ```
-
+-->
 You can optionally put it in a virtual environment, which may be the better idea.
 
 ## Using pyke
@@ -427,6 +435,12 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |language|C++|Sets the language.
 |language_version|23|Sets the language version.
 |kind|release|Release or debug build. See below for adding new kinds.
+|taregt_os_gnu|posix|Specifies UNIX or GNU/Linux as the target OS for the build. Determined by the toolkit.
+|target_os_clang|posix|Specifies UNIX or GNU/Linux as the target OS for the build. Determined by the toolkit.
+|target_os_visualstudio|windows|Specifies MS Windows as the target OS for the build. Determined by the toolkit.
+|tool_args_gnu|gnuclang|Specifies either gcc or clang as the primary build tool. Determined by the toolkit.
+|tool_args_clang|gnuclang|Specifies either gcc or clang as the primary build tool. Determined by the toolkit.
+|tool_args_visualstudio|visualstudio|Specifies Visual Studio as the primary build tool. Determined by the toolkit.
 |gnuclang_warnings|['all', 'extra', 'error']|Sets warning flags. These are toolkit-specific.
 |gnuclang_debug_debug_level|2|Debug level during debug builds. Sets n as passed by -g\<n\> to gnu/clang.
 |gnuclang_debug_optimization|g|Optimization level during debug builds. Sets n as passed by -O\<n\> to gnu/clang.
@@ -441,29 +455,90 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |visualstudio_release_debug_level||Debug level during release builds. Sets n as passed by [?] to Visual Studio.
 |visualstudio_release_optimization||Optimization level during release builds. Sets n as passed by [?] to Visual Studio.
 |visualstudio_release_flags|[]|Additional flags passed to Visual Studio during relase builds.
+|debug_level|{{tool_args_{toolkit}}_{kind}_debug_level}|Maps the tool-specific debug level.
+|optimization|{{tool_args_{toolkit}}_{kind}_optimization}|Maps the tool-specific optimization flags.
+|kind_flags|{{tool_args_{toolkit}}_{kind}_flags}|Maps any tool-specific debug or release flags.
+|warnings|{{tool_args_{toolkit}}_{kind}_warnings}|Maps any tool-specific wargning flags.
 |pkg_config|[]|Specifies a list of packages which are passed into `pkg-config` for automatically specifying include directories and libraries.
 |posix_threads|False|Specifies a posix multithreaded program.
 |definitions|[]|Specifies a set of macro definitions.
 |additional_flags|[]|Specifies a set of additional flags passed to the compiler.
 |incremental_build|True|If set, and using the `CompileAndLink` phase, forces the build to create individual object for each source, and link them in a separate step. Otherwise, the build will pass all the sources to the build tool at once, to create a binary target in one step.
-|build_dir|build|The default subdirectory to place all build results into.
-|build_detail|{kind}.{toolkit}|A default subdirectoy of {build} where more specific build results are placed.
-|obj_dir|int|A default subdirectory where intermediate files are placed.
-|exe_dir|bin|A default subdirectory where final executable files are plced.
-|obj_anchor|{gen_anchor}/{build_dir}/{build_detail}/{obj_dir}|The full directory layout of intermediate files.
-|exe_anchor|{gen_anchor}/{build_dir}/{build_detail}/{exe_dir}|The full directory layout of executable files.
+|include_anchor|{project_anchor}|The base directory for include search directories.
+|include_dirs|[include]|The default directories where project headers are searched.
 |src_dir|src|The default directory where source files can be found.
 |src_anchor|{project_anchor}/{src_dir}|The full directory layout where source files can be found.
-|include_dirs|[include]|The default directories where project headers are searched.
-|obj_basename||The base file name of the generated object file. An empty string means to use the basename of the first source in {sources}.
-|obj_name|{obj_basename}.o|How to name the generated object file.
-|obj_path|{obj_anchor}/{obj_name}|The final full path of the generated object file.
 |sources|[]|A list of source files to compile in this phase.
+|build_dir|build|The default subdirectory to place all build results into.
+|build_detail|{kind}.{toolkit}|A default subdirectoy of {build} where more specific build results are placed.
+|build_anchor|{gen_anchor}/{build_dir}/{build_detail}|
+|obj_dir|int|A default subdirectory where intermediate files are placed.
+|obj_basename||The base file name of the generated object file. An empty string means to use the basename of the first source in {sources}.
+|posix_obj_file|{obj_basename}.o|Constructs the object file name for UNIX or GNU/Linux environments.
+|windows_obj_file|{obj_basename.obj|Constructs the object file name for MS Windows environments.
+|obj_file|{{target_os_{toolkit}}_obj_file}|How to name the generated object file.
+|obj_anchor|{build_anchor}/{obj_dir}|The full directory layout of intermediate files.
+|obj_path|{obj_anchor}/{obj_file}|The final full path of the generated object file.
+|exe_dir|bin|A default subdirectory where final executable files are plced.
+|exe_basename|{name}|The file name of the generated executable file.
+|posix_exe_file|{exe_basename}|Constructs the executable file name for UNIX or GNU/Linux environments.
+|windows_exe_file|{exe_basename}.exe|Constructs the executable file name for MS Windows environments.
+|exe_file|{{target_os_{toolkit}}_exe_file|Maps the executable file name.
+|exe_anchor|{build_anchor}/{exe_dir}|The full directory layout of executable files.
+|exe_path|{exe_anchor}/{exe_file}|The full path of the executable file to build.
 |lib_dirs|[]|A list of library directories.
 |libs|[]|A list of libraries to link with.
 |shared_libs|[]|A list of shared objects to link with.
-|exe_basename|{name}|The file name of the generated executable file.
 |exe_path|{exe_anchor}/{exe_basename}|The final full path of the generated executable file.
+
+### Making sense of the directory optinos
+
+Each of the include, source, object, and executable directories are built from components, some of which you can change to easily modify the path. Pyke is opinionated on its directory structure, but you can set it how you like.
+
+#### Include files
+```
+inc_dir = .
+include_anchor = {project_anchor}/{inc_dir}/\<include directory\>
+include_dirs = [include]
+```
+You are encouraged to change `inc_dir` to set a base directory for all include directories. Pyke will reference `include_anchor` and `include_dirs` directly.
+
+#### Source files
+```
+src_dir = src
+src_anchor = {project_anchor}/{src_dir}/\<source file\>
+```
+You are encouraged to change `src_dir` to set a base directory for all the source files.
+
+#### Build base directory structure
+```
+build_dir = build
+build_detail = {kind}.{toolkit}
+build_anchor = {gen_anchor}/{build_dir}/{build_detail}
+```
+You are encouraged to change `build` to set a different base for generated files. Pyke will reference `src_anchor` and `sources` directly.
+
+#### Intermediate (object) files
+```
+obj_dir = int
+obj_basename = \<source_basename\> (named after either a source file or the phase name, depending on `intermediate_build` and the phase type)
+obj_file = {obj_basename}.o  (.obj on Windows)
+obj_anchor = {build_anchor}/{obj_dir}
+obj_path = {obj_anchor}/{obj_file}
+```
+You are encouranged to change `obj_dir` to set a base directory for intermediate files. Pyke will only reference `obj_path` directly, and will override `obj_basename` for each source file.
+
+#### Binary (executable) files
+```
+exe_dir = bin
+exe_basename = {name}
+exe_file = {exe_basename}  (with .exe on Windows)
+exe_anchor = {build_anchor}/{exe_dir}
+exe_path = {exe_anchor}/{exe_file}
+```
+You are encouraged to change `exe_dir` to set a base directory for executable files, and `exe_basename` to set the name of the executable. Pyke will only reference `exe_path` directly.
+
+Of course, you can change any of these, or make your own constructed paths.
 
 ## The CLI
 

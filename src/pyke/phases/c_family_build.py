@@ -19,6 +19,9 @@ class CFamilyBuildPhase(Phase):
             'language': 'c++',
             'language_version': '23',
             'kind': 'release',
+            'target_os_gnu': 'posix',
+            'target_os_clang': 'posix',
+            'target_os_visualstudio': 'windows',
             'tool_args_gnu': 'gnuclang',
             'tool_args_clang': 'gnuclang',
             'tool_args_visualstudio': 'visualstudio',
@@ -46,26 +49,37 @@ class CFamilyBuildPhase(Phase):
             'additional_flags': [],
             'incremental_build': True,
 
-            'build_dir': 'build',
-            'build_detail': '{kind}.{toolkit}',
-            'obj_dir':'int',
-            'exe_dir':'bin',
-            'obj_anchor': '{gen_anchor}/{build_dir}/{build_detail}/{obj_dir}',
-            'exe_anchor': '{gen_anchor}/{build_dir}/{build_detail}/{exe_dir}',
+            'inc_dir': '.',
+            'include_anchor': '{project_anchor}/{inc_dir}',
+            'include_dirs': ['include'],
 
             'src_dir': 'src',
             'src_anchor': '{project_anchor}/{src_dir}',
-            'include_dirs': ['include'],
-            'obj_basename': '', # empty means to use the basename of sources[0]
-            'obj_name': '{obj_basename}.o',
-            'obj_path': '{obj_anchor}/{obj_name}',
             'sources': [],
+
+            'build_dir': 'build',
+            'build_detail': '{kind}.{toolkit}',
+            'build_anchor': '{gen_anchor}/{build_dir}/{build_detail}',
+
+            'obj_dir': 'int',
+            'obj_basename': '',
+            'posix_obj_file': '{obj_basename}.o',
+            'windows_obj_file': '{obj_basename}.obj',
+            'obj_file': '{{target_os_{toolkit}}_obj_file}',
+            'obj_anchor': '{build_anchor}/{obj_dir}',
+            'obj_path': '{obj_anchor}/{obj_file}',
+
+            'exe_dir':'bin',
+            'exe_basename': '{name}',
+            'posix_exe_file': '{exe_basename}',
+            'windows_exe_file': '{exe_basename}.exe',
+            'exe_file': '{{target_os_{toolkit}}_exe_file',
+            'exe_anchor': '{build_anchor}/{exe_dir}',
+            'exe_path': '{exe_anchor}/{exe_file}',
 
             'lib_dirs': [],
             'libs': [],
             'shared_libs': [],
-            'exe_basename': 'sample',
-            'exe_path': '{exe_anchor}/{exe_basename}',
         } | options
         super().__init__(options, dependencies)
         self.default_action = 'build'
@@ -183,12 +197,11 @@ class CFamilyBuildPhase(Phase):
     def make_compile_arguments(self):
         ''' Constructs the inc_dirs portion of a gcc command.'''
         inc_dirs = self.lopt('include_dirs')
-        proj_anchor = self.sopt('project_anchor')
+        inc_anchor = self.sopt('include_anchor')
         pkg_configs = self.lopt('pkg_config')
         assert isinstance(pkg_configs, list)
 
-        # TODO: make an option for {proj_anchor/{inc}
-        inc_dirs = ''.join((f'-I{proj_anchor}/{inc} ' for inc in inc_dirs))
+        inc_dirs = ''.join((f'-I{inc_anchor}/{inc} ' for inc in inc_dirs))
         pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' +
                    ' '.join(pkg for pkg in pkg_configs) +
                    ')') if len(pkg_configs) > 0 else ''
