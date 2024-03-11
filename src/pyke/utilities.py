@@ -113,4 +113,13 @@ def set_color(color):
             bg = color_desc.get('bg')
             return (f'{a.rgb_fg(*fg) if fg else ""}'
                     f'{a.rgb_bg(*bg) if bg else ""}')
+        if color_desc.get('form') == 'named':
+            fg = color_desc.get('fg')
+            bg = color_desc.get('bg')
+            off = color_desc.get('off')
+            if isinstance(off, list):
+                return f'{a.off}'
+            # TODO: The rest
+            return ''
+
     return ''

@@ -4,6 +4,7 @@ is contained herein.
 '''
 
 from pathlib import Path
+from typing import Type, TypeVar, Iterable
 from typing_extensions import Self
 
 from ..action import (StepResult, ActionResult, ResultCode,
@@ -12,6 +13,8 @@ from .. import ansi as a
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
                          InvalidOptionKey, CircularDependencyError)
+
+T = TypeVar('T')
 
 class Phase:
     '''
@@ -37,6 +40,7 @@ class Phase:
             'gen_anchor': WorkingSet.makefile_dir,
             'simulate': False,
             'colors_24bit': {
+                'off':              {'form': 'named', 'off': [] },
                 'success':          {'form': 'rgb24', 'fg': [0x33, 0xaf, 0x55] },
                 'fail':             {'form': 'rgb24', 'fg': [0xff, 0x33, 0x33] },
                 'phase_lt':         {'form': 'rgb24', 'fg': [0x33, 0x33, 0xff] },
@@ -48,10 +52,14 @@ class Phase:
                 'val_uninterp_dk':  {'form': 'rgb24', 'fg': [0x5f, 0x13, 0x5f] },
                 'val_uninterp_lt':  {'form': 'rgb24', 'fg': [0xaf, 0x23, 0xaf] },
                 'val_interp':       {'form': 'rgb24', 'fg': [0x33, 0x33, 0xff] },
+                'token_type':       {'form': 'rgb24', 'fg': [0x33, 0xff, 0xff] },
+                'token_value':      {'form': 'rgb24', 'fg': [0xff, 0x33, 0xff] },
+                'token_depth':      {'form': 'rgb24', 'fg': [0x33, 0xff, 0x33] },
             },
             'colors_named': {
             },
             'colors_none': {
+                'off':              {},
                 'success':          {},
                 'fail':             {},
                 'phase_lt':         {},
@@ -63,6 +71,9 @@ class Phase:
                 'val_uninterp_dk':  {},
                 'val_uninterp_lt':  {},
                 'val_interp':       {},
+                'token_type':       {},
+                'token_value':      {},
+                'token_depth':      {},
             },
             'colors': '{colors_24bit}',
         }
@@ -80,7 +91,7 @@ class Phase:
         for dep in dependencies:
             self.set_dependency(dep)
 
-    def push_option_overrides(self, overrides: dict):
+    def push_opts(self, overrides: dict):
         '''
         Apply optinos which take precedence over self.overrides. Intended to be 
         set temporarily, likely from the command line.
@@ -89,7 +100,7 @@ class Phase:
         for dep in self.dependencies:
             dep.push_option_overrides(overrides)
 
-    def pop_option_overrides(self, keys: list):
+    def pop_opts(self, keys: list):
         '''
         Removes pushed option overrides.
         '''
@@ -97,32 +108,6 @@ class Phase:
             dep.pop_option_overrides(keys)
         for key in keys:
             self.options.pop(key)
-
-    def lopt(self, key: str, overrides: dict | None = None, interpolate: bool = True):
-        '''
-        Returns an option's value, given its key. The option is optionally
-        interpolated (by default) with self.options as its local namespace.
-        '''
-        if overrides:
-            self.options |= overrides
-        val = self.options.get(key, interpolate)
-        if overrides:
-            for k in overrides.keys():
-                self.options.pop(k)
-        return val
-
-    def sopt(self, key: str, overrides: dict | None = None, interpolate: bool = True):
-        '''
-        Returns an option's value, given its key. The option is optionally
-        interpolated (by default) with self.options as its local namespace.
-        '''
-        if overrides:
-            self.options |= overrides
-        val = self.options.get(key, interpolate)
-        if overrides:
-            for k in overrides.keys():
-                self.options.pop(k)
-        return val
 
     def opt(self, key: str, overrides: dict | None = None, interpolate: bool = True):
         '''
@@ -137,11 +122,101 @@ class Phase:
                 self.options.pop(k)
         return val
 
+    def opt_t(self, obj_type: Type[T], key: str, overrides: dict | None = None,
+              interpolate: bool = True) -> T:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a tuple.
+        '''
+        val = self.opt(key, overrides, interpolate)
+        assert isinstance(val, obj_type)
+        return val
+
+    def opt_iter(self, key: str, overrides: dict | None = None,
+                 interpolate: bool = True) -> Iterable:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a tuple.
+        '''
+        return self.opt_t(Iterable, key, overrides, interpolate)
+
+    def opt_bool(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> bool:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a bool.
+        '''
+        return self.opt_t(bool, key, overrides, interpolate)
+
+    def opt_int(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> int:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be an int.
+        '''
+        return self.opt_t(int, key, overrides, interpolate)
+
+    def opt_float(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> float:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a float.
+        '''
+        return self.opt_t(float, key, overrides, interpolate)
+
+    def opt_str(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> str:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a string.
+        '''
+        return self.opt_t(str, key, overrides, interpolate)
+
+    def opt_tuple(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> tuple:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a tuple.
+        '''
+        return self.opt_t(tuple, key, overrides, interpolate)
+
+    def opt_list(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> list:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a list.
+        '''
+        val = self.opt(key, overrides, interpolate)
+        assert isinstance(val, list)
+        return val
+
+    def opt_set(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> set:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a set.
+        '''
+        val = self.opt(key, overrides, interpolate)
+        assert isinstance(val, set)
+        return val
+
+    def opt_dict(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> dict:
+        '''
+        Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace.
+        The referenced value must be a dict.
+        '''
+        val = self.opt(key, overrides, interpolate)
+        assert isinstance(val, dict)
+        return val
+
     def __str__(self):
-        return str(self.sopt("name"))
+        return str(self.opt_str("name"))
 
     def __repr__(self):
-        return str(self.sopt("name"))
+        return str(self.opt_str("name"))
 
     def clone(self, options: dict | None = None):
         '''
@@ -213,8 +288,8 @@ class Phase:
         '''
 
         # set this on every do(), so each phase still controls its own verbosity
-        WorkingSet.report_verbosity = int(str(self.sopt('report_verbosity')))
-        WorkingSet.verbosity = int(str(self.sopt('verbosity')))
+        WorkingSet.report_verbosity = self.opt_int('report_verbosity')
+        WorkingSet.verbosity = self.opt_int('verbosity')
 
         if cols := self.opt('colors'):
             if isinstance(cols, dict):
@@ -225,7 +300,7 @@ class Phase:
             self.last_action_result = ActionResult(
                 action,
                 StepResult('', '', '', '', ResultCode.ALREADY_UP_TO_DATE,
-                f'{self.sopt("name")}.{action}'))
+                f'{self.opt_str("name")}.{action}'))
             return self.last_action_result
 
         self.last_action_ordinal = action_ordinal
@@ -239,14 +314,14 @@ class Phase:
 
         action_method = getattr(self, 'do_action_' + action, self.do_action_undefined)
         try:
-            report_action_start(str(self.sopt('name')), action)
+            report_action_start(str(self.opt_str('name')), action)
             self.last_action_result = action_method()
 
         except InvalidOptionKey as e:
             self.last_action_result = ActionResult(
                 action,
                 StepResult('', '', '', '', ResultCode.INVALID_OPTION, e))
-            report_error(str(self.sopt('name')), action, str(e))
+            report_error(str(self.opt_str('name')), action, str(e))
 
         report_action_end(bool(self.last_action_result))
 
@@ -265,7 +340,7 @@ class Phase:
         '''
         report = ''
         if WorkingSet.report_verbosity >= 0:
-            report = f'phase: {self.sopt("name")}'
+            report = f'phase: {self.opt_str("name")}'
             #pass
         if WorkingSet.report_verbosity >= 1:
             opts_str = ''

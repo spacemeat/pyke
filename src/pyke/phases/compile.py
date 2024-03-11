@@ -10,9 +10,8 @@ class CompilePhase(CFamilyBuildPhase):
     def __init__(self, options, dependencies = None):
         options = {
             'name': 'compile',
-        } | options | {
             'build_operation': 'compile_to_object',
-        }
+        } | options
         super().__init__(options, dependencies)
         self.default_action = 'build'
 
@@ -42,5 +41,3 @@ class CompilePhase(CFamilyBuildPhase):
                     prefix, args, src_path, obj_path))
 
         return ActionResult('build', tuple(step_results))
-
-

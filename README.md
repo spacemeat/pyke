@@ -22,7 +22,7 @@ Eventually there will be a plugin interface for separate extension projects. Thi
 
 ## Installing pyke
 
-Pyke is very nearly ready for its first submission to PyPI. Until then, clone this repo and:
+Pyke is very nearly ready for its first submission to PyPI. Until then, clone this repo and install locally:
 
 ```bash
 $ git clone git@github.com:spacemeat/pyke
@@ -381,14 +381,14 @@ phase = p.CompileAndLinkPhase({
     'include_dirs+': 'include/exp'      # appending to include_dirs
 })
 
-p.push_option_override(                 # appending to sources
-    'sources+', 
-    (f'exp/{src}' for src in ['try_this.cpp', 'maybe.cpp', 'what_if.cpp']))
+p.push_opts({                 # appending to sources
+    'sources+': (f'exp/{src}' for src in ['try_this.cpp', 'maybe.cpp', 'what_if.cpp'])
+})
 
 p.use_phases(phase)
 ```
 
-(This is obviously a contrived example, but it showcases the `push_option_override` call.)
+You can pop the override wiht `Phase.pop_opts([key])`. (Without the arguemts or operators.) This is obviously a contrived example, but it showcases the `push_opts` call.
 
 ### Overriding on the command line
 

@@ -23,7 +23,7 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
 
         step_results = []
 
-        if self.sopt('incremental_build') != 'false':
+        if self.opt_bool('incremental_build'):
             for _, obj_path in self.get_all_src_and_object_paths():
                 step_results.append(self.do_step_delete_file(obj_path))
 
@@ -42,7 +42,7 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         c_args = self.make_compile_arguments()
         l_args = self.make_link_arguments()
 
-        if self.sopt('incremental_build') != 'false':
+        if self.opt_bool('incremental_build'):
             for src_path, obj_path in self.get_all_src_and_object_paths():
                 step_results.append(self.do_step_create_directory(obj_path.parent))
 

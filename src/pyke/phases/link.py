@@ -37,7 +37,6 @@ class LinkPhase(CFamilyBuildPhase):
         '''
         Builds all object paths.
         '''
-
         step_results = []
 
         object_paths = self.get_all_object_paths()

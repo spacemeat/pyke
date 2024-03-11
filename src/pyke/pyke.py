@@ -169,7 +169,7 @@ def main():
     run_make_file(make_path, cache_make)
 
     active_phase = WorkingSet.using_phases[-1]
-    phase_map = {phase.sopt('name'): phase for phase in WorkingSet.using_phases}
+    phase_map = {phase.opt_str('name'): phase for phase in WorkingSet.using_phases}
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]

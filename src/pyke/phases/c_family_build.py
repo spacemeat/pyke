@@ -73,7 +73,7 @@ class CFamilyBuildPhase(Phase):
             'exe_basename': '{name}',
             'posix_exe_file': '{exe_basename}',
             'windows_exe_file': '{exe_basename}.exe',
-            'exe_file': '{{target_os_{toolkit}}_exe_file',
+            'exe_file': '{{target_os_{toolkit}}_exe_file}',
             'exe_anchor': '{build_anchor}/{exe_dir}',
             'exe_path': '{exe_anchor}/{exe_file}',
 
@@ -88,8 +88,7 @@ class CFamilyBuildPhase(Phase):
         '''
         Gets the src_idxth source from options. Ensures the result is a Path.
         '''
-        sources = self.lopt('sources')
-        assert isinstance(sources, list)
+        sources = self.opt_list('sources')
         return sources[src_idx]
 
     def make_src_path(self, src_idx):
@@ -97,7 +96,7 @@ class CFamilyBuildPhase(Phase):
         Makes a full source path out of the src_idxth source from options.
         '''
         src = self.get_source(src_idx)
-        return Path(f"{self.sopt('src_anchor')}/{src}")
+        return Path(f"{self.opt_str('src_anchor')}/{src}")
 
     def make_obj_path_from_src(self, src_idx):
         '''
@@ -105,14 +104,13 @@ class CFamilyBuildPhase(Phase):
         '''
         src = self.get_source(src_idx)
         basename = Path(src).stem
-        return Path(str(self.sopt('obj_path', {'obj_basename': basename})))
+        return Path(str(self.opt_str('obj_path', {'obj_basename': basename})))
 
     def get_all_src_paths(self):
         '''
         Generate te full path for each source file.
         '''
-        sources = self.lopt('sources')
-        assert isinstance(sources, list)
+        sources = self.opt_list('sources')
         for i in range(len(sources)):
             yield self.make_src_path(i)
 
@@ -120,8 +118,7 @@ class CFamilyBuildPhase(Phase):
         '''
         Generate the full path for each target object file.
         '''
-        sources = self.lopt('sources')
-        assert isinstance(sources, list)
+        sources = self.opt_list('sources')
         for i in range(len(sources)):
             yield self.make_obj_path_from_src(i)
 
@@ -135,13 +132,13 @@ class CFamilyBuildPhase(Phase):
         '''
         Makes the full exe path from options.
         '''
-        return Path(str(self.sopt('exe_path')))
+        return Path(str(self.opt_str('exe_path')))
 
     def make_build_command_prefix(self):
         '''
         Makes a partial build command line that several build phases can further augment and use.
         '''
-        toolkit = self.sopt('toolkit')
+        toolkit = self.opt_str('toolkit')
         if toolkit == 'gnu':
             return self._make_build_command_prefix_gnu()
         if toolkit == 'clang':
@@ -151,8 +148,8 @@ class CFamilyBuildPhase(Phase):
         raise UnsupportedToolkitError(f'Specified toolkit "{toolkit}" is not supported.')
 
     def _make_build_command_prefix_gnu(self):
-        lang = str(self.sopt('language')).lower()
-        ver = str(self.sopt('language_version')).lower()
+        lang = self.opt_str('language').lower()
+        ver = self.opt_str('language_version').lower()
         prefix = ''
         if lang == 'c++':
             prefix = f'g++ -std=c++{ver} '
@@ -163,8 +160,8 @@ class CFamilyBuildPhase(Phase):
         return self._make_build_command_prefix_gnu_clang(prefix)
 
     def _make_build_command_prefix_clang(self):
-        lang = str(self.sopt('language')).lower()
-        ver = str(self.sopt('language_version')).lower()
+        lang = self.opt_str('language').lower()
+        ver = self.opt_str('language_version').lower()
         prefix = ''
         if lang == 'c++':
             prefix = f'clang++ -std=c++{ver} '
@@ -175,18 +172,18 @@ class CFamilyBuildPhase(Phase):
         return self._make_build_command_prefix_gnu_clang(prefix)
 
     def _make_build_command_prefix_gnu_clang(self, prefix):
-        compile_only = self.sopt('build_operation') == 'build_obj'
+        compile_only = self.opt_str('build_operation') == 'build_obj'
         c = '-c ' if compile_only else ''
 
-        warn = ''.join((f'-W{w} ' for w in self.lopt('gnuclang_warnings')))
+        warn = ''.join((f'-W{w} ' for w in self.opt_list('gnuclang_warnings')))
 
-        g = f'-g{self.sopt("debug_level")} '
-        o = f'-O{self.sopt("optimization")} '
-        kf = ' '.join(self.lopt('kind_flags'))
+        g = f'-g{self.opt_str("debug_level")} '
+        o = f'-O{self.opt_str("optimization")} '
+        kf = ' '.join(self.opt_list('kind_flags'))
 
-        defs = ''.join((f'-D{d} ' for d in self.lopt('definitions')))
+        defs = ''.join((f'-D{d} ' for d in self.opt_list('definitions')))
 
-        additional_flags = ''.join((str(flag) for flag in self.lopt('additional_flags')))
+        additional_flags = ''.join((str(flag) for flag in self.opt_list('additional_flags')))
 
         build_string = f'{prefix}{warn}{c}{g}{o} {kf}{defs}{additional_flags} '
         return build_string
@@ -196,10 +193,9 @@ class CFamilyBuildPhase(Phase):
 
     def make_compile_arguments(self):
         ''' Constructs the inc_dirs portion of a gcc command.'''
-        inc_dirs = self.lopt('include_dirs')
-        inc_anchor = self.sopt('include_anchor')
-        pkg_configs = self.lopt('pkg_config')
-        assert isinstance(pkg_configs, list)
+        inc_dirs = self.opt_list('include_dirs')
+        inc_anchor = self.opt_str('include_anchor')
+        pkg_configs = self.opt_list('pkg_config')
 
         inc_dirs = ''.join((f'-I{inc_anchor}/{inc} ' for inc in inc_dirs))
         pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' +
@@ -218,8 +214,7 @@ class CFamilyBuildPhase(Phase):
 
     def make_link_arguments(self):
         ''' Constructs the linking arguments of a gcc command.'''
-        pkg_configs = self.lopt('pkg_config')
-        assert isinstance(pkg_configs, list)
+        pkg_configs = self.opt_list('pkg_config')
 
         pkg_dirs_cmd = ('$(pkg-config --libs-only-L ' +
                    ' '.join(pkg for pkg in pkg_configs) +
@@ -231,18 +226,18 @@ class CFamilyBuildPhase(Phase):
                    ' '.join(pkg for pkg in pkg_configs) +
                    ')') if len(pkg_configs) > 0 else ''
 
-        lib_dirs = self.lopt('lib_dirs')
+        lib_dirs = self.opt_list('lib_dirs')
         lib_dirs_cmd = ''.join((f'-L{lib_dir} ' for lib_dir in lib_dirs))
         lib_dirs_cmd += pkg_dirs_cmd
 
-        static_libs = self.lopt('libs')
+        static_libs = self.opt_list('libs')
         static_libs_cmd = ''.join((f'-l{lib} ' for lib in static_libs))
         static_libs_cmd += pkg_libs_cmd
         if len(static_libs_cmd) > 0:
             static_libs_cmd = f'-Wl,-Bstatic {static_libs_cmd}'
 
         # TODO: Ensure this is all kinda correct. I'm learning about rpath/$ORIGIN.
-        shared_libs = self.lopt('shared_libs')
+        shared_libs = self.opt_list('shared_libs')
         shared_libs_cmd = ''.join((f'-l{so} ' for so in shared_libs))
         if len(shared_libs_cmd) > 0:
             shared_libs_cmd = f'-Wl,-Bdynamic {shared_libs_cmd} -Wl,-rpath,$ORIGIN -Wl,-z,origin'
