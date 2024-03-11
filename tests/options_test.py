@@ -359,6 +359,78 @@ class TestCondition(TestCase_NoDiff):
         ast.condition_tokens()
         self.assertEqual(ast, cast)
 
+    def test_parse_set_1_int(self):
+        cast = Ast('{1}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.INT, '1', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_1_float(self):
+        cast = Ast('{6.28}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.FLOAT, '6.28', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_1_bool(self):
+        cast = Ast('{true}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.BOOL, 'true', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_1_none(self):
+        cast = Ast('{none}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.NONE, 'none', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_1_qstring(self):
+        cast = Ast('{\'test\'}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.QSTRING, 'test', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_1_dqstring(self):
+        cast = Ast('{"test"}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.DQSTRING, 'test', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
     def test_parse_tuple_1_string(self):
         cast = Ast('(test)', [
             [
@@ -506,6 +578,300 @@ class TestCondition(TestCase_NoDiff):
                     TO(T.RBRACKET, ']', 2),
                 ],
                 TO(T.RPAREN, ')', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_list_4_ns(self):
+        cast = Ast('[a,b,c,d]', [
+            [
+                TO(T.LBRACKET, '[', 1),
+                TO(T.STRING, 'a', 1),
+                TO(T.STRING, 'b', 1),
+                TO(T.STRING, 'c', 1),
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACKET, ']', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_list_4_ws(self):
+        cast = Ast(' [a, b, c, d] ', [
+            [
+                TO(T.LBRACKET, '[', 1),
+                TO(T.STRING, 'a', 1),
+                TO(T.STRING, 'b', 1),
+                TO(T.STRING, 'c', 1),
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACKET, ']', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_list_1_2_1_ns(self):
+        cast = Ast('[a,[b,c],d]', [
+            [
+                TO(T.LBRACKET, '[', 1),
+                TO(T.STRING, 'a', 1), [
+                    TO(T.LBRACKET, '[', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.RBRACKET, ']', 2),
+                ],
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACKET, ']', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_list_3_1_ns(self):
+        cast = Ast('[[a,b,c],d]', [
+            [
+                TO(T.LBRACKET, '[', 1), [
+                    TO(T.LBRACKET, '[', 2),
+                    TO(T.STRING, 'a', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.RBRACKET, ']', 2),
+                ],
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACKET, ']', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_list_1_3_ns(self):
+        cast = Ast('[a,[b,c,d]]', [
+            [
+                TO(T.LBRACKET, '[', 1),
+                TO(T.STRING, 'a', 1), [
+                    TO(T.LBRACKET, '[', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.STRING, 'd', 2),
+                    TO(T.RBRACKET, ']', 2),
+                ],
+                TO(T.RBRACKET, ']', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_list_1_2_1_ws(self):
+        cast = Ast('[a, [b, c], d]', [
+            [
+                TO(T.LBRACKET, '[', 1),
+                TO(T.STRING, 'a', 1), [
+                    TO(T.LBRACKET, '[', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.RBRACKET, ']', 2),
+                ],
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACKET, ']', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_4_ns(self):
+        cast = Ast('{a,b,c,d}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.STRING, 'a', 1),
+                TO(T.STRING, 'b', 1),
+                TO(T.STRING, 'c', 1),
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_4_ws(self):
+        cast = Ast('{a, b, c, d}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.STRING, 'a', 1),
+                TO(T.STRING, 'b', 1),
+                TO(T.STRING, 'c', 1),
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_1_2_1_ns(self):
+        cast = Ast('{a,{b,c},d}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.STRING, 'a', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_set_1_2_1_ws(self):
+        cast = Ast('{a, {b, c}, d}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.STRING, 'a', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_dict_2_ns(self):
+        cast = Ast('{a:b,c:d}', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.STRING, 'a', 1),
+                TO(T.COLON, ':', 1),
+                TO(T.STRING, 'b', 1),
+                TO(T.STRING, 'c', 1),
+                TO(T.COLON, ':', 1),
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_dict_2_ws(self):
+        cast = Ast(' { a : b, c : d } ', [
+            [
+                TO(T.LBRACE, '{', 1),
+                TO(T.STRING, 'a', 1),
+                TO(T.COLON, ':', 1),
+                TO(T.STRING, 'b', 1),
+                TO(T.STRING, 'c', 1),
+                TO(T.COLON, ':', 1),
+                TO(T.STRING, 'd', 1),
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_dict_set_set_ns(self):
+        cast = Ast('{{a,b}:{c,d}}', [
+            [
+                TO(T.LBRACE, '{', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'a', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                    TO(T.COLON, ':', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.STRING, 'd', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_dict_set_set_ws(self):
+        cast = Ast('{ { a , b } : { c, d } }', [
+            [
+                TO(T.LBRACE, '{', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'a', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                    TO(T.COLON, ':', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.STRING, 'd', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_dict_dict_dict_ns(self):
+        cast = Ast('{{a:b}:{c:d}}', [
+            [
+                TO(T.LBRACE, '{', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'a', 2),
+                    TO(T.COLON, ':', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                    TO(T.COLON, ':', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.COLON, ':', 2),
+                    TO(T.STRING, 'd', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                TO(T.RBRACE, '}', 1)
+            ]
+        ])
+        ast = Ast(cast.value)
+        ast.condition_tokens()
+        self.assertEqual(ast, cast)
+
+    def test_parse_dict_dict_dict_ws(self):
+        cast = Ast(' { { a : b } : { c : d } } ', [
+            [
+                TO(T.LBRACE, '{', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'a', 2),
+                    TO(T.COLON, ':', 2),
+                    TO(T.STRING, 'b', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                    TO(T.COLON, ':', 1), [
+                    TO(T.LBRACE, '{', 2),
+                    TO(T.STRING, 'c', 2),
+                    TO(T.COLON, ':', 2),
+                    TO(T.STRING, 'd', 2),
+                    TO(T.RBRACE, '}', 2),
+                ],
+                TO(T.RBRACE, '}', 1)
             ]
         ])
         ast = Ast(cast.value)

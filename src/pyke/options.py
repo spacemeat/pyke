@@ -230,39 +230,56 @@ class Ast:
                     num_tok += 1
             return num_tok
 
+        def inc_depth(ast: TokenList) -> TokenList:
+            for obj in ast:
+                if isinstance(obj, list):
+                    inc_depth(obj)
+                else:
+                    obj.depth += 1
+            return ast
+
         def recur_match(ast: TokenList, pattern: list[Token], then_what: Callable) -> TokenList:
-            print (f'  Matching {pattern}...')
+            print (f'  Matching {pattern} on\n{ast}...')
             tok_idx = 0
+            new_ast = []
             while tok_idx < len(ast):
                 tok = ast[tok_idx]
                 if isinstance(tok, list):
                     the_what = recur_match(tok, pattern, then_what)
                     if len(the_what) > 1:
                         the_what = [the_what]
-                    ast = (ast[:tok_idx]
-                        + the_what
-                        + ast[tok_idx + 1:])
+                    new_ast.extend(the_what)
+
                 else:
                     match = True
                     for i, pattern_token in enumerate(pattern):
-                        if (len(ast) <= tok_idx + i or
-                            not isinstance(ast[tok_idx + i], TokenObj) or
-                            pattern_token not in [ast[tok_idx + i].token, Token.ANY]):
+                        if len(ast) <= tok_idx + i:
                             match = False
                             break
+                        if pattern_token != Token.ANY:
+                            if isinstance(ast[tok_idx + i], list):
+                                match = False
+                                break
+                            if pattern_token != ast[tok_idx + i].token:
+                                match = False
+                                break
+
                     if match:
-                        the_what = then_what(ast[tok_idx:tok_idx + len(pattern)]) or []
-                        ast = (ast[:tok_idx]
-                            + the_what
-                            + ast[tok_idx + len(pattern):])
+                        the_what = then_what(ast[tok_idx : tok_idx + len(pattern)])
+                        tok_idx += len(pattern) - 1
+                        new_ast.extend(the_what)
+                    else:
+                        new_ast.append(tok)
+
                 tok_idx += 1
-            return ast
+            print (f'-> {new_ast}')
+            return new_ast
 
         def replace_string_with_unit(subtree: TokenList) -> TokenList:
             subtree = subtree[0]
             v = subtree.value
-            if v == '0x01':
-                breakpoint()
+            #if v == '0x01':
+            #    breakpoint()
             try:
                 int(v, 0)
                 return [TokenObj(Token.INT, v, subtree.depth)]
@@ -292,10 +309,8 @@ class Ast:
                             subtree[0].depth)]
 
         def remove_it(_:list) -> list:
+            #breakpoint()
             return []
-
-        def replace_kvp(subtree:list) -> list:
-            return [[TokenObj(st.token, st.value, st.depth + 1) for st in subtree]]
 
         ast = recur_match(self.toks, [Token.STRING], replace_string_with_unit)
         new_num_toks = get_num_tokens(ast)
@@ -308,7 +323,6 @@ class Ast:
                               replace_adjacent_strings)
             new_num_toks = get_num_tokens(ast)
         ast = recur_match(ast, [Token.SPACE], remove_it)
-        ast = recur_match(ast, [Token.ANY, Token.COLON, Token.ANY], replace_kvp)
         ast = recur_match(ast, [Token.COMMA], remove_it)
 
         self.toks = ast
