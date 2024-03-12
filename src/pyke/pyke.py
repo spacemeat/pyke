@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sys
 
+from .options_parser import parse_value
 from .phases.phase import Phase
 from .utilities import WorkingSet
 
@@ -205,9 +206,10 @@ def main():
                 override = sys.argv[idx]
             if ':' in override:
                 k, v = override.split(':', 1)
-                active_phase.push_option_overrides({k: v})
+                v = parse_value(v)
+                active_phase.push_opts({k: v})
             else:
-                active_phase.pop_option_overrides([override])
+                active_phase.pop_opts([override])
 
         else:
             action = arg

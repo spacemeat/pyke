@@ -98,14 +98,14 @@ class Phase:
         '''
         self.options |= overrides
         for dep in self.dependencies:
-            dep.push_option_overrides(overrides)
+            dep.push_opts(overrides)
 
     def pop_opts(self, keys: list):
         '''
         Removes pushed option overrides.
         '''
         for dep in reversed(self.dependencies):
-            dep.pop_option_overrides(keys)
+            dep.pop_opts(keys)
         for key in keys:
             self.options.pop(key)
 
