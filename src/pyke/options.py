@@ -10,7 +10,7 @@ from .utilities import (InvalidOptionValue, re_interp_option, InvalidOptionOpera
 
 class Token(Enum):
     ''' Encodes tokens found in override values parsed from a string. '''
-    ANY = '?'
+    #ANY = '?'
     QSTRING = '\''
     DQSTRING = '"'
     LPAREN = '('
@@ -239,7 +239,6 @@ class Ast:
             return ast
 
         def recur_match(ast: TokenList, pattern: list[Token], then_what: Callable) -> TokenList:
-            print (f'  Matching {pattern} on\n{ast}...')
             tok_idx = 0
             new_ast = []
             while tok_idx < len(ast):
@@ -253,16 +252,11 @@ class Ast:
                 else:
                     match = True
                     for i, pattern_token in enumerate(pattern):
-                        if len(ast) <= tok_idx + i:
+                        if (len(ast) <= tok_idx + i or                 # pattern is too long
+                            isinstance(ast[tok_idx + i], list) or      # pattern can't match a list
+                            pattern_token != ast[tok_idx + i].token):  # pattern doesn't match token
                             match = False
                             break
-                        if pattern_token != Token.ANY:
-                            if isinstance(ast[tok_idx + i], list):
-                                match = False
-                                break
-                            if pattern_token != ast[tok_idx + i].token:
-                                match = False
-                                break
 
                     if match:
                         the_what = then_what(ast[tok_idx : tok_idx + len(pattern)])
@@ -272,14 +266,11 @@ class Ast:
                         new_ast.append(tok)
 
                 tok_idx += 1
-            print (f'-> {new_ast}')
             return new_ast
 
         def replace_string_with_unit(subtree: TokenList) -> TokenList:
             subtree = subtree[0]
             v = subtree.value
-            #if v == '0x01':
-            #    breakpoint()
             try:
                 int(v, 0)
                 return [TokenObj(Token.INT, v, subtree.depth)]
@@ -309,7 +300,6 @@ class Ast:
                             subtree[0].depth)]
 
         def remove_it(_:list) -> list:
-            #breakpoint()
             return []
 
         ast = recur_match(self.toks, [Token.STRING], replace_string_with_unit)
@@ -328,6 +318,83 @@ class Ast:
         self.toks = ast
 
         print (f'Conditioned:\n{self}')
+
+    def objectify(self):
+        ''' Turns a conditioned value into objects. '''
+        self.condition_tokens()
+
+
+        def recur(toks: TokenList) -> Any:
+            tok_idx = 0
+            new_toks = []
+
+            def get_unit_obj(tok: TokenObj) -> Any:
+                match tok.token:
+                    case Token.INT: return int(tok.value)
+                    case Token.FLOAT: return float(tok.value)
+                    case Token.BOOL: return not tok.value.lower == 'false'
+                    case Token.NONE: return None
+                    case Token.QSTRING: return tok.value
+                    case Token.DQSTRING: return tok.value
+                    case Token.STRING: return tok.value
+                return tok
+
+            while tok_idx < len(toks):
+                tok = toks[tok_idx]
+                if isinstance(tok, list):
+                    new_toks.append(recur(tok))
+
+                elif tok.token == Token.LBRACE:
+                    is_dict = True
+                    for i in range(tok_idx + 2, len(toks), 3):
+                        if toks[i].token != Token.COLON:
+                            is_dict = False
+                            break
+
+                    if is_dict:
+                        obj = {}
+                        for i in range(tok_idx + 1, len(toks) - 2, 3):
+                            k = toks[i]
+                            v = toks[i + 2]
+                            if isinstance(k, list):
+                                k = recur(k)
+                            else:
+                                k = get_unit_obj(k)
+                            if isinstance(v, list):
+                                v = recur(v)
+                            else:
+                                v = get_unit_obj(v)
+                            obj[v] = k
+                        return obj
+
+                    obj = set()
+                    for i in range(tok_idx + 1, len(toks) - 1):
+                        x = toks[i]
+                        if isinstance(x, list):
+                            x = recur(x)
+                        else:
+                            x = get_unit_obj(x)
+                        obj.add(x)
+                    return obj
+
+                elif tok.token == Token.LBRACKET:
+                    obj = []
+                    for i in range(tok_idx + 1, len(toks) - 1):
+                        x = toks[i]
+                        if isinstance(x, list):
+                            x = recur(x)
+                        else:
+                            x = get_unit_obj(x)
+                        obj.append(x)
+                    return obj
+
+            return new_toks
+
+        stuff = recur([self.toks])
+        if len(stuff) > 1:
+            raise InvalidOptionValue(f'Value objectified into more than one unit: {self.value}')
+        return * stuff
+
 
 def parse_value(value: str):
     ''' Turn a value string into a value object. '''
