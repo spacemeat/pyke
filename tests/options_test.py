@@ -882,117 +882,136 @@ class TestObjectify(TestCase_NoDiff):
     # TODO NEXT: Testing objectify values
     def test_objectify_0(self):
         cast = Ast('test', [TO(T.STRING, 'test', 0)])
+        cobj = 'test'
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_int(self):
         cast = Ast('1', [TO(T.INT, '1', 0)])
+        cobj = 1
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_int_radix(self):
         cast = Ast('0x01', [TO(T.INT, '0x01', 0)])
+        cobj = 1
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_int_negative(self):
         cast = Ast('-1', [TO(T.INT, '-1', 0)])
+        cobj = -1
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_int_positive(self):
         cast = Ast('+1', [TO(T.INT, '+1', 0)])
+        cobj = 1
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_float(self):
-        cast = Ast('0.1', [TO(T.FLOAT, '0.1', 0)])
+        cast = Ast('0.5', [TO(T.FLOAT, '0.5', 0)])
+        cobj = 0.5
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_float_dot(self):
         cast = Ast('0.', [TO(T.FLOAT, '0.', 0)])
+        cobj = 0.0
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_dot_float(self):
-        cast = Ast('.1', [TO(T.FLOAT, '.1', 0)])
+        cast = Ast('.25', [TO(T.FLOAT, '.25', 0)])
+        cobj = 0.25
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_float_whole_exp(self):
         cast = Ast('1e-4', [TO(T.FLOAT, '1e-4', 0)])
+        cobj = 1e-4
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_float_exp(self):
         cast = Ast('1.1e20', [TO(T.FLOAT, '1.1e20', 0)])
+        cobj = 1.1e20
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_bool(self):
         cast = Ast('True', [TO(T.BOOL, 'True', 0)])
+        cobj = True
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_bool_case(self):
         cast = Ast('fAlSe', [TO(T.BOOL, 'fAlSe', 0)])
+        cobj = False
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_bool_none(self):
         cast = Ast('None', [TO(T.NONE, 'None', 0)])
+        cobj = None
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_bool_none_case(self):
         cast = Ast('none', [TO(T.NONE, 'none', 0)])
+        cobj = None
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_qstring(self):
         cast = Ast("'none'", [TO(T.QSTRING, 'none', 0)])
+        cobj = 'none'
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_dqstring(self):
         cast = Ast('"none"', [TO(T.DQSTRING, 'none', 0)])
+        cobj = 'none'
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_single_dqstring_with_quoted_escapement(self):
         cast = Ast('"no\\"ne"', [TO(T.DQSTRING, 'no"ne', 0)])
+        cobj = 'no"ne'
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_1_braces(self):
         cast = Ast('{test}', [TO(T.STRING, '{test}', 0)])
+        cobj = '{test}'
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_1_escaped_braces(self):
         cast = Ast('\\{test\\}', [TO(T.STRING, '{test}', 0)])
+        cobj = '{test}'
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_int(self):
         cast = Ast('{1}', [
@@ -1002,9 +1021,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {1,}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_float(self):
         cast = Ast('{6.28}', [
@@ -1014,9 +1034,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {6.28,}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_bool(self):
         cast = Ast('{true}', [
@@ -1026,9 +1047,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {True,}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_none(self):
         cast = Ast('{none}', [
@@ -1038,9 +1060,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {None,}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_qstring(self):
         cast = Ast('{\'test\'}', [
@@ -1050,9 +1073,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'test',}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_dqstring(self):
         cast = Ast('{"test"}', [
@@ -1062,9 +1086,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'test',}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_tuple_1_string(self):
         cast = Ast('(test)', [
@@ -1074,9 +1099,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = ('test',)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_tuple_1_int(self):
         cast = Ast('(1)', [
@@ -1086,9 +1112,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = (1,)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_tuple_1_float(self):
         cast = Ast('(6.28)', [
@@ -1098,9 +1125,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = (6.28,)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_tuple_1_bool(self):
         cast = Ast('(true)', [
@@ -1110,9 +1138,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = (True,)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_tuple_1_none(self):
         cast = Ast('(none)', [
@@ -1122,9 +1151,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = (None,)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_tuple_1_qstring(self):
         cast = Ast('(\'test\')', [
@@ -1134,9 +1164,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = ('test',)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_tuple_1_dqstring(self):
         cast = Ast('("test")', [
@@ -1146,26 +1177,27 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = ('test',)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_nest_0_1_0(self):
-        cast = Ast('test[nest]test', [
-            TO(T.STRING, 'test', 0), [
+        cast = Ast('[nest]', [
+            [
                 TO(T.LBRACKET, '[', 1),
                 TO(T.STRING, 'nest', 1),
                 TO(T.RBRACKET, ']', 1),
             ],
-            TO(T.STRING, 'test', 0)
         ])
+        cobj = ['nest']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_nest_0_1_2_1_0(self):
-        cast = Ast('test{nest(best)nest}test', [
-            TO(T.STRING, 'test', 0), [
+        cast = Ast('{nest(best)nest}', [
+            [
                 TO(T.LBRACE, '{', 1),
                 TO(T.STRING, 'nest', 1), [
                     TO(T.LPAREN, '(', 2),
@@ -1175,34 +1207,24 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.STRING, 'nest', 1),
                 TO(T.RBRACE, '}', 1),
             ],
-            TO(T.STRING, 'test', 0)
         ])
+        cobj = ['nest']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_nest_0_1_2_1_0_1_2_1_0(self):
-        cast = Ast('test{nest(best)nest}test[nest{best}nest]test', [
-            TO(T.STRING, 'test', 0), [
-                TO(T.LBRACE, '{', 1),
-                TO(T.STRING, 'nest', 1), [
-                    TO(T.LPAREN, '(', 2),
-                    TO(T.STRING, 'best', 2),
-                    TO(T.RPAREN, ')', 2),
-                ],
-                TO(T.STRING, 'nest', 1),
-                TO(T.RBRACE, '}', 1),
-            ],
-            TO(T.STRING, 'test', 0), [
+        cast = Ast('[nest{best}nest]', [
+            [
                 TO(T.LBRACKET, '[', 1),
                 TO(T.STRING, 'nest{best}nest', 1),
                 TO(T.RBRACKET, ']', 1),
             ],
-            TO(T.STRING, 'test', 0)
         ])
+        cobj = ['nest{best}nest']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_nest_3(self):
         cast = Ast('([{test}])', [
@@ -1215,9 +1237,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RPAREN, ')', 1)
             ]
         ])
+        cobj = (['{test}'],)
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_list_4_ns(self):
         cast = Ast('[a,b,c,d]', [
@@ -1230,9 +1253,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACKET, ']', 1)
             ]
         ])
+        cobj = ['a', 'b', 'c', 'd']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_list_4_ws(self):
         cast = Ast(' [a, b, c, d] ', [
@@ -1245,9 +1269,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACKET, ']', 1)
             ]
         ])
+        cobj = ['a', 'b', 'c', 'd']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_list_1_2_1_ns(self):
         cast = Ast('[a,[b,c],d]', [
@@ -1263,9 +1288,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACKET, ']', 1)
             ]
         ])
+        cobj = ['a', ['b', 'c'], 'd']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_list_3_1_ns(self):
         cast = Ast('[[a,b,c],d]', [
@@ -1281,9 +1307,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACKET, ']', 1)
             ]
         ])
+        cobj = [['a', 'b', 'c'], 'd']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_list_1_3_ns(self):
         cast = Ast('[a,[b,c,d]]', [
@@ -1299,9 +1326,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACKET, ']', 1)
             ]
         ])
+        cobj = ['a', ['b', 'c', 'd']]
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_list_1_2_1_ws(self):
         cast = Ast('[a, [b, c], d]', [
@@ -1317,9 +1345,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACKET, ']', 1)
             ]
         ])
+        cobj = ['a', ['b', 'c'], 'd']
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_4_ns(self):
         cast = Ast('{a,b,c,d}', [
@@ -1332,9 +1361,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'a', 'b', 'c', 'd'}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_4_ws(self):
         cast = Ast('{a, b, c, d}', [
@@ -1347,9 +1377,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'a', 'b', 'c', 'd'}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_2_1_ns(self):
         cast = Ast('{a,{b,c},d}', [
@@ -1365,9 +1396,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'a', {'b', 'c'}, 'd'}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_set_1_2_1_ws(self):
         cast = Ast('{a, {b, c}, d}', [
@@ -1383,9 +1415,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'a', {'b', 'c'}, 'd'}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_dict_2_ns(self):
         cast = Ast('{a:b,c:d}', [
@@ -1400,9 +1433,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'a':'b', 'c':'d'}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_dict_2_ws(self):
         cast = Ast(' { a : b, c : d } ', [
@@ -1417,9 +1451,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {'a':'b', 'c':'d'}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_dict_set_set_ns(self):
         cast = Ast('{{a,b}:{c,d}}', [
@@ -1439,9 +1474,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {{'a':'b', 'c':'d'},}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_dict_set_set_ws(self):
         cast = Ast('{ { a , b } : { c, d } }', [
@@ -1461,9 +1497,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {{'a':'b', 'c':'d'},}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_dict_dict_dict_ns(self):
         cast = Ast('{{a:b}:{c:d}}', [
@@ -1485,9 +1522,10 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {{'a':'b'}:{'c':'d'},}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
 
     def test_objectify_dict_dict_dict_ws(self):
         cast = Ast(' { { a : b } : { c : d } } ', [
@@ -1509,6 +1547,7 @@ class TestObjectify(TestCase_NoDiff):
                 TO(T.RBRACE, '}', 1)
             ]
         ])
+        cobj = {{'a':'b'}:{'c':'d'},}
         ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)

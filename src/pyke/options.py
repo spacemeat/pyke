@@ -388,12 +388,14 @@ class Ast:
                         obj.append(x)
                     return obj
 
+                tok_idx += 1
+
             return new_toks
 
         stuff = recur([self.toks])
         if len(stuff) > 1:
             raise InvalidOptionValue(f'Value objectified into more than one unit: {self.value}')
-        return * stuff
+        return stuff[0]
 
 
 def parse_value(value: str):
