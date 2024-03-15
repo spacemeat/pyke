@@ -1,21 +1,36 @@
 ''' Options class and friends.'''
-# pylint: disable=too-many-boolean-expressions, too-many-branches
+# pylint: disable=too-many-boolean-expressions, too-many-branches, too-few-public-methods
+# pylint: disable=consider-using-generator
 import copy
 from enum import Enum
+from typing import Any
 from .utilities import (re_interp_option, InvalidOptionOperation)
 
 
 class OptionOp(Enum):
     ''' The operations you can perform with option overrides.'''
     REPLACE = '='
+    ADD = '+'       # add numbers, add to strings
+    SUBTRACT = '-'  # subtract numbers, remove matching substrings
+    MULTIPLY = '*'  # multiply numbers
+    DIVIDE = '/'    # divide numbers
     APPEND = '+'    # append to lists/tuples, add to sets, union to dicts
+    REMOVE = '-'    # remove by value from lists and sets and tuples
     EXTEND = '*'    # extend to lists/tuples
-    REMOVE = '-'    # remove by index from lists/tuples, by key from sets and dicts
     UNION = '|'     # union of sets and dicts
-    INTERSECT = '&'     # intersection of sets
-    DIFF = '~'    # difference of sets
-    SYM_DIFF = '^' # sym_diff of sets
+    INTERSECT = '&' # intersection of sets
+    DIFF = '\\'     # remove by index from lists/tuples, by key from dict, difference of sets
+    SYM_DIFF = '^'  # sym_diff of sets
 
+
+class ReplaceValuePlaceholder:
+    ''' This is a placeholder value for the two-parameter version of push. If push has three
+    arguments, the second is considered the replacement value, and the third is defaulted to
+    a ReplaceValuePlaceholder; if it has three args, the second is considered the operator, 
+    and the third is the value. This third default would normally be defaulted to None, but
+    since None is a valid value to set, we need to detect a default of something else: one of
+    these.'''
+    pass
 
 class Option:
     ''' Represents a named option. Stores all its overrides.'''
@@ -56,9 +71,9 @@ class Options:
     def __init__(self):
         self.opts = {}
 
-    def __ior__(self, new_opts):
+    def __ior__(self, new_opts: dict[str, tuple[OptionOp, Any] | Any]):
         for k, v in new_opts.items():
-            self.push(k, v, OptionOp.REPLACE)
+            self.push(k, v)
         return self
 
     def __iter__(self):
@@ -77,13 +92,11 @@ class Options:
         ''' Returns the option keys.'''
         return self.opts.keys()
 
-    def push(self, k, v, op=None):
+    def push(self, k, v: dict[str, tuple[OptionOp, Any] | Any]):
         ''' Push an option override.'''
-        if op is None:
-            op = OptionOp.REPLACE
-            for eop in OptionOp:
-                if k[-1] == eop.value:
-                    op = eop
+        op = OptionOp.REPLACE
+        if isinstance(v, tuple) and isinstance(v[0], OptionOp):
+            op, v = v
 
         if k not in self.opts:
             self.opts[k] = Option(k, v)
@@ -118,7 +131,8 @@ class Options:
                 return val
 
             if isinstance(val, tuple):
-                val = (interp(ve) for ve in val)
+                # NOTE: linter is telling me to use this; I think I want to use ([x for x in y])
+                val = tuple([interp(ve) for ve in val])
                 return val
 
             if isinstance(val, (set, frozenset)):
@@ -152,17 +166,47 @@ class Options:
         if op == OptionOp.REPLACE:
             return override
 
+        if isinstance(computed, (int, float)):
+            if op == OptionOp.ADD:
+                if isinstance(override, (int, float)):
+                    return computed + override
+            if op == OptionOp.SUBTRACT:
+                if isinstance(override, (int, float)):
+                    return computed - override
+            if op == OptionOp.MULTIPLY:
+                if isinstance(override, (int, float)):
+                    return computed * override
+            if op == OptionOp.DIVIDE:
+                if isinstance(override, (int, float)) and float(override) != 0.0:
+                    return computed / override
+            raise InvalidOptionOperation(
+                'Operators on ints or floats must be +, -, *, /, and not dividing by 0.')
+
+        if isinstance(computed, str):
+            if op == OptionOp.ADD:
+                return f'{computed}{override}'
+            if op == OptionOp.SUBTRACT:
+                overstr = str(override)
+                if (idx := computed.find(overstr)) >= 0:
+                    return computed[:idx] + computed[idx + len(overstr):]
+                return computed
+            raise InvalidOptionOperation(
+                'Operators on string options must be + or -.')
+
         if isinstance(computed, list):
             if op == OptionOp.APPEND:
                 return [*computed, override]
             if op == OptionOp.EXTEND:
                 if isinstance(override, (list, tuple)):
                     return [*computed, *override]
+                raise InvalidOptionOperation('Lists can be extended only by other lists or tuples.')
             if op == OptionOp.REMOVE:
+                return [e for e in computed if e != override]
+            if op == OptionOp.DIFF:
                 if isinstance(override, int):
                     return [e for i, e in enumerate(computed) if i != override]
-                if isinstance(override, (list, tuple)):
-                    if all((isinstance(e, int) for e in override)):
+                if isinstance(override, (list, tuple, set)):
+                    if all(isinstance(e, int) for e in override):
                         return [e for i, e in enumerate(computed) if i not in override]
                 raise InvalidOptionOperation('Remove from list operands must be by integer index.')
 
@@ -172,12 +216,16 @@ class Options:
             if op == OptionOp.EXTEND:
                 if isinstance(override, (list, tuple)):
                     return (*computed, *override)
+                raise InvalidOptionOperation(
+                    'Tuples can be extended only by other lists or tuples.')
             if op == OptionOp.REMOVE:
+                return tuple([e for e in computed if e != override])
+            if op == OptionOp.DIFF:
                 if isinstance(override, int):
-                    return (e for i, e in enumerate(computed) if i != override)
-                if isinstance(override, (list, tuple)):
-                    if all((isinstance(e, int) for e in override)):
-                        return (e for i, e in enumerate(computed) if i not in override)
+                    return tuple([e for i, e in enumerate(computed) if i != override])
+                if isinstance(override, (list, tuple, set)):
+                    if all(isinstance(e, int) for e in override):
+                        return tuple([e for i, e in enumerate(computed) if i not in override])
                 raise InvalidOptionOperation('Remove from tuple operands must be by integer index.')
 
         if isinstance(computed, (set, frozenset)):
@@ -208,56 +256,8 @@ class Options:
                     raise InvalidOptionOperation('Append/union operands to dicts must be dicts.')
                 return computed | override
             if op == OptionOp.REMOVE:
-                if isinstance(override, str):
-                    return {k: v for k, v in computed.items() if k != override}
                 if isinstance(override, (list, tuple, set, frozenset)):
-                    if all((isinstance(e, str) for e in override)):
-                        return {k: v for k, v, in computed.items() if k not in override}
-                raise InvalidOptionOperation(
-                    'Remove operands from dicts must be lists, tuples, or sets.')
+                    return {k: v for k, v, in computed.items() if k not in override}
+                return {k: v for k, v in computed.items() if k != override}
 
-        if op != OptionOp.REPLACE:
-            raise InvalidOptionOperation('Override operators cannot be applied to this option'
-                                         f'of type {type(computed)}.')
-        return override
-
-
-
-if __name__ == '__main__':
-    opts = Options()
-    opts |= {
-        'foo': 'bar',
-        'baz': ['foo', '{foo}', 'abc{foo}def'],
-        'sna': '{baz}',
-        'cat': { 'dog': 'ray', 'cow': {'pig': 'bug', 'ant':'bee'} },
-        'gar': ['bun', '--{cat}--', '{sna}'],
-        'gnu': ['zip', 'one', 'two', 'thr'],
-        'fly': [0, 2],
-    }
-
-    def p(k):
-        print (f'{k}: {opts.get(k)}')
-
-    p('foo')
-    p('sna')
-    p('cat')
-    p('gar')
-    p('gnu')
-    opts.push('baz+', 'add0')
-    opts.push('baz+', ['add1', 'add2'])
-    opts.push('baz-', 1)
-    opts.push('gnu-', '{fly}')
-    p('foo')
-    p('sna')
-    p('cat')
-    p('gar')
-    p('gnu')
-    opts.pop('gnu')
-    opts.pop('baz')
-    opts.pop('baz')
-    opts.pop('baz')
-    p('foo')
-    p('sna')
-    p('cat')
-    p('gar')
-    p('gnu')
+        raise InvalidOptionOperation('Invalid operation for this option.')

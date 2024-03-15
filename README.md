@@ -226,19 +226,24 @@ So how does one specify that an override *modifies* an option, instead of *repla
 |original type|operator|override type|effect
 |---|---|---|---
 |any|=, none|any|the option is replaced by the override
+|int\|float|+, -, *, /|int\|float|performs standard math operations
+|string|+  |any|appends str(override) to the end of the string
+|string|-  |string|removes the first instance of the override string from the string
 |list|+  |any|the override is appended to the list
 |list|*  |list\|tuple|the override elements extend the list
-|list|-  |int|the override specifies an index to remove from the list
-|list|-  |list[int]\|tuple[int]|the override specifies a collection of indices to remove from the list
+|list|-  |any|the override is removed from the list
+|list|\\  |int|the override specifies an index to remove from the list
+|list|\\  |list[int]\|tuple[int]|the override specifies a collection of indices to remove from the list
 |tuple|+  |any|the override is appended to the list
 |tuple|*  |list\|tuple|the override elements extend the list
-|tuple|-  |int|the override specifies an index to remove from the list
-|tuple|-  |list[int]\|tuple[int]|the override specifies a collection of indices to remove from the list
+|tuple|-  |any|the override is removed from the tuple
+|tuple|\\  |int|the override specifies an index to remove from the list
+|tuple|\\  |list[int]\|tuple[int]|the override specifies a collection of indices to remove from the list
 |set|+, \||any non-set|the override is added to the set
 |set|-  |any|the override is removed from the set
 |set|\|  |set|the result is unioned with the set 
 |set|&  |set|the result is intersected with the set
-|set|~  |set|the result is the difference with the set
+|set|\\  |set|the result is the difference with the set
 |set|^  |set|the result is the symmetric difference with the set
 |dict|+  |dict|the result is the union with the dict
 |dict|-  |any|the entry is removed from the dict by key

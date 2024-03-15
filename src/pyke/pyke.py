@@ -204,10 +204,15 @@ def main():
             else:
                 idx += 1
                 override = sys.argv[idx]
-            if ':' in override:
-                k, v = override.split(':', 1)
-                v = parse_value(v)
-                active_phase.push_opts({k: v})
+            if '=' in override:
+                k, v = override.split('=', 1)
+                if k in ['+', '*', '-', '|', '&', '\\', '^']:
+                    op = f'{k[-1]}='
+                    k = k[:-1].strip()
+                else:
+                    op = '='
+                v = parse_value(v.strip())
+                active_phase.push_opts({k: (op, v)})
             else:
                 active_phase.pop_opts([override])
 

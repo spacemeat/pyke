@@ -186,8 +186,6 @@ class Ast:
         if depth != 0:
             raise InvalidOptionValue(f'Malformed option override string: {self.value}')
 
-        print (f'Tokenized:\n{self}')
-
     def parse_tokenized_string_value(self):
         '''
         Takes the inital token list, and transforms it into a nested list of lists to match
@@ -210,8 +208,6 @@ class Ast:
             return ast
 
         self.toks = recur(0)
-
-        print (f'Parsed:\n{self}')
 
     def condition_tokens(self):
         '''
@@ -322,8 +318,6 @@ class Ast:
         ast = recur_match(ast, [Token.COMMA], remove_it)
 
         self.toks = ast
-
-        print (f'Conditioned:\n{self}')
 
     def objectify(self):
         ''' Turns a conditioned value into objects. '''

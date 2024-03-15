@@ -287,10 +287,9 @@ class Phase:
         internally.
         '''
 
-        # set this on every do(), so each phase still controls its own verbosity
+        # set this on every do(), so each phase still controls its own verbosity, colors, etc
         WorkingSet.report_verbosity = self.opt_int('report_verbosity')
         WorkingSet.verbosity = self.opt_int('verbosity')
-
         if cols := self.opt('colors'):
             if isinstance(cols, dict):
                 WorkingSet.colors = cols
@@ -362,7 +361,7 @@ class Phase:
                         op = vue[1].value if isinstance(vue[1], OptionOp) else ' '
                         indent = 0 if i == 0 else len(k) + 2
                         opts_str = ''.join((opts_str,
-                                            f'{" " * indent}{color}{op} {vue[0]}{a.off}\n'))
+                                            f'{" " * indent}{color}{op} {vue[0]}{c("off")}\n'))
                     indent = len(k) + 1
                 else:
                     indent = 0
@@ -370,7 +369,7 @@ class Phase:
                 opts_str = ''.join((opts_str,
                                     f'{" " * indent}{c("val_interp")}-> {vi}\n'))
 
-            report += f'\n{opts_str}'
+            report += f'\n{opts_str}{c("off")}'
         print (report)
         return ActionResult(
             'report', StepResult('report', '', '', '', ResultCode.NO_ACTION, str(self)))
