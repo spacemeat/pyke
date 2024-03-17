@@ -8,4 +8,4 @@ phase = p.CompileAndLinkPhase({
     'exe_basename': '{name}',
 })
 
-p.use_phases(phase)
+p.main_project().set_dependency(phase)

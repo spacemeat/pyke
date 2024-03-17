@@ -30,4 +30,4 @@ o_to_exe_phase = p.LinkPhase({
 
 phases.append(o_to_exe_phase)
 
-p.use_phases(phases)
+p.main_project().set_dependency(o_to_exe_phase)

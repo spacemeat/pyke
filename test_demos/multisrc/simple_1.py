@@ -23,4 +23,4 @@ o_to_exe_phase = p.LinkPhase({
     'exe_basename': '{name}',
 }, c_to_o_phases)
 
-p.use_phases(o_to_exe_phase)
+p.main_project().set_dependency(o_to_exe_phase)

@@ -9,10 +9,15 @@ import os
 from pathlib import Path
 import sys
 
+from .options import OptionOp
 from .options_parser import parse_value
 from .phases.phase import Phase
+from .phases.project import ProjectPhase
 from .utilities import WorkingSet
 
+def main_project():
+    ''' Returns the main project created for the makefile.'''
+    return WorkingSet.using_phases[0]
 
 class ReturnCode(Enum):
     ''' Encoded return code for program exit.'''
@@ -132,6 +137,7 @@ def main():
     current_dir = os.getcwd()
     make_file = 'make.py'
     cache_make = False
+    global project
 
     idx = 1
     while idx < len(sys.argv):
@@ -167,9 +173,15 @@ def main():
         make_path = make_path / 'make.py'
 
     WorkingSet.makefile_dir = str(make_path.parent)
+
+    project = ProjectPhase({
+        'name': make_path.parent.name if make_path.name == 'make.py' else make_path.stem
+    })
+    active_phase = project
+
     run_make_file(make_path, cache_make)
 
-    active_phase = WorkingSet.using_phases[-1]
+    # TODO: Get all names from dependency graph?
     phase_map = {phase.opt_str('name'): phase for phase in WorkingSet.using_phases}
 
     while idx < len(sys.argv):
@@ -206,11 +218,11 @@ def main():
                 override = sys.argv[idx]
             if '=' in override:
                 k, v = override.split('=', 1)
-                if k in ['+', '*', '-', '|', '&', '\\', '^']:
+                if k[-1] in ['+', '*', '-', '|', '&', '\\', '^']:
                     op = f'{k[-1]}='
-                    k = k[:-1].strip()
+                    k = OptionOp(k[:-1].strip()).name
                 else:
-                    op = '='
+                    op = OptionOp.REPLACE
                 v = parse_value(v.strip())
                 active_phase.push_opts({k: (op, v)})
             else:

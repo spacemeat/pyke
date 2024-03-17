@@ -11,6 +11,11 @@ class PhaseNotFoundError(Exception):
     Raised when referencing a phase by name which does not match any existing phase.
     '''
 
+class InvalidActionError(Exception):
+    '''
+    Raised when invalid operations on actions are attempted.
+    '''
+
 class InvalidOptionOverrideError(Exception):
     '''
     Raised when referencing an option which was not given a default.
@@ -99,6 +104,7 @@ def do_shell_command(cmd):
 class WorkingSet:
     ''' Keeps track of globally-available values.'''
     makefile_dir = ''
+    #uber_phase = None
     colors = {}
     report_verbosity = 2
     verbosity = 0

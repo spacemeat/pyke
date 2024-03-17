@@ -9,7 +9,6 @@ from typing_extensions import Self
 
 from ..action import (StepResult, ActionResult, ResultCode,
                       report_action_start, report_action_end, report_error)
-from .. import ansi as a
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
                          InvalidOptionKey, CircularDependencyError)
@@ -84,6 +83,8 @@ class Phase:
         self.last_action_ordinal = -1
         self.last_action_result = None
 
+        self.override_project_dependency_options = False
+
         if dependencies is None:
             dependencies = []
         dependencies = ensure_list(dependencies)
@@ -98,14 +99,16 @@ class Phase:
         '''
         self.options |= overrides
         for dep in self.dependencies:
-            dep.push_opts(overrides)
+            if dep.opt_str('build_operation') != 'project' or self.override_project_dependency_options:
+                dep.push_opts(overrides)
 
-    def pop_opts(self, keys: list):
+    def pop_opts(self, keys: list[str]):
         '''
         Removes pushed option overrides.
         '''
         for dep in reversed(self.dependencies):
-            dep.pop_opts(keys)
+            if dep.opt_str('build_operation') != 'project' or self.override_project_dependency_options:
+                dep.pop_opts(keys)
         for key in keys:
             self.options.pop(key)
 
@@ -229,7 +232,7 @@ class Phase:
         obj.options |= options or {}
         return obj
 
-    def is_in_dependency_tree(self, dep_to_find: Self):
+    def find_in_dependency_tree(self, dep_to_find: Self):
         '''
         Returns whether dep_to_find is in the dependency tree for 
         this phase.
@@ -252,7 +255,7 @@ class Phase:
         '''
         new_deps = ensure_list(new_deps)
         for new_dep in new_deps:
-            if new_dep.is_in_dependency_tree(self) is not None:
+            if new_dep.find_in_dependency_tree(self) is not None:
                 raise CircularDependencyError(
                     f'Attempt to set a circular dependency {str(new_dep)} '
                     f'to phase {str(self)}. Not cool.')
@@ -294,6 +297,9 @@ class Phase:
             if isinstance(cols, dict):
                 WorkingSet.colors = cols
 
+        # TODO: New action stuff.
+        #action.set_phase(self.opt_str('name'))
+
         action_ordinal = self._get_action_ordinal(action_ordinal)
         if self.last_action_ordinal == action_ordinal:
             self.last_action_result = ActionResult(
@@ -301,15 +307,25 @@ class Phase:
                 StepResult('', '', '', '', ResultCode.ALREADY_UP_TO_DATE,
                 f'{self.opt_str("name")}.{action}'))
             return self.last_action_result
-
         self.last_action_ordinal = action_ordinal
+
         for dep in self.dependencies:
-            res = dep.do(action, action_ordinal)
-            if not res:
-                self.last_action_result = ActionResult(
-                    action,
-                    StepResult('', '', '', '', ResultCode.DEPENDENCY_ERROR, dep))
-                return self.last_action_result
+            if dep.opt_str('build_operation') == 'project':
+                res = dep.do(action, action_ordinal)
+                if not res:
+                    self.last_action_result = ActionResult(
+                        action,
+                        StepResult('', '', '', '', ResultCode.DEPENDENCY_ERROR, dep))
+                    return self.last_action_result
+
+        for dep in self.dependencies:
+            if dep.opt_str('build_operation') != 'project':
+                res = dep.do(action, action_ordinal)
+                if not res:
+                    self.last_action_result = ActionResult(
+                        action,
+                        StepResult('', '', '', '', ResultCode.DEPENDENCY_ERROR, dep))
+                    return self.last_action_result
 
         action_method = getattr(self, 'do_action_' + action, self.do_action_undefined)
         try:

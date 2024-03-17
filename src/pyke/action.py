@@ -4,7 +4,7 @@ from enum import Enum
 import sys
 from typing import Optional
 
-from .utilities import ensure_tuple, set_color as c, WorkingSet
+from .utilities import ensure_tuple, set_color as c, WorkingSet, InvalidActionError
 
 class ResultCode(Enum):
     '''
@@ -13,11 +13,127 @@ class ResultCode(Enum):
     NO_ACTION = 0
     SUCCEEDED = 1
     ALREADY_UP_TO_DATE = 2
+    ALREADY_RUN = 3
+    NOT_YET_RUN = 4
     MISSING_INPUT = -1
     COMMAND_FAILED = -2
     DEPENDENCY_ERROR = -3
     INVALID_OPTION = -4
 
+'''
+    def succeeded(self):
+        return self.value >= 0
+
+    def failed(self):
+        return not self.succeeded()
+
+class StepAction:
+    def __init__(self, step_name: str):
+        self.name = step_name
+        self.result: ResultCode = ResultCode.NO_ACTION
+
+    def get_result(self):
+        return self.result
+
+    def set_result(self, result: ResultCode):
+        self.result = result
+
+class PhaseAction:
+    def __init__(self, phase_name: str):
+        self.name = phase_name
+        self.current_step: str = ''
+        self.steps = {}
+
+    def get_result(self):
+        res = ResultCode.NOT_YET_RUN
+        for _, pv in self.steps.items():
+            if (res := pv.get_result()).succeeded():
+                return res
+        return res
+
+    def set_step(self, step_name: str):
+        self.current_step = step_name
+        if self.current_step not in self.steps:
+            self.steps[self.current_step] = {}
+        else:
+            return ResultCode.ALREADY_RUN
+
+    def set_step_result(self, result: ResultCode):
+        if self.current_step:
+            self.steps[self.current_step].set_result(result)
+        else:
+            raise InvalidActionError('No step set.')
+
+class ProjectAction:
+    def __init__(self, project_name: str):
+        self.name = project_name
+        self.current_phase: str = ''
+        self.phases = {}
+
+    def get_result(self):
+        res = ResultCode.NOT_YET_RUN
+        for _, pv in self.phases.items():
+            if (res := pv.get_result()).succeeded():
+                return res
+        return res
+
+    def set_phase(self, phase_name: str):
+        self.current_phase = phase_name
+        if self.current_phase not in self.phases:
+            self.phases[self.current_phase] = {}
+            return ResultCode.NOT_YET_RUN
+        return self.phases[self.current_phase].get_result()
+
+    def set_step(self, step_name: str):
+        if self.current_phase:
+            return self.phases[self.current_phase].set_step(step_name)
+        raise InvalidActionError('No phase set.')
+
+    def set_step_result(self, result: ResultCode):
+        if self.current_phase:
+            self.phases[self.current_phase].set_step_result(result)
+        raise InvalidActionError('No project set.')
+
+class Action:
+    next_ordinal = 0
+
+    def __init__(self, action_name: str):
+        self.name = action_name
+        self.ordinal = Action.next_ordinal
+        Action.next_ordinal += 1
+        self.current_project: str = ''
+        self.projects = {}
+
+    def get_result(self):
+        res = ResultCode.NOT_YET_RUN
+        for _, pv in self.projects.items():
+            if (res := pv.get_result()).succeeded():
+                return res
+        return res
+
+    def set_project(self, project_name: str):
+        self.current_project = project_name
+        if self.current_project not in self.projects:
+            self.projects[self.current_project] = {}
+            return ResultCode.NOT_YET_RUN
+        return self.projects[self.current_project].get_result()
+
+    def set_phase(self, phase_name: str):
+        if self.current_project:
+            return self.projects[self.current_project].set_phase(phase_name)
+        raise InvalidActionError('No project set.')
+
+    def set_step(self, step_name: str):
+        if self.current_project:
+            return self.projects[self.current_project].set_step(step_name)
+        raise InvalidActionError('No project set.')
+
+    def set_step_result(self, result: ResultCode):
+        if self.current_project:
+            self.projects[self.current_project].set_step_result(result)
+        else:
+            raise InvalidActionError('No project set.')
+'''
 
 class StepResult:
     '''
