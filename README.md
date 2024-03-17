@@ -584,7 +584,7 @@ The command line arguments are:
 
 ### Simulating the run
 
-This is a near-future feature. TBD.
+This is a near-future feature. TBD. But it'll simulate a successful run, and report on potentially clobbered files, etc.
 
 ### Adding new phases
 

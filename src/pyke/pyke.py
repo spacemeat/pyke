@@ -2,22 +2,24 @@
 Python library for building software.
 '''
 
+# pylint: disable=broad-exception-caught
+
 from enum import Enum
 import importlib.util
 import importlib.machinery
 import os
 from pathlib import Path
 import sys
+import traceback
 
 from .options import OptionOp
 from .options_parser import parse_value
-from .phases.phase import Phase
 from .phases.project import ProjectPhase
 from .utilities import WorkingSet
 
 def main_project():
     ''' Returns the main project created for the makefile.'''
-    return WorkingSet.using_phases[0]
+    return WorkingSet.main_phase
 
 class ReturnCode(Enum):
     ''' Encoded return code for program exit.'''
@@ -28,31 +30,23 @@ class ReturnCode(Enum):
     ACTION_FAILED = 4
 
 
-def use_phases(phases: Phase | list[Phase] | tuple[Phase]):
-    '''
-    Called by the user's pyke program to register phases for use in the project.
-    '''
-    if isinstance(phases, Phase):
-        phases = [phases]
-    else:
-        phases = list(phases)
-    WorkingSet.using_phases.extend(phases)
-
-
 def run_make_file(pyke_path, cache_make):
     ''' Loads and runs the user-created make file.'''
-    if pyke_path.exists:
-        sys.dont_write_bytecode = not cache_make
-        spec = importlib.util.spec_from_file_location('pyke', pyke_path)
-        if spec:
-            module = importlib.util.module_from_spec(spec)
-            loader = spec.loader
-            if loader:
-                loader.exec_module(module)
-                sys.dont_write_bytecode = cache_make
-                return
-        print (f'"{pyke_path}" could not be loaded.')
-        sys.exit(ReturnCode.MAKEFILE_DID_NOT_LOAD.value)
+    if pyke_path.exists():
+        try:
+            sys.dont_write_bytecode = not cache_make
+            spec = importlib.util.spec_from_file_location('pyke', pyke_path)
+            if spec:
+                module = importlib.util.module_from_spec(spec)
+                loader = spec.loader
+                if loader:
+                    loader.exec_module(module)
+                    sys.dont_write_bytecode = cache_make
+                    return
+        except Exception:
+            print (f'"{pyke_path}" could not be loaded.')
+            traceback.print_exc()
+            sys.exit(ReturnCode.MAKEFILE_DID_NOT_LOAD.value)
     else:
         print (f'"{pyke_path}" was not found.')
         sys.exit(ReturnCode.MAKEFILE_NOT_FOUND.value)
@@ -98,18 +92,18 @@ action: Arguments given without switches specify actions to be taken on the acti
 Returns the version number.
 $ pyke -v
 
-Looks for ./make.py && loads the last phase in _using_phases && runs the default action.
+Looks for ./make.py && loads the project phase && runs the default action.
 $ pyke
 $ pyke -m .
 
-Looks for ./simple_test.py && loads the last phase in _using_phases && runs the default action.
+Looks for ./simple_test.py && loads the project phase && runs the default action.
 $ pyke -m ./simple_test.py
 
-Looks for ../../make.py && loads the last phase in _using_phases && runs the default
+Looks for ../../make.py && loads the project phase && runs the default
 action from the current directory. This will emplace build targets relative to ../../.
 $ pyke -m ../../
 
-Looks for ../../make.py && loads the last phase in _using_phases && runs the default
+Looks for ../../make.py && loads the project phase && runs the default
 action from the current directory. This will emplace build targets relative to ./.
 $ pyke -m../../ -o anchor:$PWD
 
@@ -120,7 +114,7 @@ $ pyke -o kind:debug -o verbosity:0
 Looks for ./make.py && loads the phase named "alt_project" && runs its default action.
 $ pyke -p alt_project
 
-Looks for ./make.py && loads the last phase && runs the action named "build"
+Looks for ./make.py && loads the project phase && runs the action named "build"
 $ pyke build
 
 Looks for ./make.py && loads && overrides the "time_run" option && runs the "clean", "build", 
@@ -137,7 +131,6 @@ def main():
     current_dir = os.getcwd()
     make_file = 'make.py'
     cache_make = False
-    global project
 
     idx = 1
     while idx < len(sys.argv):
@@ -174,15 +167,21 @@ def main():
 
     WorkingSet.makefile_dir = str(make_path.parent)
 
-    project = ProjectPhase({
+    WorkingSet.main_phase = ProjectPhase({
         'name': make_path.parent.name if make_path.name == 'make.py' else make_path.stem
     })
-    active_phase = project
+    active_phase = WorkingSet.main_phase
 
     run_make_file(make_path, cache_make)
 
-    # TODO: Get all names from dependency graph?
-    phase_map = {phase.opt_str('name'): phase for phase in WorkingSet.using_phases}
+    phase_map = {phase.opt_str('name'): phase
+                 for phase in WorkingSet.main_phase.enumerate_dependencies()
+                 if phase.is_project_phase}
+
+    phase_map |= {f'{proj_name}.{phase.opt_str("name")}': phase
+                  for proj_name, proj in phase_map.items()
+                  for phase in proj.enumerate_dependencies()
+                  if not phase.is_project_phase}
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]
@@ -207,7 +206,11 @@ def main():
             else:
                 idx += 1
                 phase_name = sys.argv[idx]
+            if phase_name not in phase_map:
+                print (f'Could not find a phase named "{phase_name}".')
+                return ReturnCode.INVALID_ARGS.value
             active_phase = phase_map[phase_name]
+
 
         elif arg.startswith('-o') or arg == '--override':
             override = ''

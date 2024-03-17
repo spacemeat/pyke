@@ -9,10 +9,9 @@ class LinkPhase(CFamilyBuildPhase):
     '''
     def __init__(self, options, dependencies = None):
         options = {
-            'name': 'link'
-        } | options | {
+            'name': 'link',
             'build_operation': 'link_to_executable',
-        }
+        } | options
         super().__init__(options, dependencies)
 
     def get_all_object_paths(self):
@@ -20,8 +19,7 @@ class LinkPhase(CFamilyBuildPhase):
         Gets the object file paths from each dependency.
         '''
         for dep in self.dependencies:
-            for obj_path in dep.get_all_object_paths():
-                yield obj_path
+            yield from dep.get_all_object_paths()
 
     def do_action_clean(self):
         '''

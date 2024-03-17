@@ -11,7 +11,7 @@ from ..action import (StepResult, ActionResult, ResultCode,
                       report_action_start, report_action_end, report_error)
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
-                         InvalidOptionKey, CircularDependencyError)
+                         InvalidOptionKey, CircularDependencyError, ProjectPhaseDependencyError)
 
 T = TypeVar('T')
 
@@ -80,6 +80,7 @@ class Phase:
 
         assert isinstance(options, dict)
         self.default_action = 'report'
+        self.is_project_phase = False
         self.last_action_ordinal = -1
         self.last_action_result = None
 
@@ -92,23 +93,27 @@ class Phase:
         for dep in dependencies:
             self.set_dependency(dep)
 
-    def push_opts(self, overrides: dict):
+    def push_opts(self, overrides: dict,
+                  include_deps: bool = False, include_project_deps: bool = False):
         '''
         Apply optinos which take precedence over self.overrides. Intended to be 
         set temporarily, likely from the command line.
         '''
         self.options |= overrides
-        for dep in self.dependencies:
-            if dep.opt_str('build_operation') != 'project' or self.override_project_dependency_options:
-                dep.push_opts(overrides)
+        if include_deps:
+            for dep in self.dependencies:
+                if not dep.is_project_phase or include_project_deps:
+                    dep.push_opts(overrides)
 
-    def pop_opts(self, keys: list[str]):
+    def pop_opts(self, keys: list[str],
+                  include_deps: bool = False, include_project_deps: bool = False):
         '''
         Removes pushed option overrides.
         '''
-        for dep in reversed(self.dependencies):
-            if dep.opt_str('build_operation') != 'project' or self.override_project_dependency_options:
-                dep.pop_opts(keys)
+        if include_deps:
+            for dep in reversed(self.dependencies):
+                if not dep.is_projet_phase or include_project_deps:
+                    dep.pop_opts(keys)
         for key in keys:
             self.options.pop(key)
 
@@ -191,9 +196,7 @@ class Phase:
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a list.
         '''
-        val = self.opt(key, overrides, interpolate)
-        assert isinstance(val, list)
-        return val
+        return self.opt_t(list, key, overrides, interpolate)
 
     def opt_set(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> set:
         '''
@@ -201,9 +204,7 @@ class Phase:
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a set.
         '''
-        val = self.opt(key, overrides, interpolate)
-        assert isinstance(val, set)
-        return val
+        return self.opt_t(set, key, overrides, interpolate)
 
     def opt_dict(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> dict:
         '''
@@ -211,12 +212,7 @@ class Phase:
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a dict.
         '''
-        val = self.opt(key, overrides, interpolate)
-        assert isinstance(val, dict)
-        return val
-
-    def __str__(self):
-        return str(self.opt_str("name"))
+        return self.opt_t(dict, key, overrides, interpolate)
 
     def __repr__(self):
         return str(self.opt_str("name"))
@@ -231,6 +227,12 @@ class Phase:
         obj.options = self.options.clone()
         obj.options |= options or {}
         return obj
+
+    def enumerate_dependencies(self):
+        ''' Enumerates all the dependencies in depth-first order whose types match obj_type.'''
+        for dep in self.dependencies:
+            yield from dep.enumerate_dependencies()
+        yield self
 
     def find_in_dependency_tree(self, dep_to_find: Self):
         '''
@@ -255,10 +257,15 @@ class Phase:
         '''
         new_deps = ensure_list(new_deps)
         for new_dep in new_deps:
+            if (not self.is_project_phase and
+                new_dep.is_project_phase):
+                raise ProjectPhaseDependencyError(
+                    f'Attempt by non-project phase "{self.opt_str("name")}" to depend on a '
+                    f'project phase "{new_dep.opt_str("name")}.')
             if new_dep.find_in_dependency_tree(self) is not None:
                 raise CircularDependencyError(
-                    f'Attempt to set a circular dependency {str(new_dep)} '
-                    f'to phase {str(self)}. Not cool.')
+                    f'Attempt to set a circular dependency {new_dep.opt_str("name")} '
+                    f'to phase {self.opt_str("name")}. Not cool.')
             self.dependencies.append(new_dep)
 
     def _get_action_ordinal(self, action_ordinal: int):
@@ -310,7 +317,7 @@ class Phase:
         self.last_action_ordinal = action_ordinal
 
         for dep in self.dependencies:
-            if dep.opt_str('build_operation') == 'project':
+            if dep.is_project_phase:
                 res = dep.do(action, action_ordinal)
                 if not res:
                     self.last_action_result = ActionResult(
@@ -319,7 +326,7 @@ class Phase:
                     return self.last_action_result
 
         for dep in self.dependencies:
-            if dep.opt_str('build_operation') != 'project':
+            if not dep.is_project_phase:
                 res = dep.do(action, action_ordinal)
                 if not res:
                     self.last_action_result = ActionResult(

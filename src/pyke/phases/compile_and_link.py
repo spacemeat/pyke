@@ -3,16 +3,17 @@
 from ..action import ActionResult
 from .c_family_build import CFamilyBuildPhase
 
+from ..utilities import WorkingSet
+
 class CompileAndLinkPhase(CFamilyBuildPhase):
     '''
     Phase class for linking object files to build executable binaries.
     '''
     def __init__(self, options, dependencies = None):
         options = {
-            'name': 'compile_and_link'
-        } | options | {
+            'name': 'compile_and_link',
             'build_operation': 'compile_to_executable',
-        }
+        } | options
         super().__init__(options, dependencies)
 
     def do_action_clean(self):

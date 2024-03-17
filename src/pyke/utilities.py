@@ -11,6 +11,12 @@ class PhaseNotFoundError(Exception):
     Raised when referencing a phase by name which does not match any existing phase.
     '''
 
+class ProjectPhaseDependencyError(Exception):
+    '''
+    Raised when a non-project Phase is set to depend on a project Phase. Only projects may
+    depend on projects.
+    '''
+
 class InvalidActionError(Exception):
     '''
     Raised when invalid operations on actions are attempted.
@@ -104,11 +110,10 @@ def do_shell_command(cmd):
 class WorkingSet:
     ''' Keeps track of globally-available values.'''
     makefile_dir = ''
-    #uber_phase = None
+    main_phase = None
     colors = {}
     report_verbosity = 2
     verbosity = 0
-    using_phases = []
 
 def set_color(color):
     ''' Returns the ANSI color code for the specified thematic element.'''
