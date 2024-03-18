@@ -23,15 +23,6 @@ class OptionOp(Enum):
     SYM_DIFF = '^'  # sym_diff of sets
 
 
-class ReplaceValuePlaceholder:
-    ''' This is a placeholder value for the two-parameter version of push. If push has three
-    arguments, the second is considered the replacement value, and the third is defaulted to
-    a ReplaceValuePlaceholder; if it has three args, the second is considered the operator, 
-    and the third is the value. This third default would normally be defaulted to None, but
-    since None is a valid value to set, we need to detect a default of something else: one of
-    these.'''
-    pass
-
 class Option:
     ''' Represents a named option. Stores all its overrides.'''
     def __init__(self, name: str, value):
@@ -47,27 +38,9 @@ class Option:
         ''' Removes the last override.'''
         del self.value[-1]
 
+# TODO: Track and flag circular refs.
 class Options:
-    '''
-    phase.opts |= {'foo_b': True}
-    phase.opts |= {'foo_s': 'bar'}
-    phase.opts |= {'foo_lb': ['bar', False]}
-    phase.opts |= {'foo_ls': ['bar', 'baz']}
-    phase.opts |= {'foo_db': {'bar': True, 'sna': False}
-    phase.opts |= {'foo_ds': {'bar': 'baz', 'sna': 'guh'}
-    ...
-    phase.opts |= {'foo_b': False}                  # overrides the value
-    phase.opts |= {'foo_ls: ['fleeb', 'plugh']}     # overrides the whole list
-    phase.opts |= {'foo_ls+: ['fleeb', 'plugh']}    # appends to the list
-    phase.opts |= {'foo_ls-: ['bar']}               # removes 'bar' from the list
-    phase.opts |= {'foo_db': {'sna': True}}         # overrides the whole dict
-    phase.opts |= {'foo_db+': {'sna': True}}        # overrides the dict value
-    phase.opts |= {'foo_db+': {'zin': True}}        # appends the dict value
-    phase.opts |= {'foo_db-': {'sna'}}              # removes the dict value
-
-    -o foo_ds:{bar:baz}
-    -o kvs:{url:{ht_method}://foo.com,user:$REDIS_ID,password:$REDIS_PWD}
-    '''
+    ''' Holds the collection of options for a particular phase. '''
     def __init__(self):
         self.opts = {}
 

@@ -1,6 +1,6 @@
 ''' This is the compile-and-link phase for single-phase build.'''
 
-from ..action import ActionResult
+from ..action import Action, ActionResult, ResultCode
 from .c_family_build import CFamilyBuildPhase
 
 from ..utilities import WorkingSet
@@ -16,34 +16,78 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         } | options
         super().__init__(options, dependencies)
 
-    def do_action_clean(self):
+    def do_action_clean(self, action: Action):
         '''
         Cleans all object paths this phase builds.
         '''
         exe_path = self.get_exe_path()
 
-        step_results = []
-
+        action_res = ResultCode.SUCCEEDED
         if self.opt_bool('incremental_build'):
             for _, obj_path in self.get_all_src_and_object_paths():
-                step_results.append(self.do_step_delete_file(obj_path))
+                if (res := self.do_step_delete_file(obj_path, action)).failed():
+                    action_res = res
 
-        step_results.append(self.do_step_delete_file(exe_path))
+        if (res := self.do_step_delete_file(exe_path, action)).failed():
+            action_res = res
 
-        return ActionResult('clean', tuple(step_results))
+        return action_res
+        #step_results = []
 
-    def do_action_build(self):
+        #if self.opt_bool('incremental_build'):
+        #    for _, obj_path in self.get_all_src_and_object_paths():
+        #        step_results.append(self.do_step_delete_file(obj_path))
+
+        #step_results.append(self.do_step_delete_file(exe_path))
+
+        #return ActionResult('clean', tuple(step_results))
+
+    def do_action_build(self, action: Action):
         '''
         Builds all object paths.
         '''
-        step_results = []
+        #step_results = []
         exe_path = self.get_exe_path()
 
         prefix = self.make_build_command_prefix()
         c_args = self.make_compile_arguments()
         l_args = self.make_link_arguments()
 
+        action_res = ResultCode.SUCCEEDED
         if self.opt_bool('incremental_build'):
+            for src_path, obj_path in self.get_all_src_and_object_paths():
+                if (res := self.do_step_create_directory(obj_path.parent, action)).failed():
+                    action_res = res
+
+                if action_res.succeeded():
+                    if (res := self.do_step_compile_src_to_object(
+                        prefix, c_args, src_path, obj_path, action)).failed():
+                        action_res = res
+
+            if action_res.succeeded():
+                object_paths = self.get_all_object_paths()
+
+                if (res := self.do_step_create_directory(exe_path.parent, action)).failed():
+                    action_res = res
+
+                if action_res.succeeded():
+                    if (res := self.do_step_link_objects_to_exe(
+                        prefix, l_args, exe_path, object_paths, action)).failed():
+                        action_res = res
+        else:
+            src_paths = self.get_all_src_paths()
+
+            if (res := self.do_step_create_directory(exe_path.parent, action)).failed():
+                action_res = res
+
+            if action_res.succeeded():
+                if (res := self.do_step_compile_srcs_to_exe(
+                    prefix, c_args | l_args, src_paths, exe_path, action)).failed():
+                    action_res = res
+
+        return action_res
+
+        old = '''if self.opt_bool('incremental_build'):
             for src_path, obj_path in self.get_all_src_and_object_paths():
                 step_results.append(self.do_step_create_directory(obj_path.parent))
 
@@ -67,3 +111,4 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
                     prefix, c_args | l_args, src_paths, exe_path))
 
         return ActionResult('build', tuple(step_results))
+        '''

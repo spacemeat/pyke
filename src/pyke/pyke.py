@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 import traceback
 
+from .action import Action
 from .options import OptionOp
 from .options_parser import parse_value
 from .phases.project import ProjectPhase
@@ -211,7 +212,6 @@ def main():
                 return ReturnCode.INVALID_ARGS.value
             active_phase = phase_map[phase_name]
 
-
         elif arg.startswith('-o') or arg == '--override':
             override = ''
             if len(arg) > 2:
@@ -232,7 +232,7 @@ def main():
                 active_phase.pop_opts([override])
 
         else:
-            action = arg
+            action = Action(arg)
             if not active_phase.do(action):
                 return ReturnCode.ACTION_FAILED.value
 

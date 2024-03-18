@@ -6,53 +6,58 @@ import subprocess
 
 from . import ansi as a
 
-class PhaseNotFoundError(Exception):
+class PykeException(Exception):
+    '''
+    Parent for all Pyke errors.
+    '''
+
+class PhaseNotFoundError(PykeException):
     '''
     Raised when referencing a phase by name which does not match any existing phase.
     '''
 
-class ProjectPhaseDependencyError(Exception):
+class ProjectPhaseDependencyError(PykeException):
     '''
     Raised when a non-project Phase is set to depend on a project Phase. Only projects may
     depend on projects.
     '''
 
-class InvalidActionError(Exception):
+class InvalidActionError(PykeException):
     '''
     Raised when invalid operations on actions are attempted.
     '''
 
-class InvalidOptionOverrideError(Exception):
+class InvalidOptionOverrideError(PykeException):
     '''
     Raised when referencing an option which was not given a default.
     '''
 
-class UnsupportedToolkitError(Exception):
+class UnsupportedToolkitError(PykeException):
     '''
     Raised when a toolkit is specified that is not supported.
     '''
 
-class UnsupportedLanguageError(Exception):
+class UnsupportedLanguageError(PykeException):
     '''
     Raised when a language is specified that is not supported.
     '''
 
-class CircularDependencyError(Exception):
+class CircularDependencyError(PykeException):
     '''
     Raised when a circular phase dependency is attempted.
     '''
 
-class InvalidOptionValue(Exception):
+class InvalidOptionValue(PykeException):
     '''
     Raised when attempting to set a value to an option with an incompatible type.
     '''
 
-class InvalidOptionKey(Exception):
+class InvalidOptionKey(PykeException):
     '''
     Raised when an option is referenced which is not allowed for this phase.
     '''
 
-class InvalidOptionOperation(Exception):
+class InvalidOptionOperation(PykeException):
     '''
     Raised when an option operation is not type-compatible.
     '''

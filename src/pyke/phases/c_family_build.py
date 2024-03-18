@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..action import ActionStep, ResultCode
+from ..action import Action, ActionStep, ResultCode
 from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError, input_is_newer,
                          do_shell_command)
 from .phase import Phase
@@ -250,10 +250,28 @@ class CFamilyBuildPhase(Phase):
             'posix_threads': self.opt('posix_threads'),
         }
 
-    def do_step_delete_file(self, path):
+    def do_step_delete_file(self, path: Path, action: Action):
         '''
         Perfoems a file deletion operation as an action step.
         '''
+        step_result = ResultCode.SUCCEEDED
+        step_notes = None
+        cmd = self.make_cmd_delete_file(path)
+        action.set_step(f'delete {str(path)}', cmd)
+        if path.exists():
+            res, _, err = do_shell_command(cmd)
+            if res != 0:
+                step_result = ResultCode.COMMAND_FAILED
+                step_notes = err
+            else:
+                step_result = ResultCode.SUCCEEDED
+        else:
+            step_result = ResultCode.ALREADY_UP_TO_DATE
+
+        action.set_result(step_result, step_notes)
+        return step_result
+
+        old = '''
         step_results = None
         with ActionStep('deleting', '', str(path),
                         self.make_cmd_delete_file(path)) as step:
@@ -267,11 +285,31 @@ class CFamilyBuildPhase(Phase):
             else:
                 step.set_result(ResultCode.ALREADY_UP_TO_DATE)
         return step_results
+        '''
 
-    def do_step_create_directory(self, new_dir):
+    def do_step_create_directory(self, new_dir, action):
         '''
         Performs a directory creation operation as an action step.
         '''
+        step_result = ResultCode.SUCCEEDED
+        step_notes = None
+        cmd = f'mkdir -p {new_dir}'
+        action.set_step(f'create {str(new_dir)}', cmd)
+
+        if not new_dir.is_dir():
+            res, _, err = do_shell_command(cmd)
+            if res != 0:
+                step_result = ResultCode.COMMAND_FAILED
+                step_notes = err
+            else:
+                step_result = ResultCode.SUCCEEDED
+        else:
+            step_result = ResultCode.ALREADY_UP_TO_DATE
+
+        action.set_result(step_result, step_notes)
+        return step_result
+
+        old = '''
         step_results = None
         with ActionStep('creating', '', str(new_dir),
                         f'mkdir -p {new_dir}') as step:
@@ -285,11 +323,36 @@ class CFamilyBuildPhase(Phase):
             else:
                 step.set_result(ResultCode.ALREADY_UP_TO_DATE)
         return step_results
+        '''
 
-    def do_step_compile_src_to_object(self, prefix, args, src_path, obj_path):
+    def do_step_compile_src_to_object(self, prefix, args, src_path, obj_path, action):
         '''
         Perform a C or C++ source compile operation as an action step.
         '''
+        step_result = ResultCode.SUCCEEDED
+        step_notes = None
+        cmd = (f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} '
+               f'{src_path}{" -pthread" if args["posix_threads"] else ""}')
+        action.set_step(f'compile {str(obj_path)}', cmd)
+
+        if not src_path.exists():
+            step_result = ResultCode.MISSING_INPUT
+            step_notes = src_path
+        else:
+            if not obj_path.exists() or input_is_newer(src_path, obj_path):
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+        action.set_result(step_result, step_notes)
+        return step_result
+
+        old = '''
         step_results = None
         with ActionStep(
             'compiling', str(src_path), str(obj_path),
@@ -308,11 +371,47 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step.set_result(ResultCode.ALREADY_UP_TO_DATE)
         return step_results
+        '''
 
-    def do_step_link_objects_to_exe(self, prefix, args, exe_path, object_paths):
+    def do_step_link_objects_to_exe(self, prefix, args, exe_path, object_paths, action):
         '''
         Perform a C or C++ source compile operation as an action step.
         '''
+        step_result = ResultCode.SUCCEEDED
+        step_notes = None
+        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
+        cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
+               f'{" -pthread" if args["posix_threads"] else ""}{args["lib_dirs"]}'
+               f'{args["pkg_libs_bits"]} {args["static_libs"]}{args["shared_libs"]}')
+        action.set_step(f'link {str(exe_path)}', cmd)
+        missing_objs = []
+
+        for obj_path in object_paths:
+            if not obj_path.exists():
+                missing_objs.append(obj_path)
+        if len(missing_objs) > 0:
+            step_result = ResultCode.MISSING_INPUT
+            step_notes = missing_objs
+        else:
+            exe_exists = exe_path.exists()
+            must_build = not exe_exists
+            for obj_path in object_paths:
+                if not exe_exists or input_is_newer(obj_path, exe_path):
+                    must_build = True
+            if must_build:
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+        action.set_result(step_result, step_notes)
+        return step_result
+
+        old = '''
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
 
         step_results = None
@@ -343,11 +442,48 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step.set_result(ResultCode.ALREADY_UP_TO_DATE)
         return step_results
+        '''
 
-    def do_step_compile_srcs_to_exe(self, prefix, args, src_paths, exe_path):
+    def do_step_compile_srcs_to_exe(self, prefix, args, src_paths, exe_path, action):
         '''
         Perform a multiple C or C++ source compile to executable operation as an action step.
         '''
+        step_result = ResultCode.SUCCEEDED
+        step_notes = None
+        src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
+        cmd = (f'{prefix} {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {exe_path} '
+               f'{" -pthread" if args["posix_threads"] else ""}'
+               f'{src_paths_cmd}{args["lib_dirs"]} {args["pkg_libs_bits"]} '
+               f'{args["static_libs"]}{args["shared_libs"]}')
+        action.set_step(f'compile and link {str(exe_path)}', cmd)
+        missing_srcs = []
+
+        for src_path in src_paths:
+            if not src_path.exists():
+                missing_srcs.append(src_path)
+        if len(missing_srcs) > 0:
+            step_result = ResultCode.MISSING_INPUT
+            step_notes = missing_srcs
+        else:
+            exe_exists = exe_path.exists()
+            must_build = not exe_exists
+            for src_path in src_paths:
+                if not exe_exists or input_is_newer(src_path, exe_path):
+                    must_build = True
+            if must_build:
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+        action.set_result(step_result, step_notes)
+        return step_result
+
+        old = '''
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
 
         step_results = None
@@ -378,3 +514,4 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step.set_result(ResultCode.ALREADY_UP_TO_DATE)
         return step_results
+        '''
