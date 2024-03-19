@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Type, TypeVar, Iterable
 from typing_extensions import Self
 
-from ..action import (Action, StepResult, ActionResult, ResultCode,
+from ..action import (Action, Step, Result, StepResult, ActionResult, ResultCode,
                       report_action_start, report_action_end, report_error)
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
@@ -54,6 +54,8 @@ class Phase:
                 'token_type':       {'form': 'rgb24', 'fg': [0x33, 0xff, 0xff] },
                 'token_value':      {'form': 'rgb24', 'fg': [0xff, 0x33, 0xff] },
                 'token_depth':      {'form': 'rgb24', 'fg': [0x33, 0xff, 0x33] },
+                'path_lt':          {'form': 'rgb24', 'fg': [0x33, 0xaf, 0xaf] },
+                'path_dk':          {'form': 'rgb24', 'fg': [0x23, 0x5f, 0x5f] },
             },
             'colors_named': {
             },
@@ -73,6 +75,8 @@ class Phase:
                 'token_type':       {},
                 'token_value':      {},
                 'token_depth':      {},
+                'path_lt':          {},
+                'path_dk':          {},
             },
             'colors': '{colors_24bit}',
         }
@@ -374,25 +378,30 @@ class Phase:
         if dep_phase_res.failed():
             return res
 
+        report_action_start(action.name, self.opt_str("name"), type(self).__name__)
         action_method = getattr(self, 'do_action_' + action.name, self.do_action_undefined)
         phase_res = action_method(action)
+        report_action_end(action.name, self.opt_str("name"), type(self).__name__,
+                          phase_res)
 
         return phase_res
 
-    def do_action_undefined(self, action):
+    def do_action_undefined(self, action: Action):
         '''
         This is the default action for actions that a phase does not support.
         Goes nowhere, does nothing.
         '''
-        action.set_step('nop')
-        action.set_result(ResultCode.NO_ACTION)
+        #action.set_step(Step('nop'))
+        phase_res = ResultCode.NO_ACTION
+        #action.set_step_result(Result(phase_res))
+        return phase_res
         #return ActionResult('', StepResult('', '', '', '', ResultCode.NO_ACTION))
 
-    def do_action_report(self, action):
+    def do_action_report(self, action: Action):
         '''
         This gives a small description of the phase.
         '''
-        action.set_step('report')
+        #action.set_step(Step('report'))
 
         report = ''
         if WorkingSet.report_verbosity >= 0:
@@ -431,4 +440,6 @@ class Phase:
 
         #return ActionResult(
         #    'report', StepResult('report', '', '', '', ResultCode.NO_ACTION, str(self)))
-        action.set_result(ResultCode.NO_ACTION)
+        phase_res = ResultCode.NO_ACTION
+        #action.set_step_result(Result(phase_res))
+        return phase_res

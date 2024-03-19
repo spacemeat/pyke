@@ -118,6 +118,7 @@ class WorkingSet:
     main_phase = None
     colors = {}
     report_verbosity = 2
+    report_relative_paths = True
     verbosity = 0
 
 def set_color(color):

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..action import Action, ActionStep, ResultCode
+from ..action import Action, Step, Result, ResultCode
 from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError, input_is_newer,
                          do_shell_command)
 from .phase import Phase
@@ -257,7 +257,7 @@ class CFamilyBuildPhase(Phase):
         step_result = ResultCode.SUCCEEDED
         step_notes = None
         cmd = self.make_cmd_delete_file(path)
-        action.set_step(f'delete {str(path)}', cmd)
+        action.set_step(Step('delete file', [path], [], cmd))
         if path.exists():
             res, _, err = do_shell_command(cmd)
             if res != 0:
@@ -268,7 +268,7 @@ class CFamilyBuildPhase(Phase):
         else:
             step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_result(step_result, step_notes)
+        action.set_step_result(Result(step_result, step_notes))
         return step_result
 
         old = '''
@@ -294,7 +294,7 @@ class CFamilyBuildPhase(Phase):
         step_result = ResultCode.SUCCEEDED
         step_notes = None
         cmd = f'mkdir -p {new_dir}'
-        action.set_step(f'create {str(new_dir)}', cmd)
+        action.set_step(Step('create directory', [], [new_dir], cmd))
 
         if not new_dir.is_dir():
             res, _, err = do_shell_command(cmd)
@@ -306,7 +306,7 @@ class CFamilyBuildPhase(Phase):
         else:
             step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_result(step_result, step_notes)
+        action.set_step_result(Result(step_result, step_notes))
         return step_result
 
         old = '''
@@ -333,7 +333,7 @@ class CFamilyBuildPhase(Phase):
         step_notes = None
         cmd = (f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} '
                f'{src_path}{" -pthread" if args["posix_threads"] else ""}')
-        action.set_step(f'compile {str(obj_path)}', cmd)
+        action.set_step(Step('compile', [src_path], [obj_path], cmd))
 
         if not src_path.exists():
             step_result = ResultCode.MISSING_INPUT
@@ -349,7 +349,7 @@ class CFamilyBuildPhase(Phase):
             else:
                 step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_result(step_result, step_notes)
+        action.set_step_result(Result(step_result, step_notes))
         return step_result
 
         old = '''
@@ -383,7 +383,7 @@ class CFamilyBuildPhase(Phase):
         cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
                f'{" -pthread" if args["posix_threads"] else ""}{args["lib_dirs"]}'
                f'{args["pkg_libs_bits"]} {args["static_libs"]}{args["shared_libs"]}')
-        action.set_step(f'link {str(exe_path)}', cmd)
+        action.set_step(Step('link', object_paths, [exe_path], cmd))
         missing_objs = []
 
         for obj_path in object_paths:
@@ -408,7 +408,7 @@ class CFamilyBuildPhase(Phase):
             else:
                 step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_result(step_result, step_notes)
+        action.set_step_result(Result(step_result, step_notes))
         return step_result
 
         old = '''
@@ -455,7 +455,7 @@ class CFamilyBuildPhase(Phase):
                f'{" -pthread" if args["posix_threads"] else ""}'
                f'{src_paths_cmd}{args["lib_dirs"]} {args["pkg_libs_bits"]} '
                f'{args["static_libs"]}{args["shared_libs"]}')
-        action.set_step(f'compile and link {str(exe_path)}', cmd)
+        action.set_step(Step('compile and link', src_paths, [exe_path], cmd))
         missing_srcs = []
 
         for src_path in src_paths:
@@ -480,7 +480,7 @@ class CFamilyBuildPhase(Phase):
             else:
                 step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_result(step_result, step_notes)
+        action.set_step_result(Result(step_result, step_notes))
         return step_result
 
         old = '''
