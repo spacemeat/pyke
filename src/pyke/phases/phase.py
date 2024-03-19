@@ -107,7 +107,7 @@ class Phase:
         if include_deps:
             for dep in self.dependencies:
                 if not dep.is_project_phase or include_project_deps:
-                    dep.push_opts(overrides)
+                    dep.push_opts(overrides, include_deps, include_project_deps)
 
     def pop_opts(self, keys: list[str],
                   include_deps: bool = False, include_project_deps: bool = False):
@@ -117,7 +117,7 @@ class Phase:
         if include_deps:
             for dep in reversed(self.dependencies):
                 if not dep.is_projet_phase or include_project_deps:
-                    dep.pop_opts(keys)
+                    dep.pop_opts(keys, include_deps, include_project_deps)
         for key in keys:
             self.options.pop(key)
 

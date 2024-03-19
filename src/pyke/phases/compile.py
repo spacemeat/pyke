@@ -20,7 +20,6 @@ class CompilePhase(CFamilyBuildPhase):
         Cleans all object paths this phase builds.
         '''
         #step_results = []
-        breakpoint()
         action_res = ResultCode.SUCCEEDED
         for _, obj_path in self.get_all_src_and_object_paths():
             if (res := self.do_step_delete_file(obj_path, action)).failed():
