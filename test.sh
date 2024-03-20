@@ -1,2 +1,2 @@
-python3 -m unittest tests/options_test.py
+python3 -m unittest discover -s tests
 

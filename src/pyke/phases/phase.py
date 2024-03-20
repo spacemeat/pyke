@@ -7,11 +7,10 @@ from pathlib import Path
 from typing import Type, TypeVar, Iterable
 from typing_extensions import Self
 
-from ..action import (Action, Step, Result, StepResult, ActionResult, ResultCode,
-                      report_action_start, report_action_end, report_error)
+from ..action import Action, ResultCode, report_action_start, report_action_end
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
-                         PykeException, CircularDependencyError, ProjectPhaseDependencyError)
+                         CircularDependencyError, ProjectPhaseDependencyError)
 
 T = TypeVar('T')
 
@@ -83,7 +82,6 @@ class Phase:
         self.options |= options
 
         assert isinstance(options, dict)
-        self.default_action = 'report'
         self.is_project_phase = False
         self.last_action_ordinal = -1
         self.last_action_result = None
@@ -287,7 +285,7 @@ class Phase:
         '''
         return f'rm {str(path)}'
 
-    def do(self, action: Action, action_ordinal: int = -1) -> ActionResult:
+    def do(self, action: Action) -> ResultCode:
         '''
         Performs an action, such as 'build' or 'run'. 
 
@@ -295,8 +293,7 @@ class Phase:
         Next, the corresponding 'do_action_<action>' method is called for this
         phase.
 
-        Each invoked action is bound to an action_ordinal, an integer which 
-        specifies a particular action which is tracked to prevent repeat actions
+        Each invoked action records the phases that run it, to prevent repeat actions
         for phases which are dependents of multiple other phases. This is managed
         internally.
         '''
@@ -307,51 +304,6 @@ class Phase:
         if cols := self.opt('colors'):
             if isinstance(cols, dict):
                 WorkingSet.colors = cols
-
-        prev = '''
-        action_ordinal = self._get_action_ordinal(action_ordinal)
-        if self.last_action_ordinal == action_ordinal:
-            self.last_action_result = ActionResult(
-                action_name,
-                StepResult('', '', '', '', ResultCode.ALREADY_UP_TO_DATE,
-                f'{self.opt_str("name")}.{action_name}'))
-            return self.last_action_result
-        self.last_action_ordinal = action_ordinal
-
-        for dep in self.dependencies:
-            if dep.is_project_phase:
-                res = dep.do(action_name, action_ordinal)
-                if not res:
-                    self.last_action_result = ActionResult(
-                        action_name,
-                        StepResult('', '', '', '', ResultCode.DEPENDENCY_ERROR, dep))
-                    return self.last_action_result
-
-        for dep in self.dependencies:
-            if not dep.is_project_phase:
-                res = dep.do(action_name, action_ordinal)
-                if not res:
-                    self.last_action_result = ActionResult(
-                        action_name,
-                        StepResult('', '', '', '', ResultCode.DEPENDENCY_ERROR, dep))
-                    return self.last_action_result
-
-        action_method = getattr(self, 'do_action_' + action_name, self.do_action_undefined)
-        try:
-            report_action_start(str(self.opt_str('name')), action_name)
-            self.last_action_result = action_method()
-
-        except InvalidOptionKey as e:
-            self.last_action_result = ActionResult(
-                action_name,
-                StepResult('', '', '', '', ResultCode.INVALID_OPTION, e))
-            report_error(str(self.opt_str('name')), action_name, str(e))
-
-        report_action_end(bool(self.last_action_result))
-
-        return self.last_action_result
-
-        '''
 
         if self.is_project_phase:
             if (res := action.set_project(self.opt_str('name'))) != ResultCode.NOT_YET_RUN:
@@ -378,31 +330,20 @@ class Phase:
         if dep_phase_res.failed():
             return res
 
-        report_action_start(action.name, self.opt_str("name"), type(self).__name__)
-        action_method = getattr(self, 'do_action_' + action.name, self.do_action_undefined)
-        phase_res = action_method(action)
-        report_action_end(action.name, self.opt_str("name"), type(self).__name__,
-                          phase_res)
-
-        return phase_res
-
-    def do_action_undefined(self, action: Action):
-        '''
-        This is the default action for actions that a phase does not support.
-        Goes nowhere, does nothing.
-        '''
-        #action.set_step(Step('nop'))
         phase_res = ResultCode.NO_ACTION
-        #action.set_step_result(Result(phase_res))
-        return phase_res
-        #return ActionResult('', StepResult('', '', '', '', ResultCode.NO_ACTION))
+        action_method = getattr(self, 'do_action_' + action.name, None)
+        if action_method:
+            report_action_start(action.name, self.opt_str("name"), type(self).__name__)
+            phase_res = action_method(action)
+            report_action_end(action.name, self.opt_str("name"), type(self).__name__,
+                              phase_res)
 
-    def do_action_report(self, action: Action):
+        return phase_res
+
+    def do_action_report(self, action: Action) -> ResultCode:
         '''
         This gives a small description of the phase.
         '''
-        #action.set_step(Step('report'))
-
         report = ''
         if WorkingSet.report_verbosity >= 0:
             report = f'phase: {self.opt_str("name")}'
@@ -438,8 +379,4 @@ class Phase:
             report += f'\n{opts_str}{c("off")}'
         print (report)
 
-        #return ActionResult(
-        #    'report', StepResult('report', '', '', '', ResultCode.NO_ACTION, str(self)))
-        phase_res = ResultCode.NO_ACTION
-        #action.set_step_result(Result(phase_res))
-        return phase_res
+        return ResultCode.NO_ACTION

@@ -1,9 +1,7 @@
 ''' This is the compile-and-link phase for single-phase build.'''
 
-from ..action import Action, ActionResult, ResultCode
+from ..action import Action, ResultCode
 from .c_family_build import CFamilyBuildPhase
-
-from ..utilities import WorkingSet
 
 class CompileAndLinkPhase(CFamilyBuildPhase):
     '''
@@ -22,93 +20,43 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         '''
         exe_path = self.get_exe_path()
 
-        action_res = ResultCode.SUCCEEDED
+        res = ResultCode.SUCCEEDED
         if self.opt_bool('incremental_build'):
             for _, obj_path in self.get_all_src_and_object_paths():
-                if (res := self.do_step_delete_file(obj_path, action)).failed():
-                    action_res = res
+                res = res.failed() or self.do_step_delete_file(obj_path, action)
 
-        if (res := self.do_step_delete_file(exe_path, action)).failed():
-            action_res = res
+        res = res.failed() or self.do_step_delete_file(exe_path, action)
 
-        return action_res
-        #step_results = []
-
-        #if self.opt_bool('incremental_build'):
-        #    for _, obj_path in self.get_all_src_and_object_paths():
-        #        step_results.append(self.do_step_delete_file(obj_path))
-
-        #step_results.append(self.do_step_delete_file(exe_path))
-
-        #return ActionResult('clean', tuple(step_results))
+        return res
 
     def do_action_build(self, action: Action):
         '''
         Builds all object paths.
         '''
-        #step_results = []
         exe_path = self.get_exe_path()
 
         prefix = self.make_build_command_prefix()
         c_args = self.make_compile_arguments()
         l_args = self.make_link_arguments()
 
-        action_res = ResultCode.SUCCEEDED
+        res = ResultCode.SUCCEEDED
         if self.opt_bool('incremental_build'):
             for src_path, obj_path in self.get_all_src_and_object_paths():
-                if (res := self.do_step_create_directory(obj_path.parent, action)).failed():
-                    action_res = res
+                res = res.failed() or self.do_step_create_directory(obj_path.parent, action)
+                res = res.failed() or self.do_step_compile_src_to_object(
+                    prefix, c_args, src_path, obj_path, action)
 
-                if action_res.succeeded():
-                    if (res := self.do_step_compile_src_to_object(
-                        prefix, c_args, src_path, obj_path, action)).failed():
-                        action_res = res
-
-            if action_res.succeeded():
+            if res.succeeded():
                 object_paths = self.get_all_object_paths()
 
-                if (res := self.do_step_create_directory(exe_path.parent, action)).failed():
-                    action_res = res
-
-                if action_res.succeeded():
-                    if (res := self.do_step_link_objects_to_exe(
-                        prefix, l_args, exe_path, object_paths, action)).failed():
-                        action_res = res
+                res = res.failed() or self.do_step_create_directory(exe_path.parent, action)
+                res = res.failed() or self.do_step_link_objects_to_exe(
+                    prefix, l_args, exe_path, object_paths, action)
         else:
             src_paths = self.get_all_src_paths()
 
-            if (res := self.do_step_create_directory(exe_path.parent, action)).failed():
-                action_res = res
+            res = res.failed() or self.do_step_create_directory(exe_path.parent, action)
+            res = res.failed() or self.do_step_compile_srcs_to_exe(
+                prefix, c_args | l_args, src_paths, exe_path, action)
 
-            if action_res.succeeded():
-                if (res := self.do_step_compile_srcs_to_exe(
-                    prefix, c_args | l_args, src_paths, exe_path, action)).failed():
-                    action_res = res
-
-        return action_res
-
-        old = '''if self.opt_bool('incremental_build'):
-            for src_path, obj_path in self.get_all_src_and_object_paths():
-                step_results.append(self.do_step_create_directory(obj_path.parent))
-
-                if bool(step_results[-1]):
-                    step_results.append(self.do_step_compile_src_to_object(
-                        prefix, c_args, src_path, obj_path))
-
-            if all((bool(res) for res in step_results)):
-                object_paths = self.get_all_object_paths()
-
-                step_results.append(self.do_step_create_directory(exe_path.parent))
-                if bool(step_results[-1]):
-                    step_results.append(self.do_step_link_objects_to_exe(
-                        prefix, l_args, exe_path, object_paths))
-        else:
-            src_paths = self.get_all_src_paths()
-
-            step_results.append(self.do_step_create_directory(exe_path.parent))
-            if bool(step_results[-1]):
-                step_results.append(self.do_step_compile_srcs_to_exe(
-                    prefix, c_args | l_args, src_paths, exe_path))
-
-        return ActionResult('build', tuple(step_results))
-        '''
+        return res
