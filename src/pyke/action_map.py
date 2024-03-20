@@ -60,14 +60,14 @@ class ActionMap:
         self.files = {}
         self.actions = []
 
-class File:
+class FileData:
     ''' Describes a file, in terms of its origin, type, use as inputs, etc.'''
     def __init__(self, path: str):
         self.path = path
         self.origin: FileOrigin
         self.actions = []
 
-class Action:
+class ActionData:
     ''' Describes actions used to read or generate files.'''
     def __init__(self):
         self.phase: Phase = None
