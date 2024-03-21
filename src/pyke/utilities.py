@@ -11,6 +11,11 @@ class PykeException(Exception):
     Parent for all Pyke errors.
     '''
 
+class MalformedConfigError(PykeException):
+    '''
+    Raised when reading an incorrectly formatted config file.
+    '''
+
 class PhaseNotFoundError(PykeException):
     '''
     Raised when referencing a phase by name which does not match any existing phase.
@@ -115,6 +120,7 @@ def do_shell_command(cmd):
 class WorkingSet:
     ''' Keeps track of globally-available values.'''
     makefile_dir = ''
+    action_aliases = {}
     main_phase = None
     colors = {}
     report_verbosity = 2

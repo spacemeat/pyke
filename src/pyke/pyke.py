@@ -10,13 +10,14 @@ import importlib.machinery
 import os
 from pathlib import Path
 import sys
+import json
 import traceback
 
 from .action import Action
 from .options import OptionOp
 from .options_parser import parse_value
 from .phases.project import ProjectPhase
-from .utilities import WorkingSet
+from .utilities import WorkingSet, MalformedConfigError
 
 def main_project():
     ''' Returns the main project created for the makefile.'''
@@ -127,6 +128,42 @@ Looks for ./make.py && loads && runs the "clean" and "build" actions && then ove
 $ pyke clean build -otime_run:true run
     ''')
 
+def load_config():
+    ''' Loads aliases from ~/.config/pyke/pyke-config.json or <project-root>/pyke-config.json or
+        <cwd>/pyke-config.json, overriding in that order. '''
+    def validate_config(config):
+        if not isinstance(config, dict):
+            raise MalformedConfigError(f'Config file {file}: Must be a JSON dictonary.')
+        if 'aliases' in config:
+            aliases = config['aliases']
+            if not isinstance(aliases, dict):
+                raise MalformedConfigError(f'Config file {file}: "aliases" must be a dictionary.')
+            for action, aliases in aliases.items():
+                if not isinstance(action, str):
+                    raise MalformedConfigError(
+                        f'Config file {file}: "aliases/action" key must be a string.')
+                if isinstance(aliases, str):
+                    aliases = [aliases]
+                if (not isinstance(aliases, list) or
+                    any(not isinstance(alias, str) for alias in aliases)):
+                    raise MalformedConfigError(
+                        f'Config file {file}: "aliases/action" value must be a string '
+                        'or a list of strings.')
+                for alias in aliases:
+                    WorkingSet.action_aliases[alias] = action
+
+    for direc in list(dict.fromkeys([
+            Path.home() / '.config' / 'pyke',
+            WorkingSet.makefile_dir,
+            Path.cwd()])):
+        file = Path(direc) / 'pyke-config.json'
+        try:
+            with open(file, 'r', encoding='utf-8') as fi:
+                config = json.load(fi)
+                validate_config(config)
+        except (FileNotFoundError, MalformedConfigError):
+            pass
+
 def main():
     '''Entrypoint for pyke.'''
     current_dir = os.getcwd()
@@ -167,6 +204,8 @@ def main():
         make_path = make_path / 'make.py'
 
     WorkingSet.makefile_dir = str(make_path.parent)
+
+    load_config()
 
     WorkingSet.main_phase = ProjectPhase({
         'name': make_path.parent.name if make_path.name == 'make.py' else make_path.stem
@@ -232,6 +271,7 @@ def main():
                 active_phase.pop_opts([override])
 
         else:
+            arg = WorkingSet.action_aliases.get(arg, arg)
             action = Action(arg)
             if not active_phase.do(action):
                 return ReturnCode.ACTION_FAILED.value

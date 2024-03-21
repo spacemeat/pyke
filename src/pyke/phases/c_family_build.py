@@ -59,14 +59,15 @@ class CFamilyBuildPhase(Phase):
 
             'build_dir': 'build',
             'build_detail': '{kind}.{toolkit}',
-            'build_anchor': '{gen_anchor}/{build_dir}/{build_detail}',
+            'build_anchor': '{gen_anchor}/{build_dir}',
+            'build_detail_anchor': '{build_anchor}/{build_detail}',
 
             'obj_dir': 'int',
             'obj_basename': '',
             'posix_obj_file': '{obj_basename}.o',
             'windows_obj_file': '{obj_basename}.obj',
             'obj_file': '{{target_os_{toolkit}}_obj_file}',
-            'obj_anchor': '{build_anchor}/{obj_dir}',
+            'obj_anchor': '{build_detail_anchor}/{obj_dir}',
             'obj_path': '{obj_anchor}/{obj_file}',
 
             'exe_dir':'bin',
@@ -74,7 +75,7 @@ class CFamilyBuildPhase(Phase):
             'posix_exe_file': '{exe_basename}',
             'windows_exe_file': '{exe_basename}.exe',
             'exe_file': '{{target_os_{toolkit}}_exe_file}',
-            'exe_anchor': '{build_anchor}/{exe_dir}',
+            'exe_anchor': '{build_detail_anchor}/{exe_dir}',
             'exe_path': '{exe_anchor}/{exe_file}',
 
             'lib_dirs': [],
@@ -257,6 +258,28 @@ class CFamilyBuildPhase(Phase):
         step_notes = None
         cmd = self.make_cmd_delete_file(path)
         action.set_step(Step('delete file', [path], [], cmd))
+        if path.exists():
+            res, _, err = do_shell_command(cmd)
+            if res != 0:
+                step_result = ResultCode.COMMAND_FAILED
+                step_notes = err
+            else:
+                step_result = ResultCode.SUCCEEDED
+        else:
+            step_result = ResultCode.ALREADY_UP_TO_DATE
+
+        action.set_step_result(Result(step_result, step_notes))
+        return step_result
+
+    def do_step_delete_build_directory(self, action: Action):
+        '''
+        Perfoems a file deletion operation as an action step.
+        '''
+        step_result = ResultCode.SUCCEEDED
+        step_notes = None
+        path = Path(self.opt_str("build_anchor"))
+        cmd = f'rm -r {path}'
+        action.set_step(Step('delete build', [path], [], cmd))
         if path.exists():
             res, _, err = do_shell_command(cmd)
             if res != 0:

@@ -1,0 +1,8 @@
+{
+	"aliases": {
+		"report_options": [ "report-options", "opts" ],
+		"clean": [ "c", "zot" ],
+		"clean_build_directory": [ "clean-build-directory", "cbd", "zorch" ],
+		"build": [ "b" ]
+	}
+}

@@ -23,6 +23,12 @@ class CompilePhase(CFamilyBuildPhase):
             res = res.failed() or self.do_step_delete_file(obj_path, action)
         return res
 
+    def do_action_clean_build_directory(self, action: Action):
+        '''
+        Wipes out the build directory.
+        '''
+        return self.do_step_delete_build_directory(action)
+
     def do_action_build(self, action: Action):
         '''
         Builds all object paths.

@@ -340,7 +340,7 @@ class Phase:
 
         return phase_res
 
-    def do_action_report(self, action: Action) -> ResultCode:
+    def do_action_report_options(self, action: Action) -> ResultCode:
         '''
         This gives a small description of the phase.
         '''
