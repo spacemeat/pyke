@@ -28,12 +28,6 @@ class LinkPhase(CFamilyBuildPhase):
         exe_path = self.get_exe_path()
         return self.do_step_delete_file(exe_path, action)
 
-    def do_action_clean_build_directory(self, action: Action):
-        '''
-        Wipes out the build directory.
-        '''
-        return self.do_step_delete_build_directory(action)
-
     def do_action_build(self, action: Action):
         '''
         Builds all object paths.
@@ -45,7 +39,7 @@ class LinkPhase(CFamilyBuildPhase):
         args = self.make_link_arguments()
 
         res = self.do_step_create_directory(exe_path.parent, action)
-        res = res.failed() or self.do_step_link_objects_to_exe(
+        res = res if res.failed() else self.do_step_link_objects_to_exe(
             prefix, args, exe_path, object_paths, action)
 
         return res

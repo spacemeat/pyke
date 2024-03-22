@@ -270,15 +270,6 @@ class Phase:
                     f'to phase {self.opt_str("name")}. Not cool.')
             self.dependencies.append(new_dep)
 
-    def _get_action_ordinal(self, action_ordinal: int):
-        '''
-        Replaces the default action_ordinal with the proper internal tracking
-        ordinal.
-        '''
-        if action_ordinal == -1:
-            return self.last_action_ordinal + 1
-        return action_ordinal
-
     def make_cmd_delete_file(self, path: Path):
         '''
         Returns an appropriate command for deleting a file.

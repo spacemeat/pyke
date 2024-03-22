@@ -131,6 +131,16 @@ $ pyke clean build -otime_run:true run
 def load_config():
     ''' Loads aliases from ~/.config/pyke/pyke-config.json or <project-root>/pyke-config.json or
         <cwd>/pyke-config.json, overriding in that order. '''
+    def set_default_config():
+        WorkingSet.action_aliases = {
+            'report-options': 'report_options',
+            'opts': 'report_options',
+            'c': 'clean',
+            'clean-build-directory': 'clean_build_directory',
+            'cbd': 'clean_build_directory',
+            'b': 'build',
+        }
+
     def validate_config(config):
         if not isinstance(config, dict):
             raise MalformedConfigError(f'Config file {file}: Must be a JSON dictonary.')
@@ -151,6 +161,8 @@ def load_config():
                         'or a list of strings.')
                 for alias in aliases:
                     WorkingSet.action_aliases[alias] = action
+
+    set_default_config()
 
     for direc in list(dict.fromkeys([
             Path.home() / '.config' / 'pyke',

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from ..action import Action, Step, Result, ResultCode
 from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError,
-                         input_is_newer, do_shell_command)
+                         input_path_is_newer, do_shell_command)
 from .phase import Phase
 
 
@@ -91,18 +91,16 @@ class CFamilyBuildPhase(Phase):
         sources = self.opt_list('sources')
         return sources[src_idx]
 
-    def make_src_path(self, src_idx):
+    def make_src_path(self, src):
         '''
         Makes a full source path out of the src_idxth source from options.
         '''
-        src = self.get_source(src_idx)
         return Path(f"{self.opt_str('src_anchor')}/{src}")
 
-    def make_obj_path_from_src(self, src_idx):
+    def make_obj_path_from_src(self, src):
         '''
         Makes the full object path from a single source by index.
         '''
-        src = self.get_source(src_idx)
         basename = Path(src).stem
         return Path(str(self.opt_str('obj_path', {'obj_basename': basename})))
 
@@ -110,17 +108,13 @@ class CFamilyBuildPhase(Phase):
         '''
         Generate te full path for each source file.
         '''
-        sources = self.opt_list('sources')
-        for i in range(len(sources)):
-            yield self.make_src_path(i)
+        return [self.make_src_path(src) for src in self.opt_list('sources')]
 
     def get_all_object_paths(self):
         '''
         Generate the full path for each target object file.
         '''
-        sources = self.opt_list('sources')
-        for i in range(len(sources)):
-            yield self.make_obj_path_from_src(i)
+        return [self.make_obj_path_from_src(src) for src in self.opt_list('sources')]
 
     def get_all_src_and_object_paths(self):
         '''
@@ -271,16 +265,15 @@ class CFamilyBuildPhase(Phase):
         action.set_step_result(Result(step_result, step_notes))
         return step_result
 
-    def do_step_delete_build_directory(self, action: Action):
+    def do_step_delete_directory(self, direc: Path, action: Action):
         '''
         Perfoems a file deletion operation as an action step.
         '''
         step_result = ResultCode.SUCCEEDED
         step_notes = None
-        path = Path(self.opt_str("build_anchor"))
-        cmd = f'rm -r {path}'
-        action.set_step(Step('delete build', [path], [], cmd))
-        if path.exists():
+        cmd = f'rm -r {direc}'
+        action.set_step(Step('delete build', [direc], [], cmd))
+        if direc.exists():
             res, _, err = do_shell_command(cmd)
             if res != 0:
                 step_result = ResultCode.COMMAND_FAILED
@@ -329,7 +322,7 @@ class CFamilyBuildPhase(Phase):
             step_result = ResultCode.MISSING_INPUT
             step_notes = src_path
         else:
-            if not obj_path.exists() or input_is_newer(src_path, obj_path):
+            if not obj_path.exists() or input_path_is_newer(src_path, obj_path):
                 res, _, err = do_shell_command(cmd)
                 if res != 0:
                     step_result = ResultCode.COMMAND_FAILED
@@ -365,7 +358,7 @@ class CFamilyBuildPhase(Phase):
             exe_exists = exe_path.exists()
             must_build = not exe_exists
             for obj_path in object_paths:
-                if not exe_exists or input_is_newer(obj_path, exe_path):
+                if not exe_exists or input_path_is_newer(obj_path, exe_path):
                     must_build = True
             if must_build:
                 res, _, err = do_shell_command(cmd)
@@ -404,7 +397,7 @@ class CFamilyBuildPhase(Phase):
             exe_exists = exe_path.exists()
             must_build = not exe_exists
             for src_path in src_paths:
-                if not exe_exists or input_is_newer(src_path, exe_path):
+                if not exe_exists or input_path_is_newer(src_path, exe_path):
                     must_build = True
             if must_build:
                 res, _, err = do_shell_command(cmd)
@@ -418,3 +411,10 @@ class CFamilyBuildPhase(Phase):
 
         action.set_step_result(Result(step_result, step_notes))
         return step_result
+
+    def do_action_clean_build_directory(self, action: Action):
+        '''
+        Wipes out the build directory.
+        '''
+        return self.do_step_delete_directory(Path(self.opt_str("build_anchor")), action)
+

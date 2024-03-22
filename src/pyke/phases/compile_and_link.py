@@ -23,17 +23,11 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         res = ResultCode.SUCCEEDED
         if self.opt_bool('incremental_build'):
             for _, obj_path in self.get_all_src_and_object_paths():
-                res = res.failed() or self.do_step_delete_file(obj_path, action)
+                res = res if res.failed() else self.do_step_delete_file(obj_path, action)
 
-        res = res.failed() or self.do_step_delete_file(exe_path, action)
+        res = res if res.failed() else self.do_step_delete_file(exe_path, action)
 
         return res
-
-    def do_action_clean_build_directory(self, action: Action):
-        '''
-        Wipes out the build directory.
-        '''
-        return self.do_step_delete_build_directory(action)
 
     def do_action_build(self, action: Action):
         '''
@@ -48,21 +42,23 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         res = ResultCode.SUCCEEDED
         if self.opt_bool('incremental_build'):
             for src_path, obj_path in self.get_all_src_and_object_paths():
-                res = res.failed() or self.do_step_create_directory(obj_path.parent, action)
-                res = res.failed() or self.do_step_compile_src_to_object(
+                res = res if res.failed() else self.do_step_create_directory(
+                    obj_path.parent, action)
+                res = res if res.failed() else self.do_step_compile_src_to_object(
                     prefix, c_args, src_path, obj_path, action)
 
             if res.succeeded():
                 object_paths = self.get_all_object_paths()
 
-                res = res.failed() or self.do_step_create_directory(exe_path.parent, action)
-                res = res.failed() or self.do_step_link_objects_to_exe(
+                res = res if res.failed() else self.do_step_create_directory(
+                    exe_path.parent, action)
+                res = res if res.failed() else self.do_step_link_objects_to_exe(
                     prefix, l_args, exe_path, object_paths, action)
         else:
             src_paths = self.get_all_src_paths()
 
-            res = res.failed() or self.do_step_create_directory(exe_path.parent, action)
-            res = res.failed() or self.do_step_compile_srcs_to_exe(
+            res = res if res.failed() else self.do_step_create_directory(exe_path.parent, action)
+            res = res if res.failed() else self.do_step_compile_srcs_to_exe(
                 prefix, c_args | l_args, src_paths, exe_path, action)
 
         return res

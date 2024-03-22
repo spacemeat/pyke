@@ -98,9 +98,12 @@ def ensure_tuple(o):
     '''
     return o if isinstance(o, tuple) else (o,)
 
-def input_is_newer(in_path: Path, out_path: Path):
+def input_path_is_newer(in_path: Path, out_path: Path):
     '''
     Compares the modified times of two files.
+    in_path: Path to an input file. This file must exist.
+    out_path: Path to an output file. If this file does not exist, it is considered older than the
+        input file.
     '''
     if not in_path.exists():
         raise ValueError(f'Input file "{in_path}" does not exist; cannot compare m-times.')
