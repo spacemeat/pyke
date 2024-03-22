@@ -1,6 +1,6 @@
 {
 	"aliases": {
 		"clean": [ "zot" ],
-		"clean_build_directory": [ "zorch" ],
+		"clean_build_directory": [ "zorch" ]
 	}
 }
