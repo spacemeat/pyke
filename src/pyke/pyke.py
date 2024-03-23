@@ -183,8 +183,8 @@ def resolve_project_names():
     project_names = set()
     for project_phase in project_phases:
         if project_phase.name in project_names:
-            raise ProjectNameCollisionError(f'There is already a project named {project_phase.name}. '
-                                            'Project names must be unique.')
+            raise ProjectNameCollisionError(f'There is already a project named '
+                f'{project_phase.name}. Project names must be unique.')
     for phase in project_phases:
         phase.uniquify_phase_names()
 

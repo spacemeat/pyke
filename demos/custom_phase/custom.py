@@ -27,9 +27,9 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
     '''
     def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
         options = {
-            'gen_src_dir': '{src_anchor}/gen',
+            'gen_src_dir': '{build_anchor}/gen',
         } | (options or {})
-        super().__init__(options, dependencies)
+        super().__init__(name, options, dependencies)
 
     def make_generated_source(self):
         '''

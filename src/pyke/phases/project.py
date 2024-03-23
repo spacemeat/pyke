@@ -8,9 +8,7 @@ class ProjectPhase(Phase):
     Intermediate class to handle making command lines for various toolkits.
     '''
     def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
-        options = {
-            'name': 'pyke',
-        } | (options or {})
+        options = options or {}
         super().__init__(name, options, dependencies)
         self.is_project_phase = True
         self.phase_names = {}
