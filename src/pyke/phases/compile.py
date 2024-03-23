@@ -1,6 +1,5 @@
 ''' This is the compile phase of a multi-phase build.'''
 
-from pathlib import Path
 from ..action import Action, ResultCode
 from .c_family_build import CFamilyBuildPhase
 
@@ -8,12 +7,11 @@ class CompilePhase(CFamilyBuildPhase):
     '''
     Phase class for building C/C++ files to objects.
     '''
-    def __init__(self, options, dependencies = None):
+    def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
         options = {
-            'name': 'compile',
             'build_operation': 'compile_to_object',
-        } | options
-        super().__init__(options, dependencies)
+        } | (options or {})
+        super().__init__(name, options, dependencies)
 
     def do_action_clean(self, action: Action):
         '''

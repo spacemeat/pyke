@@ -7,12 +7,11 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
     '''
     Phase class for linking object files to build executable binaries.
     '''
-    def __init__(self, options, dependencies = None):
+    def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
         options = {
-            'name': 'compile_and_link',
             'build_operation': 'compile_to_executable',
-        } | options
-        super().__init__(options, dependencies)
+        } | (options or {})
+        super().__init__(name, options, dependencies)
 
     def do_action_clean(self, action: Action):
         '''

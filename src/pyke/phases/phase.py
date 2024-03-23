@@ -14,6 +14,8 @@ from ..utilities import (ensure_list, WorkingSet, set_color as c,
 
 T = TypeVar('T')
 
+# TODO: Auto-detect terminal color capabilities
+
 class Phase:
     '''
     Serves as the base class for a derived PykePhase. Each derived 
@@ -28,10 +30,12 @@ class Phase:
     Pyke comes built-in with numerous useful phase classes, and users
     can define their own to support bespoke processes.
     '''
-    def __init__(self, options: dict, dependencies: Self | list[Self] | None = None):
+    def __init__(self, name: str | None = None, options: dict | None = None,
+                 dependencies: Self | list[Self] | None = None):
+        self.phase_names = {}
+        self.name = name
         self.options = Options()
         self.options |= {
-            'name': 'phase',
             'report_verbosity': 2,
             'verbosity': 0,
             'project_anchor': WorkingSet.makefile_dir,
@@ -79,7 +83,7 @@ class Phase:
             },
             'colors': '{colors_24bit}',
         }
-        self.options |= options
+        self.options |= (options or {})
 
         assert isinstance(options, dict)
         self.is_project_phase = False
@@ -217,17 +221,17 @@ class Phase:
         return self.opt_t(dict, key, overrides, interpolate)
 
     def __repr__(self):
-        return str(self.opt_str("name"))
+        return str(self.name)
 
-    def clone(self, options: dict | None = None):
+    def clone(self, name: str | None = None, options: dict | None = None):
         '''
         Returns a clone of this instance. The clone has the same
         options (also copied) but its own dependencies and action
         results state.
         '''
-        obj = type(self)({})
+        obj = type(self)(name, {})
         obj.options = self.options.clone()
-        obj.options |= options or {}
+        obj.options |= (options or {})
         return obj
 
     def enumerate_dependencies(self):
@@ -262,12 +266,12 @@ class Phase:
             if (not self.is_project_phase and
                 new_dep.is_project_phase):
                 raise ProjectPhaseDependencyError(
-                    f'Attempt by non-project phase "{self.opt_str("name")}" to depend on a '
+                    f'Attempt by non-project phase "{self.name}" to depend on a '
                     f'project phase "{new_dep.opt_str("name")}.')
             if new_dep.find_in_dependency_tree(self) is not None:
                 raise CircularDependencyError(
                     f'Attempt to set a circular dependency {new_dep.opt_str("name")} '
-                    f'to phase {self.opt_str("name")}. Not cool.')
+                    f'to phase {self.name}. Not cool.')
             self.dependencies.append(new_dep)
 
     def make_cmd_delete_file(self, path: Path):
@@ -297,10 +301,10 @@ class Phase:
                 WorkingSet.colors = cols
 
         if self.is_project_phase:
-            if (res := action.set_project(self.opt_str('name'))) != ResultCode.NOT_YET_RUN:
+            if (res := action.set_project(self.name)) != ResultCode.NOT_YET_RUN:
                 return res
         else:
-            if (res := action.set_phase(self.opt_str('name'))) != ResultCode.NOT_YET_RUN:
+            if (res := action.set_phase(self.name)) != ResultCode.NOT_YET_RUN:
                 return res
 
         dep_projects_res = ResultCode.SUCCEEDED
@@ -324,9 +328,9 @@ class Phase:
         phase_res = ResultCode.NO_ACTION
         action_method = getattr(self, 'do_action_' + action.name, None)
         if action_method:
-            report_action_start(action.name, self.opt_str("name"), type(self).__name__)
+            report_action_start(action.name, self.name, type(self).__name__)
             phase_res = action_method(action)
-            report_action_end(action.name, self.opt_str("name"), type(self).__name__,
+            report_action_end(action.name, self.name, type(self).__name__,
                               phase_res)
 
         return phase_res
@@ -337,7 +341,7 @@ class Phase:
         '''
         report = ''
         if WorkingSet.report_verbosity >= 0:
-            report = f'phase: {self.opt_str("name")}'
+            report = f'phase: {self.name}'
 
         if WorkingSet.report_verbosity >= 1:
             opts_str = ''

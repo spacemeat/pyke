@@ -25,11 +25,10 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
     '''
     Custom phase class for implementing some new, as-yet unconcieved actions.
     '''
-    def __init__(self, options, dependencies = None):
+    def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
         options = {
-            'name': 'generator',
             'gen_src_dir': '{src_anchor}/gen',
-        } | options
+        } | (options or {})
         super().__init__(options, dependencies)
 
     def make_generated_source(self):

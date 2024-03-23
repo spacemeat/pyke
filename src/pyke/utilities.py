@@ -11,6 +11,11 @@ class PykeException(Exception):
     Parent for all Pyke errors.
     '''
 
+class ProjectNameCollisionError(PykeException):
+    '''
+    Raised when more than one project phase shares a name in a hierarchy.
+    '''
+
 class MalformedConfigError(PykeException):
     '''
     Raised when reading an incorrectly formatted config file.
@@ -125,6 +130,7 @@ class WorkingSet:
     makefile_dir = ''
     action_aliases = {}
     main_phase = None
+    phase_map = {}
     colors = {}
     report_verbosity = 2
     report_relative_paths = True

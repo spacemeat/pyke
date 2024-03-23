@@ -597,7 +597,7 @@ The project will be called "asset_converter". If, however, it is named like:
 ``` ~/src/asset_converter/images_make.py ```
 The project will be called "images_make". (Maybe you have several pyke makefiles at the root.)
 
-Subphases of any project phase which are not themselves project phases are specified by the dotted name. Maybe your `asset_converter` project has dependencies like this:
+Dependency phases of any project phase which are not themselves project phases are specified by the dotted name. Maybe your `asset_converter` project has dependencies like this:
 ```
 asset_converter (ProjectPhase)
 ├── image_converter (ProjectPHase)
@@ -612,16 +612,16 @@ asset_converter (ProjectPhase)
         └── compile_dxf (CompilePhase)
 ```
 Here, each phase will be named by its owning project phase and its non-project phase names:
-* image_converter.link
-* image_converter.compile_jpg
-* image_converter.compile_png
-* image_converter.compile_tga
-* mesh_converter.link
-* mesh_converter.compile_blender
-* mesh_converter.compile_3ds
-* mesh_converter.compile_dxf
+* `image_converter.link`
+* `image_converter.compile_jpg`
+* `image_converter.compile_png`
+* `image_converter.compile_tga`
+* `mesh_converter.link`
+* `mesh_converter.compile_blender`
+* `mesh_converter.compile_3ds`
+* `mesh_converter.compile_dxf`
 
-Note that the naming is *not* strictly hierarchical, but rather, specifically project.non-project. Non-project phases must always be uniquely named within a project, and projects must always be uniquely named among each other. When referring to a phase on the command line with `-p`, this is the naming to use.
+Note that the naming is *not* strictly hierarchical, but rather, specifically `project.non-project`. Non-project phases must always be uniquely named within a project, and projects must always be uniquely named among each other. When referring to a phase on the command line with `-p`, this is the naming to use.
 
 ## Advanced Topics
 

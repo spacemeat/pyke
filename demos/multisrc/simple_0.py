@@ -5,15 +5,15 @@ import pyke as p
 phases = []
 c_to_o_phases = []
 
-c_to_o_phases.append(p.CompilePhase({
-    'name': 'compile_src',
+c_to_o_phases.append(p.CompilePhase(
+    'compile_src', {
     'include_dirs': ['include'],
     'obj_basename': 'sample',
     'sources': ['a.c', 'b.c', 'c.c', 'main.c']
 }))
 
-c_to_o_phases.append(p.CompilePhase({
-    'name': 'compile_exp',
+c_to_o_phases.append(p.CompilePhase(
+    'compile_exp', {
     'include_dirs': ['include'],
     'src_dir': 'exp',
     'obj_basename': 'sample_exp',
@@ -23,9 +23,9 @@ c_to_o_phases.append(p.CompilePhase({
 
 phases.extend(c_to_o_phases)
 
-o_to_exe_phase = p.LinkPhase({
-    'name': 'sample',
-    'exe_basename': '{name}',
+o_to_exe_phase = p.LinkPhase(
+    'link', {
+    'exe_basename': 'simple_0',
 }, c_to_o_phases)
 
 phases.append(o_to_exe_phase)

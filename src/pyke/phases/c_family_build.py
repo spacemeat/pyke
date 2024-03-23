@@ -12,9 +12,8 @@ class CFamilyBuildPhase(Phase):
     '''
     Intermediate class to handle making command lines for various toolkits.
     '''
-    def __init__(self, options, dependencies = None):
+    def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
         options = {
-            'name': 'build_phase',
             'toolkit': 'gnu',
             'language': 'c++',
             'language_version': '23',
@@ -71,7 +70,7 @@ class CFamilyBuildPhase(Phase):
             'obj_path': '{obj_anchor}/{obj_file}',
 
             'exe_dir':'bin',
-            'exe_basename': '{name}',
+            'exe_basename': name,
             'posix_exe_file': '{exe_basename}',
             'windows_exe_file': '{exe_basename}.exe',
             'exe_file': '{{target_os_{toolkit}}_exe_file}',
@@ -81,8 +80,8 @@ class CFamilyBuildPhase(Phase):
             'lib_dirs': [],
             'libs': [],
             'shared_libs': [],
-        } | options
-        super().__init__(options, dependencies)
+        } | (options or {})
+        super().__init__(name, options, dependencies)
 
     def get_source(self, src_idx):
         '''

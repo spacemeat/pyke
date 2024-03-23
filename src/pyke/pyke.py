@@ -17,7 +17,7 @@ from .action import Action
 from .options import OptionOp
 from .options_parser import parse_value
 from .phases.project import ProjectPhase
-from .utilities import WorkingSet, MalformedConfigError
+from .utilities import WorkingSet, MalformedConfigError, ProjectNameCollisionError
 
 def main_project():
     ''' Returns the main project created for the makefile.'''
@@ -176,6 +176,30 @@ def load_config():
         except (FileNotFoundError, MalformedConfigError):
             pass
 
+def resolve_project_names():
+    ''' Uniquify project names, and the phase names within each project.'''
+    project_phases = [phase for phase in WorkingSet.main_phase.enumerate_dependencies()
+                          if phase.is_project_phase]
+    project_names = set()
+    for project_phase in project_phases:
+        if project_phase.name in project_names:
+            raise ProjectNameCollisionError(f'There is already a project named {project_phase.name}. '
+                                            'Project names must be unique.')
+    for phase in project_phases:
+        phase.uniquify_phase_names()
+
+def make_phase_map():
+    phase_map = {phase.name: phase
+                 for phase in WorkingSet.main_phase.enumerate_dependencies()
+                 if phase.is_project_phase}
+
+    phase_map |= {f'{proj_name}.{phase.name}': phase
+                  for proj_name, proj in phase_map.items()
+                  for phase in proj.enumerate_dependencies()
+                  if not phase.is_project_phase}
+
+    return phase_map
+
 def main():
     '''Entrypoint for pyke.'''
     current_dir = os.getcwd()
@@ -219,21 +243,14 @@ def main():
 
     load_config()
 
-    WorkingSet.main_phase = ProjectPhase({
-        'name': make_path.parent.name if make_path.name == 'make.py' else make_path.stem
-    })
-    active_phase = WorkingSet.main_phase
+    WorkingSet.main_phase = ProjectPhase(
+        make_path.parent.name if make_path.name == 'make.py' else make_path.stem)
 
     run_make_file(make_path, cache_make)
+    resolve_project_names()
+    phase_map = make_phase_map()
 
-    phase_map = {phase.opt_str('name'): phase
-                 for phase in WorkingSet.main_phase.enumerate_dependencies()
-                 if phase.is_project_phase}
-
-    phase_map |= {f'{proj_name}.{phase.opt_str("name")}': phase
-                  for proj_name, proj in phase_map.items()
-                  for phase in proj.enumerate_dependencies()
-                  if not phase.is_project_phase}
+    active_phase = WorkingSet.main_phase
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]
