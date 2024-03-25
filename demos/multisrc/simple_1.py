@@ -9,7 +9,7 @@ proto = p.CompilePhase()
 for src in ('a.c', 'b.c', 'c.c', 'main.c'):
     c_to_o_phases.append(proto.clone(f'compile_{src}', {'sources': [src]}))
 
-proto = p.CompilePhase(None, {
+proto = p.CompilePhase({
     'src_dir': 'exp',
     'obj_dir': 'int/exp',
 })
@@ -17,7 +17,8 @@ proto = p.CompilePhase(None, {
 for src in ('a.c', 'b.c'):
     c_to_o_phases.append(proto.clone(f'compile_{src}', {'sources': [src]}))
 
-o_to_exe_phase = p.LinkPhase('link', {
+o_to_exe_phase = p.LinkPhase({
+    'name': 'link',
     'exe_basename': 'simple_1',
 }, c_to_o_phases)
 

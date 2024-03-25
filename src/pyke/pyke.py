@@ -267,10 +267,6 @@ class PhaseMap:
 
         return list(dict.fromkeys(all_named_phases))
 
-
-phase_map = PhaseMap(WorkingSet.main_phase)
-
-
 def main():
     '''Entrypoint for pyke.'''
     current_dir = os.getcwd()
@@ -314,9 +310,12 @@ def main():
 
     load_config()
 
-    WorkingSet.main_phase = ProjectPhase(
-        make_path.parent.name if make_path.name == 'make.py' else make_path.stem)
+    WorkingSet.main_phase = ProjectPhase({
+        'name': make_path.parent.name if
+        make_path.name == 'make.py'
+        else make_path.stem})
 
+    phase_map = PhaseMap(WorkingSet.main_phase)
     run_make_file(make_path, cache_make)
     resolve_project_names()
 

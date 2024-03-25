@@ -2,8 +2,8 @@
 
 import pyke as p
 
-phase = p.CompileAndLinkPhase(
-    'simple', {
+phase = p.CompileAndLinkPhase({
+    'name': 'simple',
     'sources': ['a.c', 'b.c', 'c.c', 'main.c'],
     'exe_basename': 'simple',
 })
