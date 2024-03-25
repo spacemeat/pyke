@@ -30,12 +30,12 @@ class Phase:
     Pyke comes built-in with numerous useful phase classes, and users
     can define their own to support bespoke processes.
     '''
-    def __init__(self, name: str | None = None, options: dict | None = None,
+    def __init__(self, options: dict | None = None,
                  dependencies: Self | list[Self] | None = None):
         self.phase_names = {}
-        self.name = name
         self.options = Options()
         self.options |= {
+            'name': '',
             'report_verbosity': 2,
             'verbosity': 0,
             'project_anchor': WorkingSet.makefile_dir,
@@ -98,6 +98,16 @@ class Phase:
         self.dependencies = []
         for dep in dependencies:
             self.set_dependency(dep)
+
+    @property
+    def name(self):
+        ''' Quick property to get the name option.'''
+        return self.opt_str('name')
+
+    @name.setter
+    def name(self, value):
+        ''' Quick property to set the name options.'''
+        self.push_opts({'name': value})
 
     def push_opts(self, overrides: dict,
                   include_deps: bool = False, include_project_deps: bool = False):
@@ -239,6 +249,13 @@ class Phase:
         for dep in self.dependencies:
             yield from dep.enumerate_dependencies()
         yield self
+
+    def find_dependency_by_name(self, name: str):
+        ''' Finds the dependency (including self) by name.'''
+        for dep in self.enumerate_dependencies():
+            if dep.opt_str('name') == name:
+                return dep
+        return None
 
     def find_in_dependency_tree(self, dep_to_find: Self):
         '''

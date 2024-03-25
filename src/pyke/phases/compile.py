@@ -7,11 +7,11 @@ class CompilePhase(CFamilyBuildPhase):
     '''
     Phase class for building C/C++ files to objects.
     '''
-    def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
+    def __init__(self, options: dict | None = None, dependencies = None):
         options = {
             'build_operation': 'compile_to_object',
         } | (options or {})
-        super().__init__(name, options, dependencies)
+        super().__init__(options, dependencies)
 
     def do_action_clean(self, action: Action):
         '''

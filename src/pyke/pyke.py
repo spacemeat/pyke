@@ -16,6 +16,7 @@ import traceback
 from .action import Action
 from .options import OptionOp
 from .options_parser import parse_value
+from .phases.phase import Phase
 from .phases.project import ProjectPhase
 from .utilities import WorkingSet, MalformedConfigError, ProjectNameCollisionError
 
@@ -136,9 +137,18 @@ def load_config():
             'report-options': 'report_options',
             'opts': 'report_options',
             'c': 'clean',
+            'clean-all': '@:clean',
+            'ca': '@:clean',
             'clean-build-directory': 'clean_build_directory',
+            'clean-build-directory-all': '@:clean_build_directory',
             'cbd': 'clean_build_directory',
+            'cbda': '@:clean_build_directory',
             'b': 'build',
+            'build-all': '@:build',
+            'ba': '@:build',
+
+            '-debug': '-o.@:kind=debug',
+            '-debug-all': '-o@,@.@:kind=debug',
         }
 
     def validate_config(config):
@@ -188,17 +198,78 @@ def resolve_project_names():
     for phase in project_phases:
         phase.uniquify_phase_names()
 
-def make_phase_map():
-    phase_map = {phase.name: phase
-                 for phase in WorkingSet.main_phase.enumerate_dependencies()
-                 if phase.is_project_phase}
+class PhaseMap:
+    def __init__(self, root_project):
+        self.root_project = root_project
+        self.project_phases = {
+            phase.name: phase
+            for phase in root_project.enumerate_dependencies()
+            if phase.is_project_phase
+        }
+        self.non_project_phases = {
+            f'{proj_name}.{phase.name}': phase
+            for proj_name, proj in self.project_phases.items()
+            for phase in proj.enumerate_dependencies()
+            if not phase.is_project_phase
+        }
 
-    phase_map |= {f'{proj_name}.{phase.name}': phase
-                  for proj_name, proj in phase_map.items()
-                  for phase in proj.enumerate_dependencies()
-                  if not phase.is_project_phase}
+    def get_project_phase(self, name: str) -> Phase | None:
+        return self.project_phases.get(name, None)
 
-    return phase_map
+    def get_all_project_phases(self) -> list[Phase]:
+        return [v for _, v in self.project_phases.items()]
+
+    def get_non_project_phase(self, name: str) -> Phase | None:
+        return self.non_project_phases.get(name, None)
+
+    def get_all_non_project_phases(self) -> list[Phase]:
+        return [v for _, v in self.non_project_phases.items()]
+
+    def get_phase_list(self, all_labels: str) -> list[Phase]:
+        ''' Gets all the phases according to the following:
+        all_labels is a ,-separated least
+        for each clause, a label can be in the form x or x.y
+        for form x, the value is a project phase name, or *, or ''
+            * = all projects
+            '' = the main project
+        for form x.y, the value is a non-project phase name, or *
+            * = all non-project phases under all of the x projects
+        So, to select every phase, the right incantation is:
+            *, *.*
+        '''
+        proj_phases = []
+        all_named_phases = []
+        labels = all_labels.split(',')
+        for proj_name in labels:
+            proj_name = proj_name.strip()
+            nonproj_name = None
+            named_phases = []
+            if '.' in proj_name:
+                proj_name, nonproj_name = proj_name.split('.', 1)
+            if proj_name == '':
+                proj_phases = [self.root_project]
+            elif proj_name == '@':
+                proj_phases = self.get_all_project_phases
+            else:
+                proj_phases = [self.get_project_phase(proj_name)]
+
+            if nonproj_name == '@':
+                named_phases = [v for k, v in self.non_project_phases.items()
+                                  for proj_phase in proj_phases
+                                if k.startswith(f'{proj_phase.name}.')]
+            elif nonproj_name:
+                named_phases = [self.get_non_project_phase(
+                                f'{project_phase.name}.{nonproj_name}')
+                                for project_phase in proj_phases]
+            else:
+                named_phases = proj_phases
+            all_named_phases.extend(named_phases)
+
+        return list(dict.fromkeys(all_named_phases))
+
+
+phase_map = PhaseMap(WorkingSet.main_phase)
+
 
 def main():
     '''Entrypoint for pyke.'''
@@ -248,12 +319,11 @@ def main():
 
     run_make_file(make_path, cache_make)
     resolve_project_names()
-    phase_map = make_phase_map()
-
-    active_phase = WorkingSet.main_phase
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]
+
+        arg = WorkingSet.action_aliases.get(arg, arg)
 
         if arg in ['-v', '--version']:
             print_version()
@@ -268,25 +338,21 @@ def main():
                    'or any action arguments.')
             return ReturnCode.INVALID_ARGS.value
 
-        if arg.startswith('-p') or arg == '--phase':
-            phase_name = ''
-            if len(arg) > 2:
-                phase_name = arg[2:]
-            else:
-                idx += 1
-                phase_name = sys.argv[idx]
-            if phase_name not in phase_map:
-                print (f'Could not find a phase named "{phase_name}".')
-                return ReturnCode.INVALID_ARGS.value
-            active_phase = phase_map[phase_name]
-
-        elif arg.startswith('-o') or arg == '--override':
+        if arg.startswith('-o') or arg == '--override':
             override = ''
             if len(arg) > 2:
                 override = arg[2:]
             else:
                 idx += 1
                 override = sys.argv[idx]
+
+            affected_phases = []
+            if ':' in override:
+                phase_labels, override = override.split(':', 1)
+                affected_phases = phase_map.get_phase_list(phase_labels)
+            else:
+                affected_phases = [WorkingSet.main_phase]
+
             if '=' in override:
                 k, v = override.split('=', 1)
                 if k[-1] in ['+', '*', '-', '|', '&', '\\', '^']:
@@ -295,15 +361,24 @@ def main():
                 else:
                     op = OptionOp.REPLACE
                 v = parse_value(v.strip())
-                active_phase.push_opts({k: (op, v)})
+                for active_phase in affected_phases:
+                    active_phase.push_opts({k: (op, v)})
             else:
-                active_phase.pop_opts([override])
+                for active_phase in affected_phases:
+                    active_phase.pop_opts([override])
 
         else:
-            arg = WorkingSet.action_aliases.get(arg, arg)
+            affected_phases = []
+            if ':' in arg:
+                phase_labels, arg = arg.split(':', 1)
+                affected_phases = phase_map.get_phase_list(phase_labels)
+            else:
+                affected_phases = [WorkingSet.main_phase]
+
             action = Action(arg)
-            if not active_phase.do(action):
-                return ReturnCode.ACTION_FAILED.value
+            for active_phase in affected_phases:
+                if not active_phase.do(action):
+                    return ReturnCode.ACTION_FAILED.value
 
         idx += 1
 

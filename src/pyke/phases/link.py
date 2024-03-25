@@ -7,12 +7,12 @@ class LinkPhase(CFamilyBuildPhase):
     '''
     Phase class for linking object files to build executable binaries.
     '''
-    def __init__(self, name: str | None = None, options: dict | None = None, dependencies = None):
+    def __init__(self, options: dict | None = None, dependencies = None):
         options = {
             'name': 'link',
             'build_operation': 'link_to_executable',
         } | (options or {})
-        super().__init__(name, options, dependencies)
+        super().__init__(options, dependencies)
 
     def get_all_object_paths(self):
         '''
