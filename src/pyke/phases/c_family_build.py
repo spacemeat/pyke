@@ -48,6 +48,8 @@ class CFamilyBuildPhase(Phase):
             'additional_flags': [],
             'incremental_build': True,
 
+            'thin_archive': False,
+
             'inc_dir': '.',
             'include_anchor': '{project_anchor}/{inc_dir}',
             'include_dirs': ['include'],
@@ -68,6 +70,14 @@ class CFamilyBuildPhase(Phase):
             'obj_file': '{{target_os_{toolkit}}_obj_file}',
             'obj_anchor': '{build_detail_anchor}/{obj_dir}',
             'obj_path': '{obj_anchor}/{obj_file}',
+
+            'archive_dir':'lib',
+            'archive_basename': '{name}',
+            'posix_archive_file': 'lib{archive_basename}.a',
+            'windows_archive_file': '{archive_basename}.lib',
+            'archive_file': '{{target_os_{toolkit}}_archive_file}',
+            'archive_anchor': '{build_detail_anchor}/{archive_dir}',
+            'archive_path': '{archive_anchor}/{archive_file}',
 
             'exe_dir':'bin',
             'exe_basename': '{name}',
@@ -125,7 +135,13 @@ class CFamilyBuildPhase(Phase):
         '''
         Makes the full exe path from options.
         '''
-        return Path(str(self.opt_str('exe_path')))
+        return Path(self.opt_str('exe_path'))
+
+    def get_archive_path(self):
+        '''
+        Gets the archived library path.
+        '''
+        return Path(self.opt_str('archive_path'))
 
     def make_build_command_prefix(self):
         '''
@@ -137,7 +153,7 @@ class CFamilyBuildPhase(Phase):
         if toolkit == 'clang':
             return self._make_build_command_prefix_clang()
         if toolkit == 'visualstudio':
-            return self._make_build_command_vs()
+            return self._make_build_command_prefix_vs()
         raise UnsupportedToolkitError(f'Specified toolkit "{toolkit}" is not supported.')
 
     def _make_build_command_prefix_gnu(self):
@@ -181,8 +197,36 @@ class CFamilyBuildPhase(Phase):
         build_string = f'{prefix}{warn}{c}{g}{o} {kf}{defs}{additional_flags} '
         return build_string
 
-    def _make_build_command_vs(self):
+    def _make_build_command_prefix_vs(self):
         pass
+
+    def make_archive_command_prefix(self):
+        '''
+        Makes a partial archive command line.
+        '''
+        toolkit = self.opt_str('toolkit')
+        if toolkit == 'gnu':
+            return self._make_archive_command_prefix_gnu()
+        if toolkit == 'clang':
+            return self._make_archive_command_prefix_gnu()
+        if toolkit == 'visualstudio':
+            return self._make_archive_command_prefix_vs()
+        raise UnsupportedToolkitError(f'Specified toolkit "{toolkit}" is not supported.')
+
+    def _make_archive_command_prefix_gnu(self):
+        prefix = 'ar rcs'
+        return self._make_archive_command_prefix_gnu_clang(prefix)
+
+    def _make_archive_command_prefix_clang(self):
+        prefix = 'llvm-ar rcs'
+        return self._make_archive_command_prefix_gnu_clang(prefix)
+
+    def _make_archive_command_prefix_gnu_clang(self, prefix):
+        thin = 'P --thin' if self.opt_bool('thin_archive') else ''
+        return f'{prefix}{thin} '
+
+    def _make_archive_command_prefix_vs(self):
+        return ''
 
     def make_compile_arguments(self):
         ''' Constructs the inc_dirs portion of a gcc command.'''
@@ -226,14 +270,14 @@ class CFamilyBuildPhase(Phase):
         static_libs = self.opt_list('libs')
         static_libs_cmd = ''.join((f'-l{lib} ' for lib in static_libs))
         static_libs_cmd += pkg_libs_cmd
-        if len(static_libs_cmd) > 0:
-            static_libs_cmd = f'-Wl,-Bstatic {static_libs_cmd}'
+        #if len(static_libs_cmd) > 0:
+        #    static_libs_cmd = f'-Wl,-static {static_libs_cmd}'
 
         # TODO: Ensure this is all kinda correct. I'm learning about rpath/$ORIGIN.
         shared_libs = self.opt_list('shared_libs')
         shared_libs_cmd = ''.join((f'-l{so} ' for so in shared_libs))
-        if len(shared_libs_cmd) > 0:
-            shared_libs_cmd = f'-Wl,-Bdynamic {shared_libs_cmd} -Wl,-rpath,$ORIGIN -Wl,-z,origin'
+        #if len(shared_libs_cmd) > 0:
+        #    shared_libs_cmd = f'-Wl,-dynamic {shared_libs_cmd} -Wl,-rpath,$ORIGIN -Wl,-z,origin'
 
         return {
             'lib_dirs': lib_dirs_cmd,
@@ -334,9 +378,45 @@ class CFamilyBuildPhase(Phase):
         action.set_step_result(Result(step_result, step_notes))
         return step_result
 
+    def do_step_archive_objects_to_library(self, prefix, archive_path, object_paths, action):
+        '''
+        Perform an archive operaton on built object files.
+        '''
+        step_result = ResultCode.SUCCEEDED
+        step_notes = None
+        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
+        cmd = f'{prefix}{archive_path} {object_paths_cmd}'
+        action.set_step(Step('archive', object_paths, [archive_path], cmd))
+        missing_objs = []
+
+        for obj_path in object_paths:
+            if not obj_path.exists():
+                missing_objs.append(obj_path)
+        if len(missing_objs) > 0:
+            step_result = ResultCode.MISSING_INPUT
+            step_notes = missing_objs
+        else:
+            exe_exists = archive_path.exists()
+            must_build = not exe_exists
+            for obj_path in object_paths:
+                if not exe_exists or input_path_is_newer(obj_path, archive_path):
+                    must_build = True
+            if must_build:
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+        action.set_step_result(Result(step_result, step_notes))
+        return step_result
+
     def do_step_link_objects_to_exe(self, prefix, args, exe_path, object_paths, action):
         '''
-        Perform a C or C++ source compile operation as an action step.
+        Perform a link to executable operation as an action step.
         '''
         step_result = ResultCode.SUCCEEDED
         step_notes = None
