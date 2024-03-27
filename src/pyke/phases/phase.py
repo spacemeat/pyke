@@ -245,7 +245,7 @@ class Phase:
         return obj
 
     def enumerate_dependencies(self):
-        ''' Enumerates all the dependencies in depth-first order whose types match obj_type.'''
+        ''' Enumerates all the dependencies in depth-first order.'''
         for dep in self.dependencies:
             yield from dep.enumerate_dependencies()
         yield self

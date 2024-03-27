@@ -249,7 +249,7 @@ class PhaseMap:
             if proj_name == '':
                 proj_phases = [self.root_project]
             elif proj_name == '@':
-                proj_phases = self.get_all_project_phases
+                proj_phases = self.get_all_project_phases()
             else:
                 proj_phases = [self.get_project_phase(proj_name)]
 
@@ -315,8 +315,8 @@ def main():
         make_path.name == 'make.py'
         else make_path.stem})
 
-    phase_map = PhaseMap(WorkingSet.main_phase)
     run_make_file(make_path, cache_make)
+    phase_map = PhaseMap(WorkingSet.main_phase)
     resolve_project_names()
 
     while idx < len(sys.argv):
