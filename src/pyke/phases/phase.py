@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Type, TypeVar, Iterable
 from typing_extensions import Self
 
-from ..action import Action, ResultCode, report_action_start, report_action_end
+from ..action import (Action, ResultCode, report_action_start, report_action_end,
+                      FileData, FileOperation, PhaseFiles)
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
                          CircularDependencyError, ProjectPhaseDependencyError)
@@ -98,6 +99,20 @@ class Phase:
         self.dependencies = []
         for dep in dependencies:
             self.set_dependency(dep)
+
+        self.files = PhaseFiles()
+
+    def record_file_operation(self, input_files: list[FileData] | FileData | None,
+                              output_files: list[FileData] | FileData | None, step_name: str):
+        ''' Record a file transform this phase can perform.'''
+        self.files.record(FileOperation(input_files, output_files, step_name))
+
+    def get_dependency_output_files(self, file_type: str):
+        ''' Returns all the generated files of a type by this phase or any dependency phases.'''
+        deps = list(self.enumerate_dependencies())[:-1]
+        return [file_data
+            for dep in deps
+            for file_data in dep.files.get_output_files(file_type)]
 
     @property
     def name(self):
@@ -233,13 +248,13 @@ class Phase:
     def __repr__(self):
         return str(self.name)
 
-    def clone(self, name: str | None = None, options: dict | None = None):
+    def clone(self, options: dict | None = None):
         '''
         Returns a clone of this instance. The clone has the same
         options (also copied) but its own dependencies and action
         results state.
         '''
-        obj = type(self)(name, {})
+        obj = type(self)({})
         obj.options = self.options.clone()
         obj.options |= (options or {})
         return obj
@@ -317,13 +332,6 @@ class Phase:
             if isinstance(cols, dict):
                 WorkingSet.colors = cols
 
-        if self.is_project_phase:
-            if (res := action.set_project(self.name)) != ResultCode.NOT_YET_RUN:
-                return res
-        else:
-            if (res := action.set_phase(self.name)) != ResultCode.NOT_YET_RUN:
-                return res
-
         dep_projects_res = ResultCode.SUCCEEDED
         for dep in self.dependencies:
             if dep.is_project_phase:
@@ -332,6 +340,10 @@ class Phase:
 
         if dep_projects_res.failed():
             return dep_projects_res
+
+        if self.is_project_phase:
+            if (res := action.set_project(self.name)) != ResultCode.NOT_YET_RUN:
+                return res
 
         dep_phase_res = ResultCode.SUCCEEDED
         for dep in self.dependencies:
@@ -342,6 +354,10 @@ class Phase:
         if dep_phase_res.failed():
             return res
 
+        if not self.is_project_phase:
+            if (res := action.set_phase(self.name)) != ResultCode.NOT_YET_RUN:
+                return res
+
         phase_res = ResultCode.NO_ACTION
         action_method = getattr(self, 'do_action_' + action.name, None)
         if action_method:
@@ -351,6 +367,9 @@ class Phase:
                               phase_res)
 
         return phase_res
+
+    def compute_file_operations(self):
+        ''' Implelent this in any phase that uses input files or generates output fies.'''
 
     def do_action_report_options(self, action: Action) -> ResultCode:
         '''

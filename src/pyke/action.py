@@ -5,7 +5,7 @@ from os.path import relpath
 from pathlib import Path
 import sys
 
-from .utilities import ensure_list, ensure_tuple, set_color as c, WorkingSet, InvalidActionError
+from .utilities import ensure_list, set_color as c, WorkingSet, InvalidActionError
 
 # pylint: disable=too-few-public-methods
 
@@ -31,13 +31,54 @@ class ResultCode(Enum):
         ''' Returns whether a particular value is considered a failure (strictly not a success).'''
         return not self.succeeded()
 
+
+class FileData:
+    def __init__(self, path: Path, file_type: str, generating_phase: 'Phase'):
+        self.path = path
+        self.file_type = file_type
+        self.generating_phase = generating_phase
+
+class FileOperation:
+    def __init__(self, input_files: list[FileData] | FileData | None,
+                 output_files: list[FileData] | FileData | None, step_name: str):
+        self.input_files = ensure_list(input_files)
+        self.output_files = ensure_list(output_files)
+        self.step_name = step_name
+
+class PhaseFiles:
+    def __init__(self):
+        self.operations = []
+
+    def record(self, operation: FileOperation):
+        ''' Records a file transform operation.'''
+        self.operations.append(operation)
+
+    def get_operations(self, step_name):
+        ''' Returns all recorded inputs and outputs for a gven operation type.'''
+        return [(op.input_files, op.output_files) for op in self.operations
+                                                  if op.step_name == step_name]
+
+    def get_output_files(self, file_type):
+        ''' Returns all recorded outputs of a given type.'''
+        return [file_data for op in self.operations
+                          for file_data in op.output_files if file_data.file_type == file_type]
+
+class StepFunction:
+    def __init__(self, fn: callable):
+        self.fn = fn
+
+class StepCommand(StepFunction):
+    def __init__(self, command: str):
+        self.command = command
+
 class Step:
     ''' Represents a single step in a phase's action. These are dynamically added as needed.'''
-    def __init__(self, step_name: str, step_input: list | None = None,
-                 step_output: list | None = None, command: str = ''):
-        self.name = step_name
-        self.inputs = step_input or []
-        self.outputs = step_output or []
+    def __init__(self, name: str, inputs: list[FileData],
+                 outputs: list[FileData], act_fn: callable, command: str = ''):
+        self.name = name
+        self.inputs = inputs or []
+        self.outputs = outputs or []
+        self.act_fn = act_fn
         self.command = command
 
 class Result:
@@ -121,6 +162,9 @@ class StepAction:
         self.result: Result = Result(ResultCode.NO_ACTION, None)
         report_step_start(self.step)
 
+    def __repr__(self):
+        return f'      {self.step.name} ({self.result[0]})'
+
     def get_result(self):
         ''' Gets the result code.'''
         return self.result.code
@@ -136,6 +180,11 @@ class PhaseAction:
         self.name = phase_name
         self.current_step: str = ''
         self.steps = []
+
+    def __repr__(self):
+        s = f'    {self.name} - current_step = {self.current_step}'
+        s += ''.join([repr(st) for st in self.steps])
+        return s
 
     def get_result(self):
         ''' Gets the result code.'''
@@ -162,6 +211,11 @@ class ProjectAction:
         self.name = project_name
         self.current_phase: str = ''
         self.phases = {}
+
+    def __repr__(self):
+        s = f'  {self.name} - current_phase = {self.current_phase}'
+        s += ''.join([repr(ph) for ph in self.phases])
+        return s
 
     def get_result(self):
         ''' Gets the result code.'''
@@ -197,6 +251,11 @@ class Action:
         self.name = action_name
         self.current_project: str = ''
         self.projects = {}
+
+    def __repr__(self):
+        s = f'{self.name} - current_phase = {self.current_project}'
+        s += ''.join([repr(pr) for pr in self.projects])
+        return s
 
     def get_result(self):
         ''' Gets the result code.'''

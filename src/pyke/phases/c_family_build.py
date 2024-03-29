@@ -1,5 +1,6 @@
 ''' Contains the BuildPhase intermediate phase class. '''
 
+from functools import partial
 from pathlib import Path
 
 from ..action import Action, Step, Result, ResultCode
@@ -291,205 +292,218 @@ class CFamilyBuildPhase(Phase):
         '''
         Perfoems a file deletion operation as an action step.
         '''
-        step_result = ResultCode.SUCCEEDED
-        step_notes = None
-        cmd = self.make_cmd_delete_file(path)
-        action.set_step(Step('delete file', [path], [], cmd))
-        if path.exists():
-            res, _, err = do_shell_command(cmd)
-            if res != 0:
-                step_result = ResultCode.COMMAND_FAILED
-                step_notes = err
+        def act(cmd: str, path: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if path.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
             else:
-                step_result = ResultCode.SUCCEEDED
-        else:
-            step_result = ResultCode.ALREADY_UP_TO_DATE
+                step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_step_result(Result(step_result, step_notes))
-        return step_result
+            return Result(step_result, step_notes)
+
+        cmd = self.make_cmd_delete_file(path)
+        action.set_step(Step('delete file', [path], [], cmd,
+                             partial(act, cmd=cmd, path=path)))
 
     def do_step_delete_directory(self, direc: Path, action: Action):
         '''
         Perfoems a file deletion operation as an action step.
         '''
-        step_result = ResultCode.SUCCEEDED
-        step_notes = None
-        cmd = f'rm -r {direc}'
-        action.set_step(Step('delete build', [direc], [], cmd))
-        if direc.exists():
-            res, _, err = do_shell_command(cmd)
-            if res != 0:
-                step_result = ResultCode.COMMAND_FAILED
-                step_notes = err
+        def act(cmd: str, direc: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if direc.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
             else:
-                step_result = ResultCode.SUCCEEDED
-        else:
-            step_result = ResultCode.ALREADY_UP_TO_DATE
+                step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_step_result(Result(step_result, step_notes))
-        return step_result
+            return Result(step_result, step_notes)
+
+        cmd = f'rm -r {direc}'
+        action.set_step(Step('delete directory', [direc], [], cmd,
+                             partial(act, cmd=cmd, direc=direc)))
 
     def do_step_create_directory(self, new_dir, action):
         '''
         Performs a directory creation operation as an action step.
         '''
-        step_result = ResultCode.SUCCEEDED
-        step_notes = None
-        cmd = f'mkdir -p {new_dir}'
-        action.set_step(Step('create directory', [], [new_dir], cmd))
-
-        if not new_dir.is_dir():
-            res, _, err = do_shell_command(cmd)
-            if res != 0:
-                step_result = ResultCode.COMMAND_FAILED
-                step_notes = err
+        def act(cmd: str, new_dir: Path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if not new_dir.is_dir():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
             else:
-                step_result = ResultCode.SUCCEEDED
-        else:
-            step_result = ResultCode.ALREADY_UP_TO_DATE
+                step_result = ResultCode.ALREADY_UP_TO_DATE
 
-        action.set_step_result(Result(step_result, step_notes))
-        return step_result
+            return Result(step_result, step_notes)
+
+        cmd = f'mkdir -p {new_dir}'
+        action.set_step(Step('create directory', [], [new_dir], cmd,
+                             partial(act, cmd=cmd, new_dir=new_dir)))
 
     def do_step_compile_src_to_object(self, prefix, args, src_path, obj_path, action):
         '''
         Perform a C or C++ source compile operation as an action step.
         '''
-        step_result = ResultCode.SUCCEEDED
-        step_notes = None
+        def act(cmd: str, src_path: Path, obj_path: Path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+
+            if not src_path.exists():
+                step_result = ResultCode.MISSING_INPUT
+                step_notes = src_path
+            else:
+                if not obj_path.exists() or input_path_is_newer(src_path, obj_path):
+                    res, _, err = do_shell_command(cmd)
+                    if res != 0:
+                        step_result = ResultCode.COMMAND_FAILED
+                        step_notes = err
+                    else:
+                        step_result = ResultCode.SUCCEEDED
+                else:
+                    step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
         cmd = (f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} '
                f'{src_path}{" -pthread" if args["posix_threads"] else ""}')
-        action.set_step(Step('compile', [src_path], [obj_path], cmd))
-
-        if not src_path.exists():
-            step_result = ResultCode.MISSING_INPUT
-            step_notes = src_path
-        else:
-            if not obj_path.exists() or input_path_is_newer(src_path, obj_path):
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-        action.set_step_result(Result(step_result, step_notes))
-        return step_result
+        action.set_step(Step('compile', [src_path], [obj_path], cmd,
+                             partial(act, src_path, obj_path)))
 
     def do_step_archive_objects_to_library(self, prefix, archive_path, object_paths, action):
         '''
         Perform an archive operaton on built object files.
         '''
-        step_result = ResultCode.SUCCEEDED
-        step_notes = None
+        def act(cmd, object_paths, archive_path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            missing_objs = []
+
+            for obj_path in object_paths:
+                if not obj_path.exists():
+                    missing_objs.append(obj_path)
+            if len(missing_objs) > 0:
+                step_result = ResultCode.MISSING_INPUT
+                step_notes = missing_objs
+            else:
+                archive_exists = archive_path.exists()
+                must_build = not archive_exists
+                for obj_path in object_paths:
+                    if not archive_exists or input_path_is_newer(obj_path, archive_path):
+                        must_build = True
+                if must_build:
+                    res, _, err = do_shell_command(cmd)
+                    if res != 0:
+                        step_result = ResultCode.COMMAND_FAILED
+                        step_notes = err
+                    else:
+                        step_result = ResultCode.SUCCEEDED
+                else:
+                    step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
         cmd = f'{prefix}{archive_path} {object_paths_cmd}'
-        action.set_step(Step('archive', object_paths, [archive_path], cmd))
-        missing_objs = []
-
-        for obj_path in object_paths:
-            if not obj_path.exists():
-                missing_objs.append(obj_path)
-        if len(missing_objs) > 0:
-            step_result = ResultCode.MISSING_INPUT
-            step_notes = missing_objs
-        else:
-            exe_exists = archive_path.exists()
-            must_build = not exe_exists
-            for obj_path in object_paths:
-                if not exe_exists or input_path_is_newer(obj_path, archive_path):
-                    must_build = True
-            if must_build:
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-        action.set_step_result(Result(step_result, step_notes))
-        return step_result
+        action.set_step(Step('archive', object_paths, [archive_path], cmd,
+                             partial(act, object_paths, archive_path)))
 
     def do_step_link_objects_to_exe(self, prefix, args, exe_path, object_paths, action):
         '''
         Perform a link to executable operation as an action step.
         '''
-        step_result = ResultCode.SUCCEEDED
-        step_notes = None
+        def act(cmd, object_paths, exe_path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            missing_objs = []
+
+            for obj_path in object_paths:
+                if not obj_path.exists():
+                    missing_objs.append(obj_path)
+            if len(missing_objs) > 0:
+                step_result = ResultCode.MISSING_INPUT
+                step_notes = missing_objs
+            else:
+                exe_exists = exe_path.exists()
+                must_build = not exe_exists
+                for obj_path in object_paths:
+                    if not exe_exists or input_path_is_newer(obj_path, exe_path):
+                        must_build = True
+                if must_build:
+                    res, _, err = do_shell_command(cmd)
+                    if res != 0:
+                        step_result = ResultCode.COMMAND_FAILED
+                        step_notes = err
+                    else:
+                        step_result = ResultCode.SUCCEEDED
+                else:
+                    step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
         cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
                f'{" -pthread" if args["posix_threads"] else ""}{args["lib_dirs"]}'
                f'{args["pkg_libs_bits"]} {args["static_libs"]}{args["shared_libs"]}')
-        action.set_step(Step('link', object_paths, [exe_path], cmd))
-        missing_objs = []
-
-        for obj_path in object_paths:
-            if not obj_path.exists():
-                missing_objs.append(obj_path)
-        if len(missing_objs) > 0:
-            step_result = ResultCode.MISSING_INPUT
-            step_notes = missing_objs
-        else:
-            exe_exists = exe_path.exists()
-            must_build = not exe_exists
-            for obj_path in object_paths:
-                if not exe_exists or input_path_is_newer(obj_path, exe_path):
-                    must_build = True
-            if must_build:
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-        action.set_step_result(Result(step_result, step_notes))
-        return step_result
+        action.set_step(Step('link', object_paths, [exe_path], cmd,
+                             partial(act, object_paths, exe_path)))
 
     def do_step_compile_srcs_to_exe(self, prefix, args, src_paths, exe_path, action):
         '''
         Perform a multiple C or C++ source compile to executable operation as an action step.
         '''
-        step_result = ResultCode.SUCCEEDED
-        step_notes = None
+        def act(cmd, src_paths, exe_path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            missing_srcs = []
+
+            for src_path in src_paths:
+                if not src_path.exists():
+                    missing_srcs.append(src_path)
+            if len(missing_srcs) > 0:
+                step_result = ResultCode.MISSING_INPUT
+                step_notes = missing_srcs
+            else:
+                exe_exists = exe_path.exists()
+                must_build = not exe_exists
+                for src_path in src_paths:
+                    if not exe_exists or input_path_is_newer(src_path, exe_path):
+                        must_build = True
+                if must_build:
+                    res, _, err = do_shell_command(cmd)
+                    if res != 0:
+                        step_result = ResultCode.COMMAND_FAILED
+                        step_notes = err
+                    else:
+                        step_result = ResultCode.SUCCEEDED
+                else:
+                    step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
         cmd = (f'{prefix} {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {exe_path} '
                f'{" -pthread" if args["posix_threads"] else ""}'
                f'{src_paths_cmd}{args["lib_dirs"]} {args["pkg_libs_bits"]} '
                f'{args["static_libs"]}{args["shared_libs"]}')
-        action.set_step(Step('compile and link', src_paths, [exe_path], cmd))
-        missing_srcs = []
-
-        for src_path in src_paths:
-            if not src_path.exists():
-                missing_srcs.append(src_path)
-        if len(missing_srcs) > 0:
-            step_result = ResultCode.MISSING_INPUT
-            step_notes = missing_srcs
-        else:
-            exe_exists = exe_path.exists()
-            must_build = not exe_exists
-            for src_path in src_paths:
-                if not exe_exists or input_path_is_newer(src_path, exe_path):
-                    must_build = True
-            if must_build:
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-        action.set_step_result(Result(step_result, step_notes))
-        return step_result
+        action.set_step(Step('compile and link', src_paths, [exe_path], cmd,
+                             partial(act, src_paths, exe_path)))
 
     def do_action_clean_build_directory(self, action: Action):
         '''

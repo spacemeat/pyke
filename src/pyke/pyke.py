@@ -316,8 +316,8 @@ def main():
         else make_path.stem})
 
     run_make_file(make_path, cache_make)
-    phase_map = PhaseMap(WorkingSet.main_phase)
     resolve_project_names()
+    phase_map = PhaseMap(WorkingSet.main_phase)
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]

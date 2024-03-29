@@ -1,6 +1,6 @@
 ''' This is the compile phase of a multi-phase build.'''
 
-from ..action import Action, ResultCode
+from ..action import Action, ResultCode, FileData
 from .c_family_build import CFamilyBuildPhase
 
 class CompilePhase(CFamilyBuildPhase):
@@ -13,25 +13,46 @@ class CompilePhase(CFamilyBuildPhase):
         } | (options or {})
         super().__init__(options, dependencies)
 
+    def compute_file_operations(self):
+        ''' Implelent this in any phase that uses input files or generates output fies.'''
+        for src_file_data in self.get_dependency_output_files('source'):
+            obj_path = self.make_obj_path_from_src(src_file_data.path)
+            self.record_file_operation(
+                None,
+                FileData(obj_path.parent, 'dir', self),
+                'create directory')
+            self.record_file_operation(
+                src_file_data,
+                FileData(obj_path, 'object', self),
+                'compile')
+
+        for src_path in self.get_all_src_paths():
+            obj_path = self.make_obj_path_from_src(src_path)
+            self.record_file_operation(
+                None,
+                FileData(obj_path.parent, 'dir', self),
+                'create directory')
+            self.record_file_operation(
+                FileData(src_path, 'source', None),
+                FileData(obj_path, 'object', self),
+                'compile')
+
     def do_action_clean(self, action: Action):
         '''
         Cleans all object paths this phase builds.
         '''
-        res = ResultCode.SUCCEEDED
-        for _, obj_path in self.get_all_src_and_object_paths():
-            res = res if res.failed() else self.do_step_delete_file(obj_path, action)
-        return res
+        for obj in self.files.get_output_files('object'):
+            self.do_step_delete_file(obj.path, action)
 
     def do_action_build(self, action: Action):
         '''
-        Builds all object paths.
+        Builds all objects.
         '''
         prefix = self.make_build_command_prefix()
         args = self.make_compile_arguments()
 
-        res = ResultCode.SUCCEEDED
-        for src_path, obj_path in self.get_all_src_and_object_paths():
-            res = res if res.failed() else self.do_step_create_directory(obj_path.parent, action)
-            res = res if res.failed() else self.do_step_compile_src_to_object(
-                prefix, args, src_path, obj_path, action)
-        return res
+        for direc in list(dict.fromkeys(self.files.get_output_files('dir'))):
+            self.do_step_create_directory(direc, action)
+
+        for src, obj in zip(self.files.get_operations('compile')):
+            self.do_step_compile_src_to_object(prefix, args, src.path, obj.path, action)
