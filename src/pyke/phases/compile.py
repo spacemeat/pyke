@@ -42,7 +42,7 @@ class CompilePhase(CFamilyBuildPhase):
         Cleans all object paths this phase builds.
         '''
         for obj in self.files.get_output_files('object'):
-            self.do_step_delete_file(obj.path, action)
+            self.do_step_delete_file(action, None, obj.path)
 
     def do_action_build(self, action: Action):
         '''
@@ -51,8 +51,10 @@ class CompilePhase(CFamilyBuildPhase):
         prefix = self.make_build_command_prefix()
         args = self.make_compile_arguments()
 
+        dirs = {}
         for direc in list(dict.fromkeys(self.files.get_output_files('dir'))):
-            self.do_step_create_directory(direc, action)
+            dirs[direc] = self.do_step_create_directory(action, None, direc)
 
         for src, obj in zip(self.files.get_operations('compile')):
-            self.do_step_compile_src_to_object(prefix, args, src.path, obj.path, action)
+            self.do_step_compile_src_to_object(action, dirs[obj.path],
+                                               prefix, args, src.path, obj.path)

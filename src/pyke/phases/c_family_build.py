@@ -2,11 +2,14 @@
 
 from functools import partial
 from pathlib import Path
+from typing import TypeAlias
 
 from ..action import Action, Step, Result, ResultCode
 from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError,
                          input_path_is_newer, do_shell_command)
 from .phase import Phase
+
+Steps: TypeAlias = list[Step] | Step | None
 
 
 class CFamilyBuildPhase(Phase):
@@ -59,6 +62,10 @@ class CFamilyBuildPhase(Phase):
             'src_anchor': '{project_anchor}/{src_dir}',
             'sources': [],
 
+            'prebuilt_obj_dir': 'prebuilt_obj',
+            'prebuilt_obj_anchor': '{project_anchor}/{prebuilt_obj_dir}',
+            'prebuilt_objs': [],
+
             'build_dir': 'build',
             'build_detail': '{kind}.{toolkit}',
             'build_anchor': '{gen_anchor}/{build_dir}',
@@ -107,6 +114,12 @@ class CFamilyBuildPhase(Phase):
         '''
         return Path(f"{self.opt_str('src_anchor')}/{src}")
 
+    def make_prebuilt_obj_path(self, prebuilt_obj):
+        '''
+        Make a full path to a prebuilt object file from options.
+        '''
+        return Path(f"{self.opt_str('prebuilt_obj_anchor')}/{prebuilt_obj}")
+
     def make_obj_path_from_src(self, src):
         '''
         Makes the full object path from a single source by index.
@@ -119,6 +132,12 @@ class CFamilyBuildPhase(Phase):
         Generate te full path for each source file.
         '''
         return [self.make_src_path(src) for src in self.opt_list('sources')]
+
+    def get_all_prebuilt_obj_paths(self):
+        '''
+        Generate te full path for each prebuilt object file.
+        '''
+        return [self.make_prebuilt_obj_path(src) for src in self.opt_list('prebuilt_objs')]
 
     def get_all_object_paths(self):
         '''
@@ -288,7 +307,7 @@ class CFamilyBuildPhase(Phase):
             'posix_threads': self.opt('posix_threads'),
         }
 
-    def do_step_delete_file(self, path: Path, action: Action):
+    def do_step_delete_file(self, action: Action, depends_on: Steps, path: Path) -> Step:
         '''
         Perfoems a file deletion operation as an action step.
         '''
@@ -308,10 +327,12 @@ class CFamilyBuildPhase(Phase):
             return Result(step_result, step_notes)
 
         cmd = self.make_cmd_delete_file(path)
-        action.set_step(Step('delete file', [path], [], cmd,
-                             partial(act, cmd=cmd, path=path)))
+        step = Step('delete file', depends_on, [path], [], cmd,
+                             partial(act, cmd=cmd, path=path))
+        action.set_step(step)
+        return step
 
-    def do_step_delete_directory(self, direc: Path, action: Action):
+    def do_step_delete_directory(self, action: Action, depends_on: Steps, direc: Path) -> Step:
         '''
         Perfoems a file deletion operation as an action step.
         '''
@@ -331,10 +352,12 @@ class CFamilyBuildPhase(Phase):
             return Result(step_result, step_notes)
 
         cmd = f'rm -r {direc}'
-        action.set_step(Step('delete directory', [direc], [], cmd,
-                             partial(act, cmd=cmd, direc=direc)))
+        step = Step('delete directory', depends_on, [direc], [], cmd,
+                             partial(act, cmd=cmd, direc=direc))
+        action.set_step(step)
+        return step
 
-    def do_step_create_directory(self, new_dir, action):
+    def do_step_create_directory(self, action: Action, depends_on: Steps, new_dir: Path) -> Step:
         '''
         Performs a directory creation operation as an action step.
         '''
@@ -354,10 +377,13 @@ class CFamilyBuildPhase(Phase):
             return Result(step_result, step_notes)
 
         cmd = f'mkdir -p {new_dir}'
-        action.set_step(Step('create directory', [], [new_dir], cmd,
-                             partial(act, cmd=cmd, new_dir=new_dir)))
+        step = Step('create directory', depends_on, [], [new_dir], cmd,
+                             partial(act, cmd=cmd, new_dir=new_dir))
+        action.set_step(step)
+        return step
 
-    def do_step_compile_src_to_object(self, prefix, args, src_path, obj_path, action):
+    def do_step_compile_src_to_object(self, action: Action, depends_on: Steps, prefix: str, args: list[str],
+                                      src_path: Path, obj_path: Path) -> Step:
         '''
         Perform a C or C++ source compile operation as an action step.
         '''
@@ -383,10 +409,13 @@ class CFamilyBuildPhase(Phase):
 
         cmd = (f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} '
                f'{src_path}{" -pthread" if args["posix_threads"] else ""}')
-        action.set_step(Step('compile', [src_path], [obj_path], cmd,
-                             partial(act, src_path, obj_path)))
+        step = Step('compile', depends_on, [src_path], [obj_path], cmd,
+                             partial(act, src_path, obj_path))
+        action.set_step(step)
+        return step
 
-    def do_step_archive_objects_to_library(self, prefix, archive_path, object_paths, action):
+    def do_step_archive_objects_to_library(self, action: Action, depends_on: Steps, prefix: str, archive_path: Path,
+                                           object_paths: list[Path]) -> Step:
         '''
         Perform an archive operaton on built object files.
         '''
@@ -421,10 +450,13 @@ class CFamilyBuildPhase(Phase):
 
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
         cmd = f'{prefix}{archive_path} {object_paths_cmd}'
-        action.set_step(Step('archive', object_paths, [archive_path], cmd,
-                             partial(act, object_paths, archive_path)))
+        step = Step('archive', depends_on, object_paths, [archive_path], cmd,
+                    partial(act, object_paths, archive_path))
+        action.set_step(step)
+        return step
 
-    def do_step_link_objects_to_exe(self, prefix, args, exe_path, object_paths, action):
+    def do_step_link_objects_to_exe(self, action: Action, depends_on: Steps, prefix: str, args: dict,
+                                    exe_path: Path, object_paths: list[Path]) -> Step:
         '''
         Perform a link to executable operation as an action step.
         '''
@@ -461,10 +493,13 @@ class CFamilyBuildPhase(Phase):
         cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
                f'{" -pthread" if args["posix_threads"] else ""}{args["lib_dirs"]}'
                f'{args["pkg_libs_bits"]} {args["static_libs"]}{args["shared_libs"]}')
-        action.set_step(Step('link', object_paths, [exe_path], cmd,
-                             partial(act, object_paths, exe_path)))
+        step = Step('link', depends_on, object_paths, [exe_path], cmd,
+                    partial(act, object_paths, exe_path))
+        action.set_step(step)
+        return step
 
-    def do_step_compile_srcs_to_exe(self, prefix, args, src_paths, exe_path, action):
+    def do_step_compile_srcs_to_exe(self, action: Action, depends_on: Steps, prefix: str,
+                                    args: dict, src_paths: list[Path], exe_path: Path) -> Step:
         '''
         Perform a multiple C or C++ source compile to executable operation as an action step.
         '''
@@ -502,12 +537,15 @@ class CFamilyBuildPhase(Phase):
                f'{" -pthread" if args["posix_threads"] else ""}'
                f'{src_paths_cmd}{args["lib_dirs"]} {args["pkg_libs_bits"]} '
                f'{args["static_libs"]}{args["shared_libs"]}')
-        action.set_step(Step('compile and link', src_paths, [exe_path], cmd,
-                             partial(act, src_paths, exe_path)))
+        step = Step('compile and link', depends_on, src_paths, [exe_path], cmd,
+                    partial(act, src_paths, exe_path))
+        action.set_step(step)
+        return step
 
-    def do_action_clean_build_directory(self, action: Action):
+    def do_action_clean_build_directory(self, action: Action, depends_on: Steps) -> Step:
         '''
         Wipes out the build directory.
         '''
-        return self.do_step_delete_directory(Path(self.opt_str("build_anchor")), action)
+        return self.do_step_delete_directory(action, depends_on,
+                                             Path(self.opt_str("build_anchor")))
 

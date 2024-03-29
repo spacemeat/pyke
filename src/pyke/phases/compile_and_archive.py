@@ -44,11 +44,15 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
             FileData(Path(self.opt_str('archive_path')).parent, 'dir', self),
             'create directory')
 
+        prebuilt_objs = [FileData(prebuilt_obj_path, 'object', None)
+                         for prebuilt_obj_path in self.get_all_prebuilt_obj_paths()]
+
         objs = self.get_dependency_output_files('object')
         objs.extend(self.files.get_output_files('object'))
+        objs.extend(prebuilt_objs)
         self.record_file_operation(
             objs,
-            FileData(Path(self.opt_str('archive_path')), 'archive', self),
+            FileData(Path(self.opt_str('archive_path')), 'static_library', self),
             'archive')
 
     def do_action_clean(self, action: Action):
@@ -58,9 +62,9 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
         archive_path = self.get_archive_path()
 
         for obj in self.files.get_output_files('object'):
-            self.do_step_delete_file(obj.path, action)
+            self.do_step_delete_file(action, None, obj.path)
 
-        self.do_step_delete_file(archive_path, action)
+        self.do_step_delete_file(action, None, archive_path)
 
     def do_action_build(self, action: Action):
         '''
@@ -71,15 +75,17 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
         prefix = self.make_build_command_prefix()
         c_args = self.make_compile_arguments()
 
+        dirs = {}
         for direc in list(dict.fromkeys(self.files.get_output_files('dir'))):
-            self.do_step_create_directory(direc, action)
+            dirs[direc] = self.do_step_create_directory(action, None, direc)
 
+        compile_steps = []
         for src, obj in zip(self.files.get_operations('compile')):
-            self.do_step_compile_src_to_object(prefix, c_args, src.path, obj.path, action)
+            compile_steps.append(self.do_step_compile_src_to_object(action, dirs[obj.path],
+                                    prefix, c_args, src.path, obj.path))
 
         prefix = self.make_archive_command_prefix()
         object_paths = list(obj for obj in self.files.get_output_files('object'))
 
-        self.do_step_create_directory(archive_path.parent, action)
-        self.do_step_archive_objects_to_library(
-            prefix, archive_path, object_paths, action)
+        self.do_step_archive_objects_to_library(action, [*compile_steps, dirs[archive_path]],
+            prefix, archive_path, object_paths)

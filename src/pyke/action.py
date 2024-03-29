@@ -4,6 +4,7 @@ from enum import Enum
 from os.path import relpath
 from pathlib import Path
 import sys
+from typing import TypeAlias
 
 from .utilities import ensure_list, set_color as c, WorkingSet, InvalidActionError
 
@@ -58,6 +59,11 @@ class PhaseFiles:
         return [(op.input_files, op.output_files) for op in self.operations
                                                   if op.step_name == step_name]
 
+    def get_input_files(self, file_type):
+        ''' Returns all recorded outputs of a given type.'''
+        return [file_data for op in self.operations
+                          for file_data in op.input_files if file_data.file_type == file_type]
+
     def get_output_files(self, file_type):
         ''' Returns all recorded outputs of a given type.'''
         return [file_data for op in self.operations
@@ -71,11 +77,15 @@ class StepCommand(StepFunction):
     def __init__(self, command: str):
         self.command = command
 
+Steps: TypeAlias = list['Step'] | 'Step' | None
+
+
 class Step:
     ''' Represents a single step in a phase's action. These are dynamically added as needed.'''
-    def __init__(self, name: str, inputs: list[FileData],
+    def __init__(self, name: str, depends_on: Steps, inputs: list[FileData],
                  outputs: list[FileData], act_fn: callable, command: str = ''):
         self.name = name
+        self.depends_on = depends_on
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.act_fn = act_fn

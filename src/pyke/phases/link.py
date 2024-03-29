@@ -1,6 +1,8 @@
 ''' This is the link phase in a multiphase buld.'''
 
-from ..action import Action
+from pathlib import Path
+
+from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
 
 class LinkPhase(CFamilyBuildPhase):
@@ -14,32 +16,46 @@ class LinkPhase(CFamilyBuildPhase):
         } | (options or {})
         super().__init__(options, dependencies)
 
-    def get_all_object_paths(self):
-        '''
-        Gets the object file paths from each dependency.
-        '''
-        for dep in self.dependencies:
-            yield from dep.get_all_object_paths()
+    def compute_file_operations(self):
+        ''' Implelent this in any phase that uses input files or generates output fies.'''
+
+        exe_path = Path(self.opt_str('exe_path'))
+
+        self.record_file_operation(
+            None,
+            FileData(exe_path.parent, 'dir', self),
+            'create directory')
+
+        prebuilt_objs = [FileData(prebuilt_obj_path, 'object', None)
+                         for prebuilt_obj_path in self.get_all_prebuilt_obj_paths()]
+
+        objs = self.get_dependency_output_files('object')
+        objs.extend(prebuilt_objs)
+        self.record_file_operation(
+            objs,
+            FileData(exe_path, 'executable', self),
+            'link')
 
     def do_action_clean(self, action: Action):
         '''
         Cleans all object paths this phase builds.
         '''
         exe_path = self.get_exe_path()
-        return self.do_step_delete_file(exe_path, action)
+        return self.do_step_delete_file(action, None, exe_path)
 
     def do_action_build(self, action: Action):
         '''
         Builds all object paths.
         '''
-        object_paths = self.get_all_object_paths()
         exe_path = self.get_exe_path()
 
         prefix = self.make_build_command_prefix()
         args = self.make_link_arguments()
 
-        res = self.do_step_create_directory(exe_path.parent, action)
-        res = res if res.failed() else self.do_step_link_objects_to_exe(
-            prefix, args, exe_path, object_paths, action)
+        object_paths = [file_data.path for op in self.files.get_operations('link')
+                                       for file_data in op.input_files]
 
-        return res
+        step = self.do_step_create_directory(action, None, exe_path.parent)
+
+        self.do_step_link_objects_to_exe(action, step,
+            prefix, args, exe_path, object_paths)
