@@ -5,6 +5,7 @@ from os.path import relpath
 from pathlib import Path
 import sys
 from typing import TypeAlias
+from typing_extensions import Self
 
 from .utilities import ensure_list, set_color as c, WorkingSet, InvalidActionError
 
@@ -42,8 +43,8 @@ class FileData:
 class FileOperation:
     def __init__(self, input_files: list[FileData] | FileData | None,
                  output_files: list[FileData] | FileData | None, step_name: str):
-        self.input_files = ensure_list(input_files)
-        self.output_files = ensure_list(output_files)
+        self.input_files = ensure_list(input_files) if input_files is not None else []
+        self.output_files = ensure_list(output_files) if output_files is not None else []
         self.step_name = step_name
 
 class PhaseFiles:
@@ -56,8 +57,7 @@ class PhaseFiles:
 
     def get_operations(self, step_name):
         ''' Returns all recorded inputs and outputs for a gven operation type.'''
-        return [(op.input_files, op.output_files) for op in self.operations
-                                                  if op.step_name == step_name]
+        return [op for op in self.operations if op.step_name == step_name]
 
     def get_input_files(self, file_type):
         ''' Returns all recorded outputs of a given type.'''
@@ -77,19 +77,32 @@ class StepCommand(StepFunction):
     def __init__(self, command: str):
         self.command = command
 
-Steps: TypeAlias = list['Step'] | 'Step' | None
+#Steps: TypeAlias = list['Step'] | 'Step' | None
 
 
 class Step:
     ''' Represents a single step in a phase's action. These are dynamically added as needed.'''
-    def __init__(self, name: str, depends_on: Steps, inputs: list[FileData],
+    def __init__(self, name: str, depends_on: list[Self] | Self | None, inputs: list[FileData],
                  outputs: list[FileData], act_fn: callable, command: str = ''):
         self.name = name
-        self.depends_on = depends_on
+        self.depends_on = ensure_list(depends_on) if depends_on is not None else []
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.act_fn = act_fn
         self.command = command
+        self.result = None
+
+    def run(self):
+        ''' Runs the act function if its depend_on steps all succeeded.'''
+        final_res = ResultCode.SUCCEEDED
+        for step in self.depends_on:
+            res = step.result.code
+            if res.failed() and final_res.succeeded():
+                final_res = res
+        if final_res.failed():
+            return final_res
+        self.result = self.act_fn()
+        return self.result.code
 
 class Result:
     ''' Represents the results of a Step.'''
@@ -126,13 +139,13 @@ def report_error(action: str, phase: str, phase_type: str, err: str):
     report_phase(action, phase, phase_type)
     print (f'\n{err}')
 
-def report_action_start(action: str, phase: str, phase_type: str):
+def report_action_phase_start(action: str, phase: str, phase_type: str):
     ''' Reports on the start of an action. '''
     if WorkingSet.verbosity > 0:
         report_phase(action, phase, phase_type)
         print ('')
 
-def report_action_end(action: str, phase: str, phase_type: str, result: ResultCode):
+def report_action_phase_end(action: str, phase: str, phase_type: str, result: ResultCode):
     ''' Reports on the start of an action. '''
     if WorkingSet.verbosity > 1 and result.succeeded():
         report_phase(action, phase, phase_type)
@@ -150,8 +163,9 @@ def report_step_start(step: Step):
             print (f'{c("step_lt")}{step.name}{c("step_dkt")}: {inputs}'
                    f'{c("step_dk")} -> {c("step_lt")}{outputs}{c("off")}', end='')
 
-def report_step_end(step: Step, result: Result):
+def report_step_end(step: Step):
     ''' Reports on the end of an action step. '''
+    result = step.result
     if result.code != ResultCode.ALREADY_UP_TO_DATE:
         if WorkingSet.verbosity > 1:
             if len(step.command) > 0:
@@ -164,25 +178,6 @@ def report_step_end(step: Step, result: Result):
             print (f'{c("step_dk")} ({c("fail")}{result.code.name}{c("step_dk")}){c("off")}')
         print (f'{result.notes}', file=sys.stderr)
 
-
-class StepAction:
-    ''' Records an action's step and results within a phase.'''
-    def __init__(self, step: Step):
-        self.step = step
-        self.result: Result = Result(ResultCode.NO_ACTION, None)
-        report_step_start(self.step)
-
-    def __repr__(self):
-        return f'      {self.step.name} ({self.result[0]})'
-
-    def get_result(self):
-        ''' Gets the result code.'''
-        return self.result.code
-
-    def set_result(self, result: Result):
-        ''' Sets the result of a step.'''
-        self.result = result
-        report_step_end(self.step, self.result)
 
 class PhaseAction:
     ''' Records an action's phases within a project phase.'''
@@ -198,22 +193,32 @@ class PhaseAction:
 
     def get_result(self):
         ''' Gets the result code.'''
+        res = ResultCode.NOT_YET_RUN
         for pv in self.steps:
-            if not (res := pv.get_result()).succeeded():
-                return res
-        return ResultCode.NOT_YET_RUN
+            res = pv.get_result()
+            if not res.succeeded():
+                break
+        return res if res.failed() else ResultCode.SUCCEEDED
 
     def set_step(self, step: Step):
         ''' Begins recording a step.'''
-        self.current_step = step.name
-        self.steps.append(StepAction(step))
+        self.steps.append(step)
 
-    def set_step_result(self, result: Result):
-        ''' Sets the result of a step.'''
-        if self.current_step and self.steps[-1].step.name == self.current_step:
-            self.steps[-1].set_result(result)
-        else:
-            raise InvalidActionError('No step set.')
+    def run(self, action_name: str):
+        ''' Run all the steps recorded for this phase.'''
+        must_report_phase = len(self.steps) > 0
+        if must_report_phase:
+            report_action_phase_start(action_name, self.name, type(self).__name__)
+        final_res = ResultCode.SUCCEEDED
+        for step in self.steps:
+            report_step_start(step)
+            res = step.run()
+            report_step_end(step)
+            if res.failed() and final_res.succeeded():
+                final_res = res
+        if must_report_phase:
+            report_action_phase_end(action_name, self.name, type(self).__name__, final_res)
+        return final_res
 
 class ProjectAction:
     ''' Records an action's project phases.'''
@@ -229,10 +234,12 @@ class ProjectAction:
 
     def get_result(self):
         ''' Gets the result code.'''
-        for _, pv in self.phases.items():
-            if not (res := pv.get_result()).succeeded():
-                return res
-        return ResultCode.NOT_YET_RUN
+        res = ResultCode.NOT_YET_RUN
+        for pv in self.phases:
+            res = pv.get_result()
+            if not res.succeeded():
+                break
+        return res if res.failed() else ResultCode.SUCCEEDED
 
     def set_phase(self, phase_name: str):
         ''' Begins recording a non-project phase.'''
@@ -240,7 +247,7 @@ class ProjectAction:
         if self.current_phase not in self.phases:
             self.phases[self.current_phase] = PhaseAction(phase_name)
             return ResultCode.NOT_YET_RUN
-        return self.phases[self.current_phase].get_result()
+        return ResultCode.ALREADY_RUN
 
     def set_step(self, step: Step):
         ''' Begins recording a step.'''
@@ -248,12 +255,14 @@ class ProjectAction:
             return self.phases[self.current_phase].set_step(step)
         raise InvalidActionError('No phase set.')
 
-    def set_step_result(self, result: Result):
-        ''' Sets the result of a step.'''
-        if self.current_phase:
-            self.phases[self.current_phase].set_step_result(result)
-        else:
-            raise InvalidActionError('No project set.')
+    def run(self, action_name: str):
+        ''' Run all the steps recorded for this project.'''
+        final_res = ResultCode.SUCCEEDED
+        for _, phase in self.phases.items():
+            res = phase.run(action_name)
+            if res.failed() and final_res.succeeded():
+                final_res = res
+        return final_res
 
 class Action:
     ''' Records an action's flow through phases and results.'''
@@ -269,10 +278,12 @@ class Action:
 
     def get_result(self):
         ''' Gets the result code.'''
-        for _, pv in self.projects.items():
-            if not (res := pv.get_result()).succeeded():
-                return res
-        return ResultCode.NOT_YET_RUN
+        res = ResultCode.NOT_YET_RUN
+        for pv in self.projects:
+            res = pv.get_result()
+            if not res.succeeded():
+                break
+        return res if res.failed() else ResultCode.SUCCEEDED
 
     def set_project(self, project_name: str):
         ''' Begins recording a project phase.'''
@@ -280,7 +291,7 @@ class Action:
         if self.current_project not in self.projects:
             self.projects[self.current_project] = ProjectAction(project_name)
             return ResultCode.NOT_YET_RUN
-        return self.projects[self.current_project].get_result()
+        return ResultCode.ALREADY_RUN
 
     def set_phase(self, phase_name: str):
         ''' Begins recording a non-project phase.'''
@@ -294,9 +305,11 @@ class Action:
             return self.projects[self.current_project].set_step(step)
         raise InvalidActionError('No project set.')
 
-    def set_step_result(self, result: Result):
-        ''' Sets the result of a step.'''
-        if self.current_project:
-            self.projects[self.current_project].set_step_result(result)
-        else:
-            raise InvalidActionError('No project set.')
+    def run(self):
+        ''' Run all the steps recorded for this action.'''
+        final_res = ResultCode.SUCCEEDED
+        for _, project in self.projects.items():
+            res = project.run(self.name)
+            if res.failed() and final_res.succeeded():
+                final_res = res
+        return final_res

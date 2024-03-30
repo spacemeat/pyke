@@ -327,8 +327,8 @@ class CFamilyBuildPhase(Phase):
             return Result(step_result, step_notes)
 
         cmd = self.make_cmd_delete_file(path)
-        step = Step('delete file', depends_on, [path], [], cmd,
-                             partial(act, cmd=cmd, path=path))
+        step = Step('delete file', depends_on, [path], [],
+                             partial(act, cmd=cmd, path=path), cmd)
         action.set_step(step)
         return step
 
@@ -352,8 +352,8 @@ class CFamilyBuildPhase(Phase):
             return Result(step_result, step_notes)
 
         cmd = f'rm -r {direc}'
-        step = Step('delete directory', depends_on, [direc], [], cmd,
-                             partial(act, cmd=cmd, direc=direc))
+        step = Step('delete directory', depends_on, [direc], [],
+                             partial(act, cmd=cmd, direc=direc), cmd)
         action.set_step(step)
         return step
 
@@ -377,13 +377,13 @@ class CFamilyBuildPhase(Phase):
             return Result(step_result, step_notes)
 
         cmd = f'mkdir -p {new_dir}'
-        step = Step('create directory', depends_on, [], [new_dir], cmd,
-                             partial(act, cmd=cmd, new_dir=new_dir))
+        step = Step('create directory', depends_on, [], [new_dir],
+                             partial(act, cmd=cmd, new_dir=new_dir), cmd)
         action.set_step(step)
         return step
 
-    def do_step_compile_src_to_object(self, action: Action, depends_on: Steps, prefix: str, args: list[str],
-                                      src_path: Path, obj_path: Path) -> Step:
+    def do_step_compile_src_to_object(self, action: Action, depends_on: Steps, prefix: str,
+                                      args: list[str], src_path: Path, obj_path: Path) -> Step:
         '''
         Perform a C or C++ source compile operation as an action step.
         '''
@@ -409,8 +409,8 @@ class CFamilyBuildPhase(Phase):
 
         cmd = (f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} '
                f'{src_path}{" -pthread" if args["posix_threads"] else ""}')
-        step = Step('compile', depends_on, [src_path], [obj_path], cmd,
-                             partial(act, src_path, obj_path))
+        step = Step('compile', depends_on, [src_path], [obj_path],
+                             partial(act, cmd=cmd, src_path=src_path, obj_path=obj_path), cmd)
         action.set_step(step)
         return step
 
@@ -450,8 +450,8 @@ class CFamilyBuildPhase(Phase):
 
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
         cmd = f'{prefix}{archive_path} {object_paths_cmd}'
-        step = Step('archive', depends_on, object_paths, [archive_path], cmd,
-                    partial(act, object_paths, archive_path))
+        step = Step('archive', depends_on, object_paths, [archive_path],
+                    partial(act, cmd, object_paths, archive_path), cmd)
         action.set_step(step)
         return step
 
@@ -493,8 +493,8 @@ class CFamilyBuildPhase(Phase):
         cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
                f'{" -pthread" if args["posix_threads"] else ""}{args["lib_dirs"]}'
                f'{args["pkg_libs_bits"]} {args["static_libs"]}{args["shared_libs"]}')
-        step = Step('link', depends_on, object_paths, [exe_path], cmd,
-                    partial(act, object_paths, exe_path))
+        step = Step('link', depends_on, object_paths, [exe_path],
+                    partial(act, cmd, object_paths, exe_path), cmd)
         action.set_step(step)
         return step
 
@@ -537,8 +537,8 @@ class CFamilyBuildPhase(Phase):
                f'{" -pthread" if args["posix_threads"] else ""}'
                f'{src_paths_cmd}{args["lib_dirs"]} {args["pkg_libs_bits"]} '
                f'{args["static_libs"]}{args["shared_libs"]}')
-        step = Step('compile and link', depends_on, src_paths, [exe_path], cmd,
-                    partial(act, src_paths, exe_path))
+        step = Step('compile and link', depends_on, src_paths, [exe_path],
+                    partial(act, cmd, src_paths, exe_path), cmd)
         action.set_step(step)
         return step
 
@@ -548,4 +548,3 @@ class CFamilyBuildPhase(Phase):
         '''
         return self.do_step_delete_directory(action, depends_on,
                                              Path(self.opt_str("build_anchor")))
-

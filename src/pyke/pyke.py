@@ -318,6 +318,9 @@ def main():
     run_make_file(make_path, cache_make)
     resolve_project_names()
     phase_map = PhaseMap(WorkingSet.main_phase)
+    WorkingSet.main_phase.compute_file_operations_in_dependencies()
+
+    actions = []
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]
@@ -374,12 +377,23 @@ def main():
             else:
                 affected_phases = [WorkingSet.main_phase]
 
+            '''
+            if we've done any options:
+                run any previously recorded actions
+                actions = []
+                update the file operations everywhere'''
+
             action = Action(arg)
+            actions.append(action)
             for active_phase in affected_phases:
-                if not active_phase.do(action):
-                    return ReturnCode.ACTION_FAILED.value
+                active_phase.do(action)
 
         idx += 1
+
+    for action in actions:
+        res = action.run()
+        if res.failed():
+            return res
 
     return ReturnCode.SUCCEEDED.value
 

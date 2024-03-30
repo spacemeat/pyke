@@ -52,9 +52,11 @@ class CompilePhase(CFamilyBuildPhase):
         args = self.make_compile_arguments()
 
         dirs = {}
-        for direc in list(dict.fromkeys(self.files.get_output_files('dir'))):
+        all_dirs = [fd.path for fd in self.files.get_output_files('dir')]
+        for direc in list(dict.fromkeys(all_dirs)):
             dirs[direc] = self.do_step_create_directory(action, None, direc)
 
-        for src, obj in zip(self.files.get_operations('compile')):
-            self.do_step_compile_src_to_object(action, dirs[obj.path],
-                                               prefix, args, src.path, obj.path)
+        for file_op in self.files.get_operations('compile'):
+            for src, obj in zip(file_op.input_files, file_op.output_files):
+                self.do_step_compile_src_to_object(
+                    action, dirs[obj.path.parent], prefix, args, src.path, obj.path)

@@ -97,21 +97,24 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         l_args = self.make_link_arguments()
 
         dirs = {}
-        for direc in list(dict.fromkeys(self.files.get_output_files('dir'))):
-            dirs[direc] = self.do_step_create_directory(direc, None, action)
+        all_dirs = [fd.path for fd in self.files.get_output_files('dir')]
+        for direc in list(dict.fromkeys(all_dirs)):
+            dirs[direc] = self.do_step_create_directory(action, None, direc)
 
         if self.opt_bool('incremental_build'):
             compile_steps = []
-            for src, obj in zip(self.files.get_operations('compile')):
-                compile_steps.append(self.do_step_compile_src_to_object(action, dirs[obj.path],
-                                prefix, c_args, src.path, obj.path))
+            for file_op in self.files.get_operations('compile'):
+                for src, obj in zip(file_op.input_files, file_op.output_files):
+                    compile_steps.append(
+                        self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
+                            prefix, c_args, src.path, obj.path))
 
-            object_paths = list(obj for obj in self.files.get_output_files('object'))
+            object_paths = list(obj.path for obj in self.files.get_output_files('object'))
 
-            self.do_step_link_objects_to_exe(action, [*compile_steps, dirs[exe_path]],
+            self.do_step_link_objects_to_exe(action, [*compile_steps, dirs[exe_path.parent]],
                 prefix, l_args, exe_path, object_paths)
         else:
-            src_paths = self.files.get_input_files('source')
+            src_paths = [src.path for src in self.files.get_input_files('source')]
 
-            self.do_step_compile_srcs_to_exe(action, dirs[exe_path],
+            self.do_step_compile_srcs_to_exe(action, dirs[exe_path.parent],
                 prefix, c_args | l_args, src_paths, exe_path)

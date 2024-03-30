@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Type, TypeVar, Iterable
 from typing_extensions import Self
 
-from ..action import (Action, ResultCode, report_action_start, report_action_end,
+from ..action import (Action, ResultCode,# report_action_start, report_action_end,
                       FileData, FileOperation, PhaseFiles)
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, set_color as c,
@@ -113,6 +113,14 @@ class Phase:
         return [file_data
             for dep in deps
             for file_data in dep.files.get_output_files(file_type)]
+
+    def compute_file_operations_in_dependencies(self):
+        ''' Compute file operations dwon the dependency hierarchy.'''
+        for dep in list(self.enumerate_dependencies()):
+            dep.compute_file_operations()
+
+    def compute_file_oerations(self):
+        ''' Subclasses must implement this to record operations.'''
 
     @property
     def name(self):
@@ -312,7 +320,7 @@ class Phase:
         '''
         return f'rm {str(path)}'
 
-    def do(self, action: Action) -> ResultCode:
+    def do(self, action: Action):
         '''
         Performs an action, such as 'build' or 'run'. 
 
@@ -325,48 +333,33 @@ class Phase:
         internally.
         '''
 
-        # set this on every do(), so each phase still controls its own verbosity, colors, etc
+        for dep in self.dependencies:
+            if dep.is_project_phase:
+                dep.do(action)
+
+        if self.is_project_phase:
+            if action.set_project(self.name) != ResultCode.NOT_YET_RUN:
+                return
+
+        for dep in self.dependencies:
+            if not dep.is_project_phase:
+                dep.do(action)
+
+        if not self.is_project_phase:
+            if action.set_phase(self.name) != ResultCode.NOT_YET_RUN:
+                return
+
         WorkingSet.report_verbosity = self.opt_int('report_verbosity')
         WorkingSet.verbosity = self.opt_int('verbosity')
         if cols := self.opt('colors'):
             if isinstance(cols, dict):
                 WorkingSet.colors = cols
 
-        dep_projects_res = ResultCode.SUCCEEDED
-        for dep in self.dependencies:
-            if dep.is_project_phase:
-                if (res := dep.do(action)).failed():
-                    dep_projects_res = res
-
-        if dep_projects_res.failed():
-            return dep_projects_res
-
-        if self.is_project_phase:
-            if (res := action.set_project(self.name)) != ResultCode.NOT_YET_RUN:
-                return res
-
-        dep_phase_res = ResultCode.SUCCEEDED
-        for dep in self.dependencies:
-            if not dep.is_project_phase:
-                if (res := dep.do(action)).failed():
-                    dep_phase_res = res
-
-        if dep_phase_res.failed():
-            return res
-
-        if not self.is_project_phase:
-            if (res := action.set_phase(self.name)) != ResultCode.NOT_YET_RUN:
-                return res
-
-        phase_res = ResultCode.NO_ACTION
         action_method = getattr(self, 'do_action_' + action.name, None)
         if action_method:
-            report_action_start(action.name, self.name, type(self).__name__)
-            phase_res = action_method(action)
-            report_action_end(action.name, self.name, type(self).__name__,
-                              phase_res)
-
-        return phase_res
+            #report_action_start(action.name, self.name, type(self).__name__)
+            action_method(action)
+            #report_action_end(action.name, self.name, type(self).__name__)
 
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
