@@ -3,14 +3,17 @@ This is the base Phase class for all other Phase types. All the base functionali
 is contained herein.
 '''
 
+from os.path import relpath
 from pathlib import Path
+import sys
 from typing import Type, TypeVar, Iterable
 from typing_extensions import Self
 
-from ..action import (Action, ResultCode,# report_action_start, report_action_end,
+from ..action import (Action, ResultCode, Step,
                       FileData, FileOperation, PhaseFiles)
+from .. import ansi as a
 from ..options import Options, OptionOp
-from ..utilities import (ensure_list, WorkingSet, set_color as c,
+from ..utilities import (ensure_list, WorkingSet, #set_color as c,
                          CircularDependencyError, ProjectPhaseDependencyError)
 
 T = TypeVar('T')
@@ -38,6 +41,7 @@ class Phase:
         self.options |= {
             'name': '',
             'report_verbosity': 2,
+            'report_relative_paths': True,
             'verbosity': 0,
             'project_anchor': WorkingSet.makefile_dir,
             'gen_anchor': WorkingSet.makefile_dir,
@@ -100,7 +104,7 @@ class Phase:
         for dep in dependencies:
             self.set_dependency(dep)
 
-        self.files = PhaseFiles()
+        self.files = None
 
     def record_file_operation(self, input_files: list[FileData] | FileData | None,
                               output_files: list[FileData] | FileData | None, step_name: str):
@@ -117,6 +121,7 @@ class Phase:
     def compute_file_operations_in_dependencies(self):
         ''' Compute file operations dwon the dependency hierarchy.'''
         for dep in list(self.enumerate_dependencies()):
+            dep.files = PhaseFiles()
             dep.compute_file_operations()
 
     def compute_file_oerations(self):
@@ -314,6 +319,26 @@ class Phase:
                     f'to phase {self.name}. Not cool.')
             self.dependencies.append(new_dep)
 
+    def c(self, color):
+        ''' Returns the ANSI color code for the specified thematic element.'''
+        #color_desc = WorkingSet.colors.get(color)
+        color_desc = self.opt_dict('colors')[color]
+        if color_desc is not None:
+            if color_desc.get('form') == 'rgb24':
+                fg = color_desc.get('fg')
+                bg = color_desc.get('bg')
+                return (f'{a.rgb_fg(*fg) if fg else ""}'
+                        f'{a.rgb_bg(*bg) if bg else ""}')
+            if color_desc.get('form') == 'named':
+                fg = color_desc.get('fg')
+                bg = color_desc.get('bg')
+                off = color_desc.get('off')
+                if isinstance(off, list):
+                    return f'{a.off}'
+                # TODO: The rest
+                return ''
+        return ''
+
     def make_cmd_delete_file(self, path: Path):
         '''
         Returns an appropriate command for deleting a file.
@@ -346,14 +371,14 @@ class Phase:
                 dep.do(action)
 
         if not self.is_project_phase:
-            if action.set_phase(self.name) != ResultCode.NOT_YET_RUN:
+            if action.set_phase(self) != ResultCode.NOT_YET_RUN:
                 return
 
-        WorkingSet.report_verbosity = self.opt_int('report_verbosity')
-        WorkingSet.verbosity = self.opt_int('verbosity')
-        if cols := self.opt('colors'):
-            if isinstance(cols, dict):
-                WorkingSet.colors = cols
+        #WorkingSet.report_verbosity = self.opt_int('report_verbosity')
+        #WorkingSet.verbosity = self.opt_int('verbosity')
+        #if cols := self.opt('colors'):
+        #    if isinstance(cols, dict):
+        #        WorkingSet.colors = cols
 
         action_method = getattr(self, 'do_action_' + action.name, None)
         if action_method:
@@ -361,18 +386,92 @@ class Phase:
             action_method(action)
             #report_action_end(action.name, self.name, type(self).__name__)
 
+    def color_path(self, path: Path | str):
+        ''' Returns a colorized and possibly CWD-relative version of a path. '''
+        if isinstance(path, Path):
+            path = str(path)
+        if self.opt_bool('report_relative_paths'):
+            path = relpath(path)
+        path = Path(path)
+        return f'{self.c("path_dk")}{path.parent}/{self.c("path_lt")}{path.name}{self.c("off")}'
+
+    def format_path_list(self, paths):
+        ''' Returns a colorized path or formatted list notation for a list of paths. '''
+        paths = ensure_list(paths)
+        if len(paths) == 0:
+            return ''
+        if len(paths) == 1:
+            return self.color_path(paths[0])
+        return f'{self.c("path_dk")}[{self.c("path_lt")}...{self.c("path_dk")}]{self.c("off")}'
+
+    def report_phase(self, action: str, phase: str, phase_type: str):
+        ''' Prints a phase summary. '''
+        print (f'{self.c("phase_dk")}action: {self.c("phase_lt")}{action}{self.c("phase_dk")} '
+               f'- phase: {self.c("phase_lt")}{phase}{self.c("phase_dk")} '
+               f'({self.c("phase_lt")}{phase_type}{self.c("phase_dk")}):{self.c("off")}', end = '')
+
+    def report_error(self, action: str, phase: str, phase_type: str, err: str):
+        ''' Print an error string to the console in nice, bright red. '''
+        self.report_phase(action, phase, phase_type)
+        print (f'\n{err}')
+
+    def report_action_phase_start(self, action: str, phase: str, phase_type: str):
+        ''' Reports on the start of an action. '''
+        if self.opt_int('verbosity') > 0:
+            self.report_phase(action, phase, phase_type)
+            print ('')
+
+    def report_action_phase_end(self, action: str, phase: str, phase_type: str, result: ResultCode):
+        ''' Reports on the start of an action. '''
+        verbosity = self.opt_int('verbosity')
+        if verbosity > 1 and result.succeeded():
+            self.report_phase(action, phase, phase_type)
+            print (f'{self.c("phase_dk")} ... {self.c("success")}succeeded{self.c("off")}')
+        elif verbosity > 0 and result.failed():
+            self.report_phase(action, phase, phase_type)
+            print (f'{self.c("phase_dk")} ... {self.c("fail")}failed{self.c("off")}')
+
+    def report_step_start(self, step: Step):
+        ''' Reports on the start of an action step. '''
+        if self.opt_int('verbosity') > 0:
+            inputs = self.format_path_list(list(step.inputs))
+            outputs = self.format_path_list(list(step.outputs))
+            if len(inputs) > 0 or len(outputs) > 0:
+                print (f'{self.c("step_lt")}{step.name}{self.c("step_dk")}: {inputs}'
+                       f'{self.c("step_dk")} -> {self.c("step_lt")}{outputs}{self.c("off")}',
+                       end='')
+
+    def report_step_end(self, step: Step):
+        ''' Reports on the end of an action step. '''
+        verbosity = self.opt_int('verbosity')
+        result = step.result
+        if result.code != ResultCode.ALREADY_UP_TO_DATE:
+            if verbosity > 1:
+                if len(step.command) > 0:
+                    print (f'\n{self.c("shell_cmd")}{step.command}{self.c("off")}', end='')
+        if result.code.value >= 0:
+            if verbosity > 0:
+                print (f'{self.c("step_dk")} ({self.c("success")}{result.code.name}'
+                       f'{self.c("step_dk")}){self.c("off")}')
+        elif result.code.value < 0:
+            if verbosity > 0:
+                print (f'{self.c("step_dk")} ({self.c("fail")}{result.code.name}'
+                       f'{self.c("step_dk")}){self.c("off")}')
+            print (f'{result.notes}', file=sys.stderr)
+
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
 
-    def do_action_report_options(self, action: Action) -> ResultCode:
+    def do_action_report_options(self, action: Action):
         '''
         This gives a small description of the phase.
         '''
         report = ''
-        if WorkingSet.report_verbosity >= 0:
+        report_verbosity = self.opt_int('report_verbosity')
+        if report_verbosity >= 0:
             report = f'phase: {self.name}'
 
-        if WorkingSet.report_verbosity >= 1:
+        if report_verbosity >= 1:
             opts_str = ''
             for k in self.options.keys():
                 vu = self.options.get(k, False)
@@ -382,25 +481,36 @@ class Phase:
 
                 indent = 0
                 opts_str = ''.join((opts_str,
-                                    f'{c("key")}{k}: '))
+                                    f'{self.c("key")}{k}: '))
                 last_replace_idx = len(vu) - next(i for i, e in enumerate(reversed(vu))
                     if e[1] == OptionOp.REPLACE) - 1
-                if WorkingSet.report_verbosity >= 2:
+                if report_verbosity >= 2:
                     for i, vue in enumerate(vu):
-                        color = (c("val_uninterp_dk") if i < last_replace_idx
-                                 else c("val_uninterp_lt"))
+                        color = (self.c("val_uninterp_dk") if i < last_replace_idx
+                                 else self.c("val_uninterp_lt"))
                         op = vue[1].value if isinstance(vue[1], OptionOp) else ' '
                         indent = 0 if i == 0 else len(k) + 2
                         opts_str = ''.join((opts_str,
-                                            f'{" " * indent}{color}{op} {vue[0]}{c("off")}\n'))
+                                            f'{" " * indent}{color}{op} {vue[0]}{self.c("off")}\n'))
                     indent = len(k) + 1
                 else:
                     indent = 0
 
                 opts_str = ''.join((opts_str,
-                                    f'{" " * indent}{c("val_interp")}-> {vi}\n'))
+                                    f'{" " * indent}{self.c("val_interp")}-> {vi}\n'))
 
-            report += f'\n{opts_str}{c("off")}'
+            report += f'\n{opts_str}{self.c("off")}'
         print (report)
 
-        return ResultCode.NO_ACTION
+    def do_action_report_files(self, action: Action):
+        ''' Prints the cmoputed file operations for each phase.'''
+        print (f'{self.name}:')
+        for file_op in self.files.operations:
+            print (f'  {file_op.step_name}:')
+            for file in file_op.input_files:
+                phase_name = file.generating_phase.name if file.generating_phase is not None else ''
+                print (f'    {self.color_path(file.path)} - {file.file_type} - {phase_name}')
+            print ('    ->')
+            for file in file_op.output_files:
+                print (f'    {self.color_path(file.path)} - {file.file_type} - '
+                       f'{file.generating_phase.name or ""}')

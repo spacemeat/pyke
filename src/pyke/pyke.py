@@ -136,6 +136,8 @@ def load_config():
         WorkingSet.action_aliases = {
             'report-options': 'report_options',
             'opts': 'report_options',
+            'report-files': 'report_files',
+            'files': 'report_files',
             'c': 'clean',
             'clean-all': '@:clean',
             'ca': '@:clean',
@@ -149,6 +151,9 @@ def load_config():
 
             '-debug': '-o.@:kind=debug',
             '-debug-all': '-o@,@.@:kind=debug',
+            '-v0': '-o@,@.@:verbosity=0',
+            '-v1': '-o@,@.@:verbosity=1',
+            '-v2': '-o@,@.@:verbosity=2',
         }
 
     def validate_config(config):
@@ -318,9 +323,9 @@ def main():
     run_make_file(make_path, cache_make)
     resolve_project_names()
     phase_map = PhaseMap(WorkingSet.main_phase)
-    WorkingSet.main_phase.compute_file_operations_in_dependencies()
 
     actions = []
+    file_operations_are_dirty = True
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]
@@ -369,6 +374,8 @@ def main():
                 for active_phase in affected_phases:
                     active_phase.pop_opts([override])
 
+            file_operations_are_dirty = True
+
         else:
             affected_phases = []
             if ':' in arg:
@@ -377,11 +384,8 @@ def main():
             else:
                 affected_phases = [WorkingSet.main_phase]
 
-            '''
-            if we've done any options:
-                run any previously recorded actions
-                actions = []
-                update the file operations everywhere'''
+            if file_operations_are_dirty:
+                WorkingSet.main_phase.compute_file_operations_in_dependencies()
 
             action = Action(arg)
             actions.append(action)

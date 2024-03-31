@@ -1,13 +1,10 @@
 ''' Things concerning phase actions. '''
 
 from enum import Enum
-from os.path import relpath
 from pathlib import Path
-import sys
-from typing import TypeAlias
 from typing_extensions import Self
 
-from .utilities import ensure_list, set_color as c, WorkingSet, InvalidActionError
+from .utilities import ensure_list, InvalidActionError
 
 # pylint: disable=too-few-public-methods
 
@@ -110,84 +107,16 @@ class Result:
         self.code = code
         self.notes = notes
 
-def color_path(path: Path | str):
-    ''' Returns a colorized and possibly CWD-relative version of a path. '''
-    if isinstance(path, Path):
-        path = str(path)
-    if WorkingSet.report_relative_paths:
-        path = relpath(path)
-    path = Path(path)
-    return f'{c("path_dk")}{path.parent}/{c("path_lt")}{path.name}{c("off")}'
-
-def format_path_list(paths):
-    ''' Returns a colorized path or formatted list notation for a list of paths. '''
-    paths = ensure_list(paths)
-    if len(paths) == 0:
-        return ''
-    if len(paths) == 1:
-        return color_path(paths[0])
-    return f'{c("path_dk")}[{c("path_lt")}...{c("path_dk")}]{c("off")}'
-
-def report_phase(action: str, phase: str, phase_type: str):
-    ''' Prints a phase summary. '''
-    print (f'{c("phase_dk")}action: {c("phase_lt")}{action}{c("phase_dk")} - phase: '
-           f'{c("phase_lt")}{phase}{c("phase_dk")} '
-           f'({c("phase_lt")}{phase_type}{c("phase_dk")}):{c("off")}', end = '')
-
-def report_error(action: str, phase: str, phase_type: str, err: str):
-    ''' Print an error string to the console in nice, bright red. '''
-    report_phase(action, phase, phase_type)
-    print (f'\n{err}')
-
-def report_action_phase_start(action: str, phase: str, phase_type: str):
-    ''' Reports on the start of an action. '''
-    if WorkingSet.verbosity > 0:
-        report_phase(action, phase, phase_type)
-        print ('')
-
-def report_action_phase_end(action: str, phase: str, phase_type: str, result: ResultCode):
-    ''' Reports on the start of an action. '''
-    if WorkingSet.verbosity > 1 and result.succeeded():
-        report_phase(action, phase, phase_type)
-        print (f'{c("phase_dk")} ... {c("success")}succeeded{c("off")}')
-    elif WorkingSet.verbosity > 0 and result.failed():
-        report_phase(action, phase, phase_type)
-        print (f'{c("phase_dk")} ... {c("fail")}failed{c("off")}')
-
-def report_step_start(step: Step):
-    ''' Reports on the start of an action step. '''
-    if WorkingSet.verbosity > 0:
-        inputs = format_path_list(list(step.inputs))
-        outputs = format_path_list(list(step.outputs))
-        if len(inputs) > 0 or len(outputs) > 0:
-            print (f'{c("step_lt")}{step.name}{c("step_dkt")}: {inputs}'
-                   f'{c("step_dk")} -> {c("step_lt")}{outputs}{c("off")}', end='')
-
-def report_step_end(step: Step):
-    ''' Reports on the end of an action step. '''
-    result = step.result
-    if result.code != ResultCode.ALREADY_UP_TO_DATE:
-        if WorkingSet.verbosity > 1:
-            if len(step.command) > 0:
-                print (f'\n{c("shell_cmd")}{step.command}{c("off")}', end='')
-    if result.code.value >= 0:
-        if WorkingSet.verbosity > 0:
-            print (f'{c("step_dk")} ({c("success")}{result.code.name}{c("step_dk")}){c("off")}')
-    elif result.code.value < 0:
-        if WorkingSet.verbosity > 0:
-            print (f'{c("step_dk")} ({c("fail")}{result.code.name}{c("step_dk")}){c("off")}')
-        print (f'{result.notes}', file=sys.stderr)
-
-
 class PhaseAction:
     ''' Records an action's phases within a project phase.'''
-    def __init__(self, phase_name: str):
-        self.name = phase_name
+    def __init__(self, phase: str):
+        self.name = phase.name
+        self.phase = phase
         self.current_step: str = ''
         self.steps = []
 
     def __repr__(self):
-        s = f'    {self.name} - current_step = {self.current_step}'
+        s = f'    {self.phase.name} - current_step = {self.current_step}'
         s += ''.join([repr(st) for st in self.steps])
         return s
 
@@ -208,16 +137,18 @@ class PhaseAction:
         ''' Run all the steps recorded for this phase.'''
         must_report_phase = len(self.steps) > 0
         if must_report_phase:
-            report_action_phase_start(action_name, self.name, type(self).__name__)
+            self.phase.report_action_phase_start(
+                action_name, self.name, type(self.phase).__name__)
         final_res = ResultCode.SUCCEEDED
         for step in self.steps:
-            report_step_start(step)
+            self.phase.report_step_start(step)
             res = step.run()
-            report_step_end(step)
+            self.phase.report_step_end(step)
             if res.failed() and final_res.succeeded():
                 final_res = res
         if must_report_phase:
-            report_action_phase_end(action_name, self.name, type(self).__name__, final_res)
+            self.phase.report_action_phase_end(
+                action_name, self.name, type(self.phase).__name__, final_res)
         return final_res
 
 class ProjectAction:
@@ -241,11 +172,11 @@ class ProjectAction:
                 break
         return res if res.failed() else ResultCode.SUCCEEDED
 
-    def set_phase(self, phase_name: str):
+    def set_phase(self, phase: 'Phase'):
         ''' Begins recording a non-project phase.'''
-        self.current_phase = phase_name
+        self.current_phase = phase.name
         if self.current_phase not in self.phases:
-            self.phases[self.current_phase] = PhaseAction(phase_name)
+            self.phases[self.current_phase] = PhaseAction(phase)
             return ResultCode.NOT_YET_RUN
         return ResultCode.ALREADY_RUN
 

@@ -109,7 +109,9 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
                         self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
                             prefix, c_args, src.path, obj.path))
 
-            object_paths = list(obj.path for obj in self.files.get_output_files('object'))
+            object_paths = [src.path
+                for file_op in self.files.get_operations('link')
+                for src in file_op.input_files]
 
             self.do_step_link_objects_to_exe(action, [*compile_steps, dirs[exe_path.parent]],
                 prefix, l_args, exe_path, object_paths)
