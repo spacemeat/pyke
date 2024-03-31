@@ -414,8 +414,8 @@ class CFamilyBuildPhase(Phase):
         action.set_step(step)
         return step
 
-    def do_step_archive_objects_to_library(self, action: Action, depends_on: Steps, prefix: str, archive_path: Path,
-                                           object_paths: list[Path]) -> Step:
+    def do_step_archive_objects_to_library(self, action: Action, depends_on: Steps, prefix: str,
+                                           archive_path: Path, object_paths: list[Path]) -> Step:
         '''
         Perform an archive operaton on built object files.
         '''
