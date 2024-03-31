@@ -52,8 +52,8 @@ class Phase:
                 'fail':             {'form': 'rgb24', 'fg': [0xff, 0x33, 0x33] },
                 'phase_lt':         {'form': 'rgb24', 'fg': [0x33, 0x33, 0xff] },
                 'phase_dk':         {'form': 'rgb24', 'fg': [0x23, 0x23, 0x7f] },
-                'step_lt':          {'form': 'rgb24', 'fg': [0x33, 0xaf, 0xaf] },
-                'step_dk':          {'form': 'rgb24', 'fg': [0x23, 0x5f, 0x5f] },
+                'step_lt':          {'form': 'rgb24', 'fg': [0xc3, 0x7f, 0x3f] },
+                'step_dk':          {'form': 'rgb24', 'fg': [0xa3, 0x4f, 0x2f] },
                 'shell_cmd':        {'form': 'rgb24', 'fg': [0x31, 0x31, 0x32] },
                 'key':              {'form': 'rgb24', 'fg': [0xff, 0x8f, 0x23] },
                 'val_uninterp_dk':  {'form': 'rgb24', 'fg': [0x5f, 0x13, 0x5f] },
@@ -64,6 +64,10 @@ class Phase:
                 'token_depth':      {'form': 'rgb24', 'fg': [0x33, 0xff, 0x33] },
                 'path_lt':          {'form': 'rgb24', 'fg': [0x33, 0xaf, 0xaf] },
                 'path_dk':          {'form': 'rgb24', 'fg': [0x23, 0x5f, 0x5f] },
+                'file_type_lt':     {'form': 'rgb24', 'fg': [0x63, 0x8f, 0xcf] },
+                'file_type_dk':     {'form': 'rgb24', 'fg': [0x43, 0x5f, 0x9f] },
+                'action_lt':        {'form': 'rgb24', 'fg': [0xd3, 0x5f, 0x3f] },
+                'action_dk':        {'form': 'rgb24', 'fg': [0x93, 0x3f, 0x2f] },
             },
             'colors_named': {
             },
@@ -363,7 +367,7 @@ class Phase:
                 dep.do(action)
 
         if self.is_project_phase:
-            if action.set_project(self.name) != ResultCode.NOT_YET_RUN:
+            if action.set_project(self) != ResultCode.NOT_YET_RUN:
                 return
 
         for dep in self.dependencies:
@@ -404,32 +408,42 @@ class Phase:
             return self.color_path(paths[0])
         return f'{self.c("path_dk")}[{self.c("path_lt")}...{self.c("path_dk")}]{self.c("off")}'
 
-    def report_phase(self, action: str, phase: str, phase_type: str):
-        ''' Prints a phase summary. '''
-        print (f'{self.c("phase_dk")}action: {self.c("phase_lt")}{action}{self.c("phase_dk")} '
-               f'- phase: {self.c("phase_lt")}{phase}{self.c("phase_dk")} '
-               f'({self.c("phase_lt")}{phase_type}{self.c("phase_dk")}):{self.c("off")}', end = '')
+    def color_phase(self, phase: Self):
+        ''' Returns a colorized phase name and type.'''
+        phase_type = type(phase).__name__
+        return (f'{self.c("phase_lt")}{phase}{self.c("phase_dk")} '
+                f'({self.c("phase_lt")}{phase_type}{self.c("phase_dk")}){self.c("off")}')
 
-    def report_error(self, action: str, phase: str, phase_type: str, err: str):
+    def color_file_type(self, file_type: str):
+        ''' Returns a colorized file type.'''
+        return f'{self.c("file_type_lt")}{file_type}{self.c("off")}'
+
+    def report_phase(self, action: str, phase: Self):
+        ''' Prints a phase summary. '''
+        print (f'{self.format_action(action)}{self.c("action_dk")} - '
+               f'{self.c("phase_dk")}phase: {self.color_phase(phase)}{self.c("phase_dk")}:'
+               f'{self.c("off")}', end = '')
+
+    def report_error(self, action: str, phase: Self, err: str):
         ''' Print an error string to the console in nice, bright red. '''
-        self.report_phase(action, phase, phase_type)
+        self.report_phase(action, phase)
         print (f'\n{err}')
 
-    def report_action_phase_start(self, action: str, phase: str, phase_type: str):
+    def report_action_phase_start(self, action: str, phase: Self):
         ''' Reports on the start of an action. '''
         if self.opt_int('verbosity') > 0:
-            self.report_phase(action, phase, phase_type)
+            self.report_phase(action, phase)
             print ('')
 
-    def report_action_phase_end(self, action: str, phase: str, phase_type: str, result: ResultCode):
+    def report_action_phase_end(self, action: str, phase: Self, result: ResultCode):
         ''' Reports on the start of an action. '''
         verbosity = self.opt_int('verbosity')
         if verbosity > 1 and result.succeeded():
-            self.report_phase(action, phase, phase_type)
-            print (f'{self.c("phase_dk")} ... {self.c("success")}succeeded{self.c("off")}')
+            #self.report_phase(action, phase)
+            print (f'        {self.c("action_dk")}... action {self.c("success")}succeeded{self.c("off")}')
         elif verbosity > 0 and result.failed():
-            self.report_phase(action, phase, phase_type)
-            print (f'{self.c("phase_dk")} ... {self.c("fail")}failed{self.c("off")}')
+            #self.report_phase(action, phase)
+            print (f'        {self.c("action_dk")}... action {self.c("fail")}failed{self.c("off")}')
 
     def report_step_start(self, step: Step):
         ''' Reports on the start of an action step. '''
@@ -449,14 +463,14 @@ class Phase:
             if verbosity > 1:
                 if len(step.command) > 0:
                     print (f'\n{self.c("shell_cmd")}{step.command}{self.c("off")}', end='')
-        if result.code.value >= 0:
+        if result.code.succeeded() >= 0:
             if verbosity > 0:
-                print (f'{self.c("step_dk")} ({self.c("success")}{result.code.name}'
-                       f'{self.c("step_dk")}){self.c("off")}')
-        elif result.code.value < 0:
+                print (f'{self.c("step_dk")} - {self.c("success")}{result.code.view_name}'
+                       f'{self.c("step_dk")}{self.c("off")}')
+        elif result.code.failed() < 0:
             if verbosity > 0:
-                print (f'{self.c("step_dk")} ({self.c("fail")}{result.code.name}'
-                       f'{self.c("step_dk")}){self.c("off")}')
+                print (f'{self.c("step_dk")} - {self.c("fail")}{result.code.view_value}'
+                       f'{self.c("step_dk")}{self.c("off")}')
             print (f'{result.notes}', file=sys.stderr)
 
     def compute_file_operations(self):
@@ -468,8 +482,7 @@ class Phase:
         '''
         report = ''
         report_verbosity = self.opt_int('report_verbosity')
-        if report_verbosity >= 0:
-            report = f'phase: {self.name}'
+        self.report_action_phase_start(action.name, self)
 
         if report_verbosity >= 1:
             opts_str = ''
@@ -480,8 +493,7 @@ class Phase:
                 assert isinstance(vu, list)
 
                 indent = 0
-                opts_str = ''.join((opts_str,
-                                    f'{self.c("key")}{k}: '))
+                opts_str = ''.join((opts_str, f'{self.c("key")}{k}: '))
                 last_replace_idx = len(vu) - next(i for i, e in enumerate(reversed(vu))
                     if e[1] == OptionOp.REPLACE) - 1
                 if report_verbosity >= 2:
@@ -499,18 +511,42 @@ class Phase:
                 opts_str = ''.join((opts_str,
                                     f'{" " * indent}{self.c("val_interp")}-> {vi}\n'))
 
-            report += f'\n{opts_str}{self.c("off")}'
+            report += f'{opts_str}{self.c("off")}'
         print (report)
+
+    def format_file_data(self, file: FileData):
+        ''' Formats a FileData object for reporting.'''
+        phase_name = (self.color_phase(file.generating_phase)
+                      if file.generating_phase is not None else '')
+        s = (f'    {self.color_path(file.path)}{self.c("step_dk")} - '
+             f'{self.c("file_type_dk")}type: {self.color_file_type(file.file_type)}')
+        if file.generating_phase is not None:
+            s += (f'{self.c("step_dk")} - {self.c("phase_dk")}generated by: {phase_name}'
+                  f'{self.c("off")}')
+        else:
+            s += f'{self.c("step_dk")} - {self.c("phase_dk")}(extant file){self.c("off")}'
+        return s
+
+    def color_file_step_name(self, step_name: str):
+        ''' Colorize a FileOperation step name for reporting.'''
+        return f'{self.c("step_lt")}{step_name}{self.c("off")}'
+
+    def format_action(self, action_name: str):
+        ''' Formats an action name for reporting.'''
+        s = f'{self.c("action_dk")}action: {self.c("action_lt")}{action_name}{self.c("off")}'
+        return s
 
     def do_action_report_files(self, action: Action):
         ''' Prints the cmoputed file operations for each phase.'''
-        print (f'{self.name}:')
+        #print (f'{self.format_action(action.name)} - {self.color_phase(self)}{self.c("phase_dk")}:'
+        #       f'{self.c("off")}')
+        self.report_action_phase_start(action.name, self)
         for file_op in self.files.operations:
-            print (f'  {file_op.step_name}:')
+            print (f'  {self.color_file_step_name(file_op.step_name)}{self.c("step_dk")}:'
+                   f'{self.c("off")}')
             for file in file_op.input_files:
-                phase_name = file.generating_phase.name if file.generating_phase is not None else ''
-                print (f'    {self.color_path(file.path)} - {file.file_type} - {phase_name}')
-            print ('    ->')
+                print (self.format_file_data(file))
+            print (f'    {self.c("step_dk")}->{self.c("off")}')
             for file in file_op.output_files:
-                print (f'    {self.color_path(file.path)} - {file.file_type} - '
-                       f'{file.generating_phase.name or ""}')
+                print (self.format_file_data(file))
+        print ('')

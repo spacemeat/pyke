@@ -12,23 +12,33 @@ class ResultCode(Enum):
     '''
     Encoded result of one step of an action. Values >= 0 are success codes.
     '''
-    NO_ACTION = 0
-    SUCCEEDED = 1
-    ALREADY_UP_TO_DATE = 2
-    ALREADY_RUN = 3
-    NOT_YET_RUN = 4
-    MISSING_INPUT = -1
-    COMMAND_FAILED = -2
-    DEPENDENCY_ERROR = -3
-    INVALID_OPTION = -4
+    NO_ACTION = (0, 'no action')
+    SUCCEEDED = (1, 'succeeded')
+    ALREADY_UP_TO_DATE = (2, 'already up to date')
+    ALREADY_RUN = (3, 'already run')
+    NOT_YET_RUN = (4, 'not yet run')
+    MISSING_INPUT = (-1, 'missing input')
+    COMMAND_FAILED = (-2, 'command failed')
+    DEPENDENCY_ERROR = (-3, 'dependency error')
+    INVALID_OPTION = (-4, 'invalid option')
 
     def succeeded(self):
         ''' Returns whether a particular value is considered a success.'''
-        return self.value >= 0
+        return self.num_value >= 0
 
     def failed(self):
         ''' Returns whether a particular value is considered a failure (strictly not a success).'''
         return not self.succeeded()
+
+    @property
+    def num_value(self):
+        ''' Returns the numeric value of the enum.'''
+        return self.value[0]
+
+    @property
+    def view_name(self):
+        ''' Returns the view-friendly value of the enum.'''
+        return self.value[1]
 
 
 class FileData:
@@ -138,7 +148,7 @@ class PhaseAction:
         must_report_phase = len(self.steps) > 0
         if must_report_phase:
             self.phase.report_action_phase_start(
-                action_name, self.name, type(self.phase).__name__)
+                action_name, self.phase)
         final_res = ResultCode.SUCCEEDED
         for step in self.steps:
             self.phase.report_step_start(step)
@@ -148,7 +158,7 @@ class PhaseAction:
                 final_res = res
         if must_report_phase:
             self.phase.report_action_phase_end(
-                action_name, self.name, type(self.phase).__name__, final_res)
+                action_name, self.phase, final_res)
         return final_res
 
 class ProjectAction:
@@ -216,18 +226,18 @@ class Action:
                 break
         return res if res.failed() else ResultCode.SUCCEEDED
 
-    def set_project(self, project_name: str):
+    def set_project(self, project: 'Phase'):
         ''' Begins recording a project phase.'''
-        self.current_project = project_name
+        self.current_project = project.name
         if self.current_project not in self.projects:
-            self.projects[self.current_project] = ProjectAction(project_name)
+            self.projects[self.current_project] = ProjectAction(project.name)
             return ResultCode.NOT_YET_RUN
         return ResultCode.ALREADY_RUN
 
-    def set_phase(self, phase_name: str):
+    def set_phase(self, phase: 'Phase'):
         ''' Begins recording a non-project phase.'''
         if self.current_project:
-            return self.projects[self.current_project].set_phase(phase_name)
+            return self.projects[self.current_project].set_phase(phase)
         raise InvalidActionError('No project set.')
 
     def set_step(self, step: Step):
