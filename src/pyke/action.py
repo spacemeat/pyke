@@ -19,7 +19,7 @@ class ResultCode(Enum):
     NOT_YET_RUN = (4, 'not yet run')
     MISSING_INPUT = (-1, 'missing input')
     COMMAND_FAILED = (-2, 'command failed')
-    DEPENDENCY_ERROR = (-3, 'dependency error')
+    DEPENDENCY_FAILED = (-3, 'dependency failed')
     INVALID_OPTION = (-4, 'invalid option')
 
     def succeeded(self):
@@ -66,15 +66,19 @@ class PhaseFiles:
         ''' Returns all recorded inputs and outputs for a gven operation type.'''
         return [op for op in self.operations if op.step_name == step_name]
 
-    def get_input_files(self, file_type):
+    def get_input_files(self, file_type = None):
         ''' Returns all recorded outputs of a given type.'''
         return [file_data for op in self.operations
-                          for file_data in op.input_files if file_data.file_type == file_type]
+                          for file_data in op.input_files
+                          if (file_type is None or
+                              file_data.file_type == file_type)]
 
-    def get_output_files(self, file_type):
+    def get_output_files(self, file_type = None):
         ''' Returns all recorded outputs of a given type.'''
         return [file_data for op in self.operations
-                          for file_data in op.output_files if file_data.file_type == file_type]
+                          for file_data in op.output_files
+                          if (file_type is None or
+                              file_data.file_type == file_type)]
 
 class StepFunction:
     def __init__(self, fn: callable):
@@ -107,6 +111,7 @@ class Step:
             if res.failed() and final_res.succeeded():
                 final_res = res
         if final_res.failed():
+            self.result = Result(ResultCode.DEPENDENCY_FAILED)
             return final_res
         self.result = self.act_fn()
         return self.result.code
@@ -157,8 +162,7 @@ class PhaseAction:
             if res.failed() and final_res.succeeded():
                 final_res = res
         if must_report_phase:
-            self.phase.report_action_phase_end(
-                action_name, self.phase, final_res)
+            self.phase.report_action_phase_end(final_res)
         return final_res
 
 class ProjectAction:

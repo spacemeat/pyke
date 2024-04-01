@@ -307,31 +307,6 @@ class CFamilyBuildPhase(Phase):
             'posix_threads': self.opt('posix_threads'),
         }
 
-    def do_step_delete_file(self, action: Action, depends_on: Steps, path: Path) -> Step:
-        '''
-        Perfoems a file deletion operation as an action step.
-        '''
-        def act(cmd: str, path: Path) -> Result:
-            step_result = ResultCode.SUCCEEDED
-            step_notes = None
-            if path.exists():
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-            return Result(step_result, step_notes)
-
-        cmd = self.make_cmd_delete_file(path)
-        step = Step('delete file', depends_on, [path], [],
-                             partial(act, cmd=cmd, path=path), cmd)
-        action.set_step(step)
-        return step
-
     def do_step_delete_directory(self, action: Action, depends_on: Steps, direc: Path) -> Step:
         '''
         Perfoems a file deletion operation as an action step.
@@ -542,9 +517,8 @@ class CFamilyBuildPhase(Phase):
         action.set_step(step)
         return step
 
-    def do_action_clean_build_directory(self, action: Action, depends_on: Steps) -> Step:
+    def do_action_clean_build_directory(self, action: Action) -> Step:
         '''
         Wipes out the build directory.
         '''
-        return self.do_step_delete_directory(action, depends_on,
-                                             Path(self.opt_str("build_anchor")))
+        return self.do_step_delete_directory(action, None, Path(self.opt_str("build_anchor")))

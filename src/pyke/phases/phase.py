@@ -3,20 +3,22 @@ This is the base Phase class for all other Phase types. All the base functionali
 is contained herein.
 '''
 
+from functools import partial
 from os.path import relpath
 from pathlib import Path
 import sys
-from typing import Type, TypeVar, Iterable
+from typing import Type, TypeVar, TypeAlias, Iterable
 from typing_extensions import Self
 
-from ..action import (Action, ResultCode, Step,
+from ..action import (Action, ResultCode, Step, Result,
                       FileData, FileOperation, PhaseFiles)
 from .. import ansi as a
 from ..options import Options, OptionOp
-from ..utilities import (ensure_list, WorkingSet, #set_color as c,
+from ..utilities import (ensure_list, WorkingSet, do_shell_command,
                          CircularDependencyError, ProjectPhaseDependencyError)
 
 T = TypeVar('T')
+Steps: TypeAlias = list[Step] | Step | None
 
 # TODO: Auto-detect terminal color capabilities
 
@@ -47,29 +49,73 @@ class Phase:
             'gen_anchor': WorkingSet.makefile_dir,
             'simulate': False,
             'colors_24bit': {
-                'off':              {'form': 'named', 'off': [] },
-                'success':          {'form': 'rgb24', 'fg': [0x33, 0xaf, 0x55] },
-                'fail':             {'form': 'rgb24', 'fg': [0xff, 0x33, 0x33] },
-                'phase_lt':         {'form': 'rgb24', 'fg': [0x33, 0x33, 0xff] },
-                'phase_dk':         {'form': 'rgb24', 'fg': [0x23, 0x23, 0x7f] },
-                'step_lt':          {'form': 'rgb24', 'fg': [0xc3, 0x7f, 0x3f] },
-                'step_dk':          {'form': 'rgb24', 'fg': [0xa3, 0x4f, 0x2f] },
-                'shell_cmd':        {'form': 'rgb24', 'fg': [0x31, 0x31, 0x32] },
-                'key':              {'form': 'rgb24', 'fg': [0xff, 0x8f, 0x23] },
-                'val_uninterp_dk':  {'form': 'rgb24', 'fg': [0x5f, 0x13, 0x5f] },
-                'val_uninterp_lt':  {'form': 'rgb24', 'fg': [0xaf, 0x23, 0xaf] },
-                'val_interp':       {'form': 'rgb24', 'fg': [0x33, 0x33, 0xff] },
-                'token_type':       {'form': 'rgb24', 'fg': [0x33, 0xff, 0xff] },
-                'token_value':      {'form': 'rgb24', 'fg': [0xff, 0x33, 0xff] },
-                'token_depth':      {'form': 'rgb24', 'fg': [0x33, 0xff, 0x33] },
-                'path_lt':          {'form': 'rgb24', 'fg': [0x33, 0xaf, 0xaf] },
-                'path_dk':          {'form': 'rgb24', 'fg': [0x23, 0x5f, 0x5f] },
-                'file_type_lt':     {'form': 'rgb24', 'fg': [0x63, 0x8f, 0xcf] },
-                'file_type_dk':     {'form': 'rgb24', 'fg': [0x43, 0x5f, 0x9f] },
-                'action_lt':        {'form': 'rgb24', 'fg': [0xd3, 0x5f, 0x3f] },
-                'action_dk':        {'form': 'rgb24', 'fg': [0x93, 0x3f, 0x2f] },
+                'off':              {'form': 'off' },
+                'success':          {'form': 'b24', 'fg': [0x33, 0xaf, 0x55] },
+                'fail':             {'form': 'b24', 'fg': [0xff, 0x33, 0x33] },
+                'phase_lt':         {'form': 'b24', 'fg': [0x33, 0x33, 0xff] },
+                'phase_dk':         {'form': 'b24', 'fg': [0x23, 0x23, 0x7f] },
+                'step_lt':          {'form': 'b24', 'fg': [0xb3, 0x8f, 0x4f] },
+                'step_dk':          {'form': 'b24', 'fg': [0x93, 0x5f, 0x2f] },
+                'shell_cmd':        {'form': 'b24', 'fg': [0x31, 0x31, 0x32] },
+                'key':              {'form': 'b24', 'fg': [0xff, 0x8f, 0x23] },
+                'val_uninterp_lt':  {'form': 'b24', 'fg': [0xaf, 0x23, 0xaf] },
+                'val_uninterp_dk':  {'form': 'b24', 'fg': [0x5f, 0x13, 0x5f] },
+                'val_interp':       {'form': 'b24', 'fg': [0x33, 0x33, 0xff] },
+                'token_type':       {'form': 'b24', 'fg': [0x33, 0xff, 0xff] },
+                'token_value':      {'form': 'b24', 'fg': [0xff, 0x33, 0xff] },
+                'token_depth':      {'form': 'b24', 'fg': [0x33, 0xff, 0x33] },
+                'path_lt':          {'form': 'b24', 'fg': [0x33, 0xaf, 0xaf] },
+                'path_dk':          {'form': 'b24', 'fg': [0x13, 0x5f, 0x8f] },
+                'file_type_lt':     {'form': 'b24', 'fg': [0x63, 0x8f, 0xcf] },
+                'file_type_dk':     {'form': 'b24', 'fg': [0x43, 0x5f, 0x9f] },
+                'action_lt':        {'form': 'b24', 'fg': [0xf3, 0x7f, 0x0f] },
+                'action_dk':        {'form': 'b24', 'fg': [0xa3, 0x4f, 0x00] },
+            },
+            'colors_8bit': {
+                'off':              {'form': 'off' },
+                'success':          {'form': 'b8', 'fg': 77 },
+                'fail':             {'form': 'b8', 'fg': 160 },
+                'phase_lt':         {'form': 'b8', 'fg': 27 },
+                'phase_dk':         {'form': 'b8', 'fg': 19 },
+                'step_lt':          {'form': 'b8', 'fg': 215 },
+                'step_dk':          {'form': 'b8', 'fg': 137 },
+                'shell_cmd':        {'form': 'b8', 'fg': 237 },
+                'key':              {'form': 'b8', 'fg': 202 },
+                'val_uninterp_lt':  {'form': 'b8', 'fg': 201 },
+                'val_uninterp_dk':  {'form': 'b8', 'fg': 90 },
+                'val_interp':       {'form': 'b8', 'fg': 27 },
+                'token_type':       {'form': 'b8', 'fg': 87 },
+                'token_value':      {'form': 'b8', 'fg': 207 },
+                'token_depth':      {'form': 'b8', 'fg': 83 },
+                'path_lt':          {'form': 'b8', 'fg': 45 },
+                'path_dk':          {'form': 'b8', 'fg': 24 },
+                'file_type_lt':     {'form': 'b8', 'fg': 111 },
+                'file_type_dk':     {'form': 'b8', 'fg': 26 },
+                'action_lt':        {'form': 'b8', 'fg': 172 },
+                'action_dk':        {'form': 'b8', 'fg': 130 },
             },
             'colors_named': {
+                'off':              {'form': 'off' },
+                'success':          {'form': 'named', 'fg': 'bright green' },
+                'fail':             {'form': 'named', 'fg': 'bright red' },
+                'phase_lt':         {'form': 'named', 'fg': 'bright blue' },
+                'phase_dk':         {'form': 'named', 'fg': 'blue' },
+                'step_lt':          {'form': 'named', 'fg': 'bright yellow' },
+                'step_dk':          {'form': 'named', 'fg': 'yellow' },
+                'shell_cmd':        {'form': 'named', 'fg': 'bright black' },
+                'key':              {'form': 'named', 'fg': 'yellow' },
+                'val_uninterp_lt':  {'form': 'named', 'fg': 'bright magenta' },
+                'val_uninterp_dk':  {'form': 'named', 'fg': 'magenta' },
+                'val_interp':       {'form': 'named', 'fg': 'bright blue' },
+                'token_type':       {'form': 'named', 'fg': 'bright cyan' },
+                'token_value':      {'form': 'named', 'fg': 'bright magenta' },
+                'token_depth':      {'form': 'named', 'fg': 'bright green' },
+                'path_lt':          {'form': 'named', 'fg': 'bright cyan' },
+                'path_dk':          {'form': 'named', 'fg': 'cyan' },
+                'file_type_lt':     {'form': 'named', 'fg': 'bright blue' },
+                'file_type_dk':     {'form': 'named', 'fg': 'blue' },
+                'action_lt':        {'form': 'named', 'fg': 'bright yellow' },
+                'action_dk':        {'form': 'named', 'fg': 'yellow' },
             },
             'colors_none': {
                 'off':              {},
@@ -81,8 +127,8 @@ class Phase:
                 'step_dk':          {},
                 'shell_cmd':        {},
                 'key':              {},
-                'val_uninterp_dk':  {},
                 'val_uninterp_lt':  {},
+                'val_uninterp_dk':  {},
                 'val_interp':       {},
                 'token_type':       {},
                 'token_value':      {},
@@ -325,22 +371,22 @@ class Phase:
 
     def c(self, color):
         ''' Returns the ANSI color code for the specified thematic element.'''
-        #color_desc = WorkingSet.colors.get(color)
         color_desc = self.opt_dict('colors')[color]
         if color_desc is not None:
-            if color_desc.get('form') == 'rgb24':
-                fg = color_desc.get('fg')
-                bg = color_desc.get('bg')
-                return (f'{a.rgb_fg(*fg) if fg else ""}'
-                        f'{a.rgb_bg(*bg) if bg else ""}')
-            if color_desc.get('form') == 'named':
-                fg = color_desc.get('fg')
-                bg = color_desc.get('bg')
-                off = color_desc.get('off')
-                if isinstance(off, list):
-                    return f'{a.off}'
-                # TODO: The rest
-                return ''
+            fg = color_desc.get('fg')
+            bg = color_desc.get('bg')
+            form = color_desc.get('form')
+            if form == 'off':
+                return a.off
+            if form == 'b24':
+                return (f'{a.b24_fg(*fg) if fg else ""}'
+                        f'{a.b24_bg(*bg) if bg else ""}')
+            if form == 'b8':
+                return (f'{a.b8_fg(fg) if fg else ""}'
+                        f'{a.b8_bg(bg) if bg else ""}')
+            if form == 'named':
+                return (f'{a.named_fg[fg] if fg else ""}'
+                        f'{a.named_bg[bg] if bg else ""}')
         return ''
 
     def make_cmd_delete_file(self, path: Path):
@@ -348,6 +394,114 @@ class Phase:
         Returns an appropriate command for deleting a file.
         '''
         return f'rm {str(path)}'
+
+    def color_path(self, path: Path | str):
+        ''' Returns a colorized and possibly CWD-relative version of a path. '''
+        if isinstance(path, Path):
+            path = str(path)
+        if self.opt_bool('report_relative_paths'):
+            path = relpath(path)
+        path = Path(path)
+        return f'{self.c("path_dk")}{path.parent}/{self.c("path_lt")}{path.name}{self.c("off")}'
+
+    def format_path_list(self, paths):
+        ''' Returns a colorized path or formatted list notation for a list of paths. '''
+        paths = ensure_list(paths)
+        if len(paths) == 0:
+            return ''
+        if len(paths) == 1:
+            return self.color_path(paths[0])
+        return f'{self.c("path_dk")}[{self.c("path_lt")}...{self.c("path_dk")}]{self.c("off")}'
+
+    def color_phase(self, phase: Self):
+        ''' Returns a colorized phase name and type.'''
+        phase_type = type(phase).__name__
+        return (f'{self.c("phase_lt")}{phase}{self.c("phase_dk")} '
+                f'({self.c("phase_lt")}{phase_type}{self.c("phase_dk")}){self.c("off")}')
+
+    def color_file_type(self, file_type: str):
+        ''' Returns a colorized file type.'''
+        return f'{self.c("file_type_lt")}{file_type}{self.c("off")}'
+
+    def format_file_data(self, file: FileData):
+        ''' Formats a FileData object for reporting.'''
+        phase_name = (self.color_phase(file.generating_phase)
+                      if file.generating_phase is not None else '')
+        s = (f'    {self.color_path(file.path)}{self.c("step_dk")} - '
+             f'{self.c("file_type_dk")}type: {self.color_file_type(file.file_type)}')
+        if file.generating_phase is not None:
+            s += (f'{self.c("step_dk")} - {self.c("phase_dk")}generated by: {phase_name}'
+                  f'{self.c("off")}')
+        else:
+            s += f'{self.c("step_dk")} - {self.c("phase_dk")}(extant file){self.c("off")}'
+        return s
+
+    def color_file_step_name(self, step_name: str):
+        ''' Colorize a FileOperation step name for reporting.'''
+        return f'{self.c("step_lt")}{step_name}{self.c("off")}'
+
+    def format_action(self, action_name: str):
+        ''' Formats an action name for reporting.'''
+        s = f'{self.c("action_dk")}action: {self.c("action_lt")}{action_name}{self.c("off")}'
+        return s
+
+    def report_phase(self, action: str, phase: Self):
+        ''' Prints a phase summary. '''
+        print (f'{self.format_action(action)}{self.c("action_dk")} - '
+               f'{self.c("phase_dk")}phase: {self.color_phase(phase)}{self.c("phase_dk")}:'
+               f'{self.c("off")}', end = '')
+
+    def report_error(self, action: str, phase: Self, err: str):
+        ''' Print an error string to the console in nice, bright red. '''
+        self.report_phase(action, phase)
+        print (f'\n{err}')
+
+    def report_action_phase_start(self, action: str, phase: Self):
+        ''' Reports on the start of an action. '''
+        if self.opt_int('verbosity') > 0:
+            self.report_phase(action, phase)
+            print ('')
+
+    def report_action_phase_end(self, result: ResultCode):
+        ''' Reports on the start of an action. '''
+        verbosity = self.opt_int('verbosity')
+        if verbosity > 1 and result.succeeded():
+            print (f'        {self.c("action_dk")}... action {self.c("success")}succeeded'
+                   f'{self.c("off")}')
+        elif verbosity > 0 and result.failed():
+            print (f'        {self.c("action_dk")}... action {self.c("fail")}failed{self.c("off")}')
+
+    def report_step_start(self, step: Step):
+        ''' Reports on the start of an action step. '''
+        if self.opt_int('verbosity') > 0:
+            inputs = self.format_path_list(list(step.inputs))
+            outputs = self.format_path_list(list(step.outputs))
+            if len(inputs) > 0 or len(outputs) > 0:
+                print (f'{self.c("step_lt")}{step.name}{self.c("step_dk")}: {inputs}'
+                       f'{self.c("step_dk")} -> {self.c("step_lt")}{outputs}{self.c("off")}',
+                       end='')
+
+    def report_step_end(self, step: Step):
+        ''' Reports on the end of an action step. '''
+        verbosity = self.opt_int('verbosity')
+        result = step.result
+        if result.code != ResultCode.ALREADY_UP_TO_DATE:
+            if verbosity > 1:
+                if len(step.command) > 0:
+                    print (f'\n{self.c("shell_cmd")}{step.command}{self.c("off")}', end='')
+        if result.code.succeeded():
+            if verbosity > 0:
+                print (f'{self.c("step_dk")} - {self.c("success")}{result.code.view_name}'
+                       f'{self.c("step_dk")}{self.c("off")}')
+        elif result.code.failed():
+            if verbosity > 0:
+                print (f'{self.c("step_dk")} - {self.c("fail")}{result.code.view_name}'
+                       f'{self.c("step_dk")}{self.c("off")}')
+            if result.notes:
+                print (f'{result.notes}', file=sys.stderr)
+
+    def compute_file_operations(self):
+        ''' Implelent this in any phase that uses input files or generates output fies.'''
 
     def do(self, action: Action):
         '''
@@ -378,103 +532,9 @@ class Phase:
             if action.set_phase(self) != ResultCode.NOT_YET_RUN:
                 return
 
-        #WorkingSet.report_verbosity = self.opt_int('report_verbosity')
-        #WorkingSet.verbosity = self.opt_int('verbosity')
-        #if cols := self.opt('colors'):
-        #    if isinstance(cols, dict):
-        #        WorkingSet.colors = cols
-
         action_method = getattr(self, 'do_action_' + action.name, None)
         if action_method:
-            #report_action_start(action.name, self.name, type(self).__name__)
             action_method(action)
-            #report_action_end(action.name, self.name, type(self).__name__)
-
-    def color_path(self, path: Path | str):
-        ''' Returns a colorized and possibly CWD-relative version of a path. '''
-        if isinstance(path, Path):
-            path = str(path)
-        if self.opt_bool('report_relative_paths'):
-            path = relpath(path)
-        path = Path(path)
-        return f'{self.c("path_dk")}{path.parent}/{self.c("path_lt")}{path.name}{self.c("off")}'
-
-    def format_path_list(self, paths):
-        ''' Returns a colorized path or formatted list notation for a list of paths. '''
-        paths = ensure_list(paths)
-        if len(paths) == 0:
-            return ''
-        if len(paths) == 1:
-            return self.color_path(paths[0])
-        return f'{self.c("path_dk")}[{self.c("path_lt")}...{self.c("path_dk")}]{self.c("off")}'
-
-    def color_phase(self, phase: Self):
-        ''' Returns a colorized phase name and type.'''
-        phase_type = type(phase).__name__
-        return (f'{self.c("phase_lt")}{phase}{self.c("phase_dk")} '
-                f'({self.c("phase_lt")}{phase_type}{self.c("phase_dk")}){self.c("off")}')
-
-    def color_file_type(self, file_type: str):
-        ''' Returns a colorized file type.'''
-        return f'{self.c("file_type_lt")}{file_type}{self.c("off")}'
-
-    def report_phase(self, action: str, phase: Self):
-        ''' Prints a phase summary. '''
-        print (f'{self.format_action(action)}{self.c("action_dk")} - '
-               f'{self.c("phase_dk")}phase: {self.color_phase(phase)}{self.c("phase_dk")}:'
-               f'{self.c("off")}', end = '')
-
-    def report_error(self, action: str, phase: Self, err: str):
-        ''' Print an error string to the console in nice, bright red. '''
-        self.report_phase(action, phase)
-        print (f'\n{err}')
-
-    def report_action_phase_start(self, action: str, phase: Self):
-        ''' Reports on the start of an action. '''
-        if self.opt_int('verbosity') > 0:
-            self.report_phase(action, phase)
-            print ('')
-
-    def report_action_phase_end(self, action: str, phase: Self, result: ResultCode):
-        ''' Reports on the start of an action. '''
-        verbosity = self.opt_int('verbosity')
-        if verbosity > 1 and result.succeeded():
-            #self.report_phase(action, phase)
-            print (f'        {self.c("action_dk")}... action {self.c("success")}succeeded{self.c("off")}')
-        elif verbosity > 0 and result.failed():
-            #self.report_phase(action, phase)
-            print (f'        {self.c("action_dk")}... action {self.c("fail")}failed{self.c("off")}')
-
-    def report_step_start(self, step: Step):
-        ''' Reports on the start of an action step. '''
-        if self.opt_int('verbosity') > 0:
-            inputs = self.format_path_list(list(step.inputs))
-            outputs = self.format_path_list(list(step.outputs))
-            if len(inputs) > 0 or len(outputs) > 0:
-                print (f'{self.c("step_lt")}{step.name}{self.c("step_dk")}: {inputs}'
-                       f'{self.c("step_dk")} -> {self.c("step_lt")}{outputs}{self.c("off")}',
-                       end='')
-
-    def report_step_end(self, step: Step):
-        ''' Reports on the end of an action step. '''
-        verbosity = self.opt_int('verbosity')
-        result = step.result
-        if result.code != ResultCode.ALREADY_UP_TO_DATE:
-            if verbosity > 1:
-                if len(step.command) > 0:
-                    print (f'\n{self.c("shell_cmd")}{step.command}{self.c("off")}', end='')
-        if result.code.succeeded() >= 0:
-            if verbosity > 0:
-                print (f'{self.c("step_dk")} - {self.c("success")}{result.code.view_name}'
-                       f'{self.c("step_dk")}{self.c("off")}')
-        elif result.code.failed() < 0:
-            if verbosity > 0:
-                print (f'{self.c("step_dk")} - {self.c("fail")}{result.code.view_value}'
-                       f'{self.c("step_dk")}{self.c("off")}')
-            print (f'{result.notes}', file=sys.stderr)
-
-    def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
 
     def do_action_report_options(self, action: Action):
         '''
@@ -514,32 +574,8 @@ class Phase:
             report += f'{opts_str}{self.c("off")}'
         print (report)
 
-    def format_file_data(self, file: FileData):
-        ''' Formats a FileData object for reporting.'''
-        phase_name = (self.color_phase(file.generating_phase)
-                      if file.generating_phase is not None else '')
-        s = (f'    {self.color_path(file.path)}{self.c("step_dk")} - '
-             f'{self.c("file_type_dk")}type: {self.color_file_type(file.file_type)}')
-        if file.generating_phase is not None:
-            s += (f'{self.c("step_dk")} - {self.c("phase_dk")}generated by: {phase_name}'
-                  f'{self.c("off")}')
-        else:
-            s += f'{self.c("step_dk")} - {self.c("phase_dk")}(extant file){self.c("off")}'
-        return s
-
-    def color_file_step_name(self, step_name: str):
-        ''' Colorize a FileOperation step name for reporting.'''
-        return f'{self.c("step_lt")}{step_name}{self.c("off")}'
-
-    def format_action(self, action_name: str):
-        ''' Formats an action name for reporting.'''
-        s = f'{self.c("action_dk")}action: {self.c("action_lt")}{action_name}{self.c("off")}'
-        return s
-
     def do_action_report_files(self, action: Action):
         ''' Prints the cmoputed file operations for each phase.'''
-        #print (f'{self.format_action(action.name)} - {self.color_phase(self)}{self.c("phase_dk")}:'
-        #       f'{self.c("off")}')
         self.report_action_phase_start(action.name, self)
         for file_op in self.files.operations:
             print (f'  {self.color_file_step_name(file_op.step_name)}{self.c("step_dk")}:'
@@ -550,3 +586,36 @@ class Phase:
             for file in file_op.output_files:
                 print (self.format_file_data(file))
         print ('')
+
+    def do_step_delete_file(self, action: Action, depends_on: Steps, path: Path) -> Step:
+        '''
+        Perfoems a file deletion operation as an action step.
+        '''
+        def act(cmd: str, path: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if path.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        cmd = self.make_cmd_delete_file(path)
+        step = Step('delete file', depends_on, [path], [],
+                             partial(act, cmd=cmd, path=path), cmd)
+        action.set_step(step)
+        return step
+
+    def do_action_clean(self, action: Action):
+        '''
+        Cleans all object paths this phase builds.
+        '''
+        for file in self.files.get_output_files():
+            if file.file_type != 'dir':
+                self.do_step_delete_file(action, None, file.path)

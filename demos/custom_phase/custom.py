@@ -21,13 +21,12 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
         '''
         Make the path and content of our generated source.
         '''
-        return { src_file: (Path(f"{self.opt_str('gen_src_dir')}/{src_file}"), src)
+        return { Path(f"{self.opt_str('gen_src_dir')}/{src_file}"): src
                  for src_file, src in self.opt_dict('gen_sources').items() }
 
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
-        for _, (src_path, _) in self.get_generated_source().items():
-            src_path = Path(src_path)
+        for src_path in self.get_generated_source().keys():
             self.record_file_operation(
                 None,
                 FileData(src_path.parent, 'dir', self),
@@ -45,7 +44,7 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
         def act(cmd: str, origin_path: Path, src_path: Path):
             step_result = ResultCode.SUCCEEDED
             step_notes = None
-            if not src_path.exists() or input_path_is_newer(src_path, origin_path):
+            if not src_path.exists() or input_path_is_newer(origin_path, src_path):
                 res, _, err = do_shell_command(cmd)
                 if res != 0:
                     step_result = ResultCode.COMMAND_FAILED
@@ -72,20 +71,21 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
             for out in file_op.output_files:
                 self.do_step_delete_file(action, None, out.path)
 
-    def do_action_clean_build_directory(self, action: Action, depends_on: list[Step] | Step | None):
+    def do_action_clean_build_directory(self, action: Action):
         '''
         Wipes out the generated source directory.
         '''
-        return self.do_step_delete_directory(action, depends_on, Path(self.opt_str('gen_src_dir')))
+        self.do_step_delete_directory(action, None, Path(self.opt_str('gen_src_dir')))
+        super().do_action_clean_build_directory(action)
 
     def do_action_build(self, action: Action):
         '''
         Generate the source files for the build.
         '''
         def get_source_code(desired_src_path):
-            for _, (src_path, src) in self.get_generated_source().items():
+            for src_path, src in self.get_generated_source().items():
                 if src_path == desired_src_path:
-                    return src
+                    return src.replace('"', '\\"')
             raise RuntimeError('Cannot find the source!')
 
         dirs = {}

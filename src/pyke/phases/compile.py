@@ -37,13 +37,6 @@ class CompilePhase(CFamilyBuildPhase):
                 FileData(obj_path, 'object', self),
                 'compile')
 
-    def do_action_clean(self, action: Action):
-        '''
-        Cleans all object paths this phase builds.
-        '''
-        for obj in self.files.get_output_files('object'):
-            self.do_step_delete_file(action, None, obj.path)
-
     def do_action_build(self, action: Action):
         '''
         Builds all objects.

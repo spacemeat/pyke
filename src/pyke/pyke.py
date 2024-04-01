@@ -4,6 +4,8 @@ Python library for building software.
 
 # pylint: disable=broad-exception-caught
 
+# TODO: Lots of good goals outlined here:  https://www.youtube.com/watch?v=Sh3uayB9kHs
+
 from enum import Enum
 import importlib.util
 import importlib.machinery
@@ -397,7 +399,7 @@ def main():
     for action in actions:
         res = action.run()
         if res.failed():
-            return res
+            return ReturnCode.ACTION_FAILED.value
 
     return ReturnCode.SUCCEEDED.value
 

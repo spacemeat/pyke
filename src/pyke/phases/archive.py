@@ -36,13 +36,6 @@ class ArchivePhase(CFamilyBuildPhase):
             FileData(archive_path, 'static_library', self),
             'archive')
 
-    def do_action_clean(self, action: Action):
-        '''
-        Cleans all object paths this phase builds.
-        '''
-        archive_path = self.get_archive_path()
-        return self.do_step_delete_file(action, None, archive_path)
-
     def do_action_build(self, action: Action):
         '''
         Builds all object paths.

@@ -36,13 +36,6 @@ class LinkPhase(CFamilyBuildPhase):
             FileData(exe_path, 'executable', self),
             'link')
 
-    def do_action_clean(self, action: Action):
-        '''
-        Cleans all object paths this phase builds.
-        '''
-        exe_path = self.get_exe_path()
-        return self.do_step_delete_file(action, None, exe_path)
-
     def do_action_build(self, action: Action):
         '''
         Builds all object paths.
