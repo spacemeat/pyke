@@ -1,12 +1,25 @@
+''' Bits for parsing stringized options, like one gets from a command line.'''
+
 from dataclasses import dataclass
 from enum import Enum
 import re
 from typing import Any, Callable
-from .utilities import set_color as c, InvalidOptionValue
+from .utilities import InvalidOptionValue
+from .ansi import named_fg, off
+
+
+def c(color: str):
+    ''' Wee colorset.'''
+    colors = {
+        'off': off,
+        'token_type': named_fg['green'],
+        'token_depth': named_fg['bright blue'],
+        'token_value': named_fg['bright green'],
+    }
+    return colors[color]
 
 class Token(Enum):
     ''' Encodes tokens found in override values parsed from a string. '''
-    #ANY = '?'
     QSTRING = '\''
     DQSTRING = '"'
     LPAREN = '('
@@ -41,7 +54,6 @@ class TokenObj:
         return (f"{c('token_type')}{self.token.name}{c('off')}"
                 f" ({c('token_depth')}{self.depth}{c('off')})"
                 f" {c('token_value')}{self.value}{c('off')}")
-        #return f"TO(T.{self.token.name}, '{self.value}', {self.depth})"
 
     def __repr__(self):
         return str(self)
@@ -73,10 +85,8 @@ class Ast:
         return self.value == other.value and self.toks == other.toks
 
     def tokenize_string_value(self):
-        '''
-        Turns an option value (as passed from the command line, probably) into a list of Tokens
-        suitable for parsing into an object.
-        '''
+        ''' Turns an option value (as passed from the command line, probably) into a list of Tokens
+        suitable for parsing into an object. '''
         self.toks = []
         idx = 0
         depth = 0
@@ -210,10 +220,8 @@ class Ast:
         self.toks = recur(0)
 
     def condition_tokens(self):
-        '''
-        Does various transforms on the token list to normalize it for object detection and
-        construction.
-        '''
+        ''' Does various transforms on the token list to normalize it for object detection and
+        construction. '''
         self.parse_tokenized_string_value()
 
         #   parse string tokens into other unit types
@@ -325,7 +333,6 @@ class Ast:
 
         def recur(toks: TokenList) -> Any:
             tok_idx = 0
-            new_toks = []
 
             def get_unit_obj(tok: TokenObj) -> Any:
                 match tok.token:
@@ -342,7 +349,6 @@ class Ast:
                 tok = toks[tok_idx]
                 if isinstance(tok, list):
                     return recur(tok)
-                    #new_toks.append(recur(tok))
 
                 if tok.token == Token.LBRACE:
                     is_dict = True
@@ -405,7 +411,6 @@ class Ast:
 
         stuff = recur(self.toks)
         return stuff
-
 
 def parse_value(value: str):
     ''' Turn a value string into a value object. '''

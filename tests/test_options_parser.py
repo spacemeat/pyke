@@ -4,15 +4,7 @@
 #pylint: disable=too-many-public-methods, too-many-lines
 
 import unittest
-from pyke.utilities import WorkingSet
 from pyke.options_parser import (Ast, TokenObj as TO, Token as T)
-
-WorkingSet.colors = {
-    'off':              {'form': 'named', 'off': [] },
-    'token_type':       {'form': 'rgb24', 'fg': [0x33, 0xff, 0xff] },
-    'token_value':      {'form': 'rgb24', 'fg': [0xff, 0x33, 0xff] },
-    'token_depth':      {'form': 'rgb24', 'fg': [0x33, 0xff, 0x33] },
-}
 
 class TestTokenize(unittest.TestCase):
     def test_tokenize_0(self):
