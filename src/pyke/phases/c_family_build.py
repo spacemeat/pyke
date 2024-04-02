@@ -55,15 +55,15 @@ class CFamilyBuildPhase(Phase):
             'thin_archive': False,
 
             'inc_dir': '.',
-            'include_anchor': '{project_anchor}/{inc_dir}',
+            'include_anchor': '{static_anchor}/{inc_dir}',
             'include_dirs': ['include'],
 
             'src_dir': 'src',
-            'src_anchor': '{project_anchor}/{src_dir}',
+            'src_anchor': '{static_anchor}/{src_dir}',
             'sources': [],
 
             'prebuilt_obj_dir': 'prebuilt_obj',
-            'prebuilt_obj_anchor': '{project_anchor}/{prebuilt_obj_dir}',
+            'prebuilt_obj_anchor': '{static_anchor}/{prebuilt_obj_dir}',
             'prebuilt_objs': [],
 
             'build_dir': 'build',

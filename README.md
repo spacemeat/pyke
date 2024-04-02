@@ -283,8 +283,8 @@ $ pyke opts
 phase: simple_app
 verbosity: = 0
           -> 0
-project_anchor: = /home/schrock/src/pyke/tests/simple_app
-               -> /home/schrock/src/pyke/tests/simple_app
+static_anchor: = /home/schrock/src/pyke/tests/simple_app
+              -> /home/schrock/src/pyke/tests/simple_app
 gen_anchor: = /home/schrock/src/pyke/tests/simple_app
            -> /home/schrock/src/pyke/tests/simple_app
 ...
@@ -309,7 +309,7 @@ The detailed report from `report_options` (`opts`) is what you get at `report_ve
 $ pyke -o report_verbosity=1
 phase: simple_app
 verbosity: -> 2
-project_anchor: -> /home/schrock/src/pyke/tests/simple_app
+static_anchor: -> /home/schrock/src/pyke/tests/simple_app
 gen_anchor: -> /home/schrock/src/pyke/tests/simple_app
 ...
 ```
@@ -431,13 +431,13 @@ There are a few options that are uiversal to pyke, regardless of the type of pro
 |name|phase|The name of the phase. You should likely override this.
 |report_verbosity|2|The verbosity of reporting. 0 just reports the phase by name; 1 reports the phase's interpolated options; 2 reports the raw and interpolated options.
 |verbosity|0|The verbosity of non-reporting actions. 0 is silent, unless there are errors; 1 is an abbreviated report; 2 is a full report with all commands run.
-|project_anchor|\<project root\>|This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
+|static_anchor|\<project root\>|This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
 |gen_anchor|\<project root\>|This is an anchor directory for other directories to relate to when referencing generated build artifacts like object files or executables.
 |colors|{colors_24bit}|Specifies the name of a color palette to use in reports and other output. Colors are discussed below; you can set this value to `{colors_none}` to disable color output.
 
-When running pyke from a directory that is different from your makefile's directory, you can specify the makefile path with `-m`. This is discussed below, but by default both the project root directory (`project_anchor`) and generated output root directory (`gen_anchor`) are relative to the makefile's directory, regardless of where you invoke from. However, this behavior can be modified. By overriding `gen_anchor` to a different directory in your file system, you can cause all the generated outputs to be placed anywhere. The generated directory structure remains the same, just at a different root location. Note that intermediate files which are inputs of later phases, like compiled object files, are still resolved correctly, as *any* generated file is rooted by `gen_anchor`. Likewise, any file that is expected as part of the project inputs created by developers (anything you might check in to your project repository, say) is anchored by `project_anchor`.
+When running pyke from a directory that is different from your makefile's directory, you can specify the makefile path with `-m`. This is discussed below, but by default both the project root directory (`static_anchor`) and generated output root directory (`gen_anchor`) are relative to the makefile's directory, regardless of where you invoke from. However, this behavior can be modified. By overriding `gen_anchor` to a different directory in your file system, you can cause all the generated outputs to be placed anywhere. The generated directory structure remains the same, just at a different root location. Note that intermediate files which are inputs of later phases, like compiled object files, are still resolved correctly, as *any* generated file is rooted by `gen_anchor`. Likewise, any file that is expected as part of the project inputs created by developers (anything you might check in to your project repository, say) is anchored by `static_anchor`.
 
-If you don't want your makefile to be situated at the project root, overriding `project_anchor` (possibly in the makefile itself) to the actual project root will line things up.
+If you don't want your makefile to be situated at the project root, overriding `static_anchor` (possibly in the makefile itself) to the actual project root will line things up.
 
 ### C/C++ specific options
 
@@ -478,10 +478,10 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |definitions|[]|Specifies a set of macro definitions.
 |additional_flags|[]|Specifies a set of additional flags passed to the compiler.
 |incremental_build|True|If set, and using the `CompileAndLink` phase, forces the build to create individual object for each source, and link them in a separate step. Otherwise, the build will pass all the sources to the build tool at once, to create a binary target in one step.
-|include_anchor|{project_anchor}|The base directory for include search directories.
+|include_anchor|{static_anchor}|The base directory for include search directories.
 |include_dirs|[include]|The default directories where project headers are searched.
 |src_dir|src|The default directory where source files can be found.
-|src_anchor|{project_anchor}/{src_dir}|The full directory layout where source files can be found.
+|src_anchor|{static_anchor}/{src_dir}|The full directory layout where source files can be found.
 |sources|[]|A list of source files to compile in this phase.
 |build_dir|build|The default subdirectory to place all build results into.
 |build_detail|{kind}.{toolkit}|A default subdirectoy of {build} where more specific build results are placed.
@@ -513,7 +513,7 @@ Each of the include, source, object, and executable directories are built from c
 #### Include files
 ```
 inc_dir = .
-include_anchor = {project_anchor}/{inc_dir}/\<include directory\>
+include_anchor = {static_anchor}/{inc_dir}/\<include directory\>
 include_dirs = [include]
 ```
 You are encouraged to change `inc_dir` to set a base directory for all include directories. Pyke will reference `include_anchor` and `include_dirs` directly; the rest are just there to construct the path.
@@ -521,7 +521,7 @@ You are encouraged to change `inc_dir` to set a base directory for all include d
 #### Source files
 ```
 src_dir = src
-src_anchor = {project_anchor}/{src_dir}
+src_anchor = {static_anchor}/{src_dir}
 ```
 You are encouraged to change `src_dir` to set a base directory for all the source files.
 

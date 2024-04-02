@@ -45,7 +45,7 @@ class Phase:
             'report_verbosity': 2,
             'report_relative_paths': True,
             'verbosity': 0,
-            'project_anchor': WorkingSet.makefile_dir,
+            'static_anchor': WorkingSet.makefile_dir,
             'gen_anchor': WorkingSet.makefile_dir,
             'simulate': False,
             'colors_24bit': {
@@ -156,6 +156,50 @@ class Phase:
 
         self.files = None
 
+    def __repr__(self):
+        return self.name
+
+    def enumerate_dependencies(self):
+        ''' Enumerates all the dependencies in depth-first order.'''
+        for dep in self.dependencies:
+            yield from dep.enumerate_dependencies()
+        yield self
+
+    def find_dependency_by_name(self, name: str):
+        ''' Finds the dependency (including self) by name.'''
+        for dep in self.enumerate_dependencies():
+            if dep.opt_str('name') == name:
+                return dep
+        return None
+
+    def find_in_dependency_tree(self, dep_to_find: Self):
+        ''' Returns whether dep_to_find is in the dependency tree for this phase. '''
+        try:
+            idx = self.dependencies.index(dep_to_find)
+            return self.dependencies[idx]
+        except ValueError:
+            for dep in self.dependencies:
+                phase = dep.find_in_dependency_tree(dep_to_find)
+                if phase is not None:
+                    return phase
+            return None
+
+    def set_dependency(self, new_deps: Self | list[Self]):
+        ''' Marks a dependency phase for this phase. Must not be a phase which does not
+        depend on this phase already (no circular references allowed). '''
+        new_deps = ensure_list(new_deps)
+        for new_dep in new_deps:
+            if (not self.is_project_phase and
+                new_dep.is_project_phase):
+                raise ProjectPhaseDependencyError(
+                    f'Attempt by non-project phase "{self.name}" to depend on a '
+                    f'project phase "{new_dep.opt_str("name")}.')
+            if new_dep.find_in_dependency_tree(self) is not None:
+                raise CircularDependencyError(
+                    f'Attempt to set a circular dependency {new_dep.opt_str("name")} '
+                    f'to phase {self.name}. Not cool.')
+            self.dependencies.append(new_dep)
+
     def record_file_operation(self, input_files: list[FileData] | FileData | None,
                               output_files: list[FileData] | FileData | None, step_name: str):
         ''' Record a file transform this phase can perform.'''
@@ -174,8 +218,8 @@ class Phase:
             dep.files = PhaseFiles()
             dep.compute_file_operations()
 
-    def compute_file_oerations(self):
-        ''' Subclasses must implement this to record operations.'''
+    def compute_file_operations(self):
+        ''' Implelent this in any phase that uses input files or generates output fies.'''
 
     @property
     def name(self):
@@ -189,10 +233,8 @@ class Phase:
 
     def push_opts(self, overrides: dict,
                   include_deps: bool = False, include_project_deps: bool = False):
-        '''
-        Apply optinos which take precedence over self.overrides. Intended to be 
-        set temporarily, likely from the command line.
-        '''
+        ''' Apply optinos which take precedence over self.overrides. Intended to be 
+        set temporarily, likely from the command line. '''
         self.options |= overrides
         if include_deps:
             for dep in self.dependencies:
@@ -201,9 +243,7 @@ class Phase:
 
     def pop_opts(self, keys: list[str],
                   include_deps: bool = False, include_project_deps: bool = False):
-        '''
-        Removes pushed option overrides.
-        '''
+        ''' Removes pushed option overrides. '''
         if include_deps:
             for dep in reversed(self.dependencies):
                 if not dep.is_projet_phase or include_project_deps:
@@ -212,10 +252,8 @@ class Phase:
             self.options.pop(key)
 
     def opt(self, key: str, overrides: dict | None = None, interpolate: bool = True):
-        '''
-        Returns an option's value, given its key. The option is optionally
-        interpolated (by default) with self.options as its local namespace.
-        '''
+        ''' Returns an option's value, given its key. The option is optionally
+        interpolated (by default) with self.options as its local namespace. '''
         if overrides:
             self.options |= overrides
         val = self.options.get(key, interpolate)
@@ -226,148 +264,76 @@ class Phase:
 
     def opt_t(self, obj_type: Type[T], key: str, overrides: dict | None = None,
               interpolate: bool = True) -> T:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a tuple.
-        '''
+        The referenced value must be a T. '''
         val = self.opt(key, overrides, interpolate)
         assert isinstance(val, obj_type)
         return val
 
     def opt_iter(self, key: str, overrides: dict | None = None,
                  interpolate: bool = True) -> Iterable:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a tuple.
-        '''
+        The referenced value must be a tuple. '''
         return self.opt_t(Iterable, key, overrides, interpolate)
 
     def opt_bool(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> bool:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a bool.
-        '''
+        The referenced value must be a bool. '''
         return self.opt_t(bool, key, overrides, interpolate)
 
     def opt_int(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> int:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be an int.
-        '''
+        The referenced value must be an int. '''
         return self.opt_t(int, key, overrides, interpolate)
 
     def opt_float(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> float:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a float.
-        '''
+        The referenced value must be a float. '''
         return self.opt_t(float, key, overrides, interpolate)
 
     def opt_str(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> str:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a string.
-        '''
+        The referenced value must be a string. '''
         return self.opt_t(str, key, overrides, interpolate)
 
     def opt_tuple(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> tuple:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a tuple.
-        '''
+        The referenced value must be a tuple. '''
         return self.opt_t(tuple, key, overrides, interpolate)
 
     def opt_list(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> list:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a list.
-        '''
+        The referenced value must be a list. '''
         return self.opt_t(list, key, overrides, interpolate)
 
     def opt_set(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> set:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a set.
-        '''
+        The referenced value must be a set. '''
         return self.opt_t(set, key, overrides, interpolate)
 
     def opt_dict(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> dict:
-        '''
-        Returns an option's value, given its key. The option is optionally
+        ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
-        The referenced value must be a dict.
-        '''
+        The referenced value must be a dict. '''
         return self.opt_t(dict, key, overrides, interpolate)
 
-    def __repr__(self):
-        return str(self.name)
-
     def clone(self, options: dict | None = None):
-        '''
-        Returns a clone of this instance. The clone has the same
+        ''' Returns a clone of this instance. The clone has the same
         options (also copied) but its own dependencies and action
-        results state.
-        '''
+        results state. '''
         obj = type(self)({})
         obj.options = self.options.clone()
         obj.options |= (options or {})
         return obj
-
-    def enumerate_dependencies(self):
-        ''' Enumerates all the dependencies in depth-first order.'''
-        for dep in self.dependencies:
-            yield from dep.enumerate_dependencies()
-        yield self
-
-    def find_dependency_by_name(self, name: str):
-        ''' Finds the dependency (including self) by name.'''
-        for dep in self.enumerate_dependencies():
-            if dep.opt_str('name') == name:
-                return dep
-        return None
-
-    def find_in_dependency_tree(self, dep_to_find: Self):
-        '''
-        Returns whether dep_to_find is in the dependency tree for 
-        this phase.
-        '''
-        try:
-            idx = self.dependencies.index(dep_to_find)
-            return self.dependencies[idx]
-        except ValueError:
-            for dep in self.dependencies:
-                phase = dep.find_in_dependency_tree(dep_to_find)
-                if phase is not None:
-                    return phase
-            return None
-
-    def set_dependency(self, new_deps: Self | list[Self]):
-        '''
-        Marks a dependency phase for this phase. Must not be a phase
-        which does not depend on this phase already (no circular 
-        references allowed).
-        '''
-        new_deps = ensure_list(new_deps)
-        for new_dep in new_deps:
-            if (not self.is_project_phase and
-                new_dep.is_project_phase):
-                raise ProjectPhaseDependencyError(
-                    f'Attempt by non-project phase "{self.name}" to depend on a '
-                    f'project phase "{new_dep.opt_str("name")}.')
-            if new_dep.find_in_dependency_tree(self) is not None:
-                raise CircularDependencyError(
-                    f'Attempt to set a circular dependency {new_dep.opt_str("name")} '
-                    f'to phase {self.name}. Not cool.')
-            self.dependencies.append(new_dep)
 
     def c(self, color):
         ''' Returns the ANSI color code for the specified thematic element.'''
@@ -390,9 +356,7 @@ class Phase:
         return ''
 
     def make_cmd_delete_file(self, path: Path):
-        '''
-        Returns an appropriate command for deleting a file.
-        '''
+        ''' Returns an appropriate command for deleting a file. '''
         return f'rm {str(path)}'
 
     def color_path(self, path: Path | str):
@@ -500,46 +464,48 @@ class Phase:
             if result.notes:
                 print (f'{result.notes}', file=sys.stderr)
 
-    def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
-
     def do(self, action: Action):
-        '''
-        Performs an action, such as 'build' or 'run'. 
+        ''' Performs an action, such as 'build' or 'run'. '''
 
-        First, each dependency phase is called with the same action, depth-first.
-        Next, the corresponding 'do_action_<action>' method is called for this
-        phase.
-
-        Each invoked action records the phases that run it, to prevent repeat actions
-        for phases which are dependents of multiple other phases. This is managed
-        internally.
-        '''
-
-        for dep in self.dependencies:
-            if dep.is_project_phase:
-                dep.do(action)
-
-        if self.is_project_phase:
-            if action.set_project(self) != ResultCode.NOT_YET_RUN:
-                return
+        # TODO: This is where a pre-action step should be performed, if any. Good place for 
+        # project hooks like remote build launches, container setups, etc.
 
         for dep in self.dependencies:
             if not dep.is_project_phase:
                 dep.do(action)
 
-        if not self.is_project_phase:
-            if action.set_phase(self) != ResultCode.NOT_YET_RUN:
-                return
+        if action.set_phase(self) != ResultCode.NOT_YET_RUN:
+            return
 
         action_method = getattr(self, 'do_action_' + action.name, None)
         if action_method:
             action_method(action)
 
+    def do_step_delete_file(self, action: Action, depends_on: Steps, path: Path) -> Step:
+        ''' Perfoems a file deletion operation as an action step. '''
+        def act(cmd: str, path: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if path.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        cmd = self.make_cmd_delete_file(path)
+        step = Step('delete file', depends_on, [path], [],
+                             partial(act, cmd=cmd, path=path), cmd)
+        action.set_step(step)
+        return step
+
     def do_action_report_options(self, action: Action):
-        '''
-        This gives a small description of the phase.
-        '''
+        ''' This gives a small description of the phase. '''
         report = ''
         report_verbosity = self.opt_int('report_verbosity')
         self.report_action_phase_start(action.name, self)
@@ -587,35 +553,8 @@ class Phase:
                 print (self.format_file_data(file))
         print ('')
 
-    def do_step_delete_file(self, action: Action, depends_on: Steps, path: Path) -> Step:
-        '''
-        Perfoems a file deletion operation as an action step.
-        '''
-        def act(cmd: str, path: Path) -> Result:
-            step_result = ResultCode.SUCCEEDED
-            step_notes = None
-            if path.exists():
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-            return Result(step_result, step_notes)
-
-        cmd = self.make_cmd_delete_file(path)
-        step = Step('delete file', depends_on, [path], [],
-                             partial(act, cmd=cmd, path=path), cmd)
-        action.set_step(step)
-        return step
-
     def do_action_clean(self, action: Action):
-        '''
-        Cleans all object paths this phase builds.
-        '''
+        ''' Cleans all object paths this phase builds. '''
         for file in self.files.get_output_files():
             if file.file_type != 'dir':
                 self.do_step_delete_file(action, None, file.path)

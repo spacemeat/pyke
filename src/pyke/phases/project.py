@@ -1,6 +1,7 @@
 
 ''' Contains the ProjectPhase phase class. '''
 
+from ..action import Action, ResultCode
 from .phase import Phase
 
 class ProjectPhase(Phase):
@@ -34,3 +35,16 @@ class ProjectPhase(Phase):
                 oname = f'{name}_{ordinal}'
             phase.name = name
             self.phase_names[name] = phase
+
+    def do(self, action: Action):
+        '''
+        Performs an action, such as 'build' or 'run'. 
+        '''
+        for dep in self.dependencies:
+            if dep.is_project_phase:
+                dep.do(action)
+
+        if action.set_project(self) != ResultCode.NOT_YET_RUN:
+            return
+
+        super().do(action)
