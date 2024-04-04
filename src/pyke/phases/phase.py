@@ -3,6 +3,7 @@ This is the base Phase class for all other Phase types. All the base functionali
 is contained herein.
 '''
 
+from copy import deepcopy
 from functools import partial
 from os.path import relpath
 from pathlib import Path
@@ -12,15 +13,13 @@ from typing_extensions import Self
 
 from ..action import (Action, ResultCode, Step, Result,
                       FileData, FileOperation, PhaseFiles)
-from .. import ansi as a
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, do_shell_command,
+                         determine_color_support, ansi_colors, set_color,
                          CircularDependencyError, ProjectPhaseDependencyError)
 
 T = TypeVar('T')
 Steps: TypeAlias = list[Step] | Step | None
-
-# TODO: Auto-detect terminal color capabilities
 
 class Phase:
     '''
@@ -48,95 +47,11 @@ class Phase:
             'static_anchor': WorkingSet.makefile_dir,
             'gen_anchor': WorkingSet.makefile_dir,
             'simulate': False,
-            'colors_24bit': {
-                'off':              {'form': 'off' },
-                'success':          {'form': 'b24', 'fg': [0x33, 0xaf, 0x55] },
-                'fail':             {'form': 'b24', 'fg': [0xff, 0x33, 0x33] },
-                'phase_lt':         {'form': 'b24', 'fg': [0x33, 0x33, 0xff] },
-                'phase_dk':         {'form': 'b24', 'fg': [0x23, 0x23, 0x7f] },
-                'step_lt':          {'form': 'b24', 'fg': [0xb3, 0x8f, 0x4f] },
-                'step_dk':          {'form': 'b24', 'fg': [0x93, 0x5f, 0x2f] },
-                'shell_cmd':        {'form': 'b24', 'fg': [0x31, 0x31, 0x32] },
-                'key':              {'form': 'b24', 'fg': [0xff, 0x8f, 0x23] },
-                'val_uninterp_lt':  {'form': 'b24', 'fg': [0xaf, 0x23, 0xaf] },
-                'val_uninterp_dk':  {'form': 'b24', 'fg': [0x5f, 0x13, 0x5f] },
-                'val_interp':       {'form': 'b24', 'fg': [0x33, 0x33, 0xff] },
-                'token_type':       {'form': 'b24', 'fg': [0x33, 0xff, 0xff] },
-                'token_value':      {'form': 'b24', 'fg': [0xff, 0x33, 0xff] },
-                'token_depth':      {'form': 'b24', 'fg': [0x33, 0xff, 0x33] },
-                'path_lt':          {'form': 'b24', 'fg': [0x33, 0xaf, 0xaf] },
-                'path_dk':          {'form': 'b24', 'fg': [0x13, 0x5f, 0x8f] },
-                'file_type_lt':     {'form': 'b24', 'fg': [0x63, 0x8f, 0xcf] },
-                'file_type_dk':     {'form': 'b24', 'fg': [0x43, 0x5f, 0x9f] },
-                'action_lt':        {'form': 'b24', 'fg': [0xf3, 0x7f, 0x0f] },
-                'action_dk':        {'form': 'b24', 'fg': [0xa3, 0x4f, 0x00] },
-            },
-            'colors_8bit': {
-                'off':              {'form': 'off' },
-                'success':          {'form': 'b8', 'fg': 77 },
-                'fail':             {'form': 'b8', 'fg': 160 },
-                'phase_lt':         {'form': 'b8', 'fg': 27 },
-                'phase_dk':         {'form': 'b8', 'fg': 19 },
-                'step_lt':          {'form': 'b8', 'fg': 215 },
-                'step_dk':          {'form': 'b8', 'fg': 137 },
-                'shell_cmd':        {'form': 'b8', 'fg': 237 },
-                'key':              {'form': 'b8', 'fg': 202 },
-                'val_uninterp_lt':  {'form': 'b8', 'fg': 201 },
-                'val_uninterp_dk':  {'form': 'b8', 'fg': 90 },
-                'val_interp':       {'form': 'b8', 'fg': 27 },
-                'token_type':       {'form': 'b8', 'fg': 87 },
-                'token_value':      {'form': 'b8', 'fg': 207 },
-                'token_depth':      {'form': 'b8', 'fg': 83 },
-                'path_lt':          {'form': 'b8', 'fg': 45 },
-                'path_dk':          {'form': 'b8', 'fg': 24 },
-                'file_type_lt':     {'form': 'b8', 'fg': 111 },
-                'file_type_dk':     {'form': 'b8', 'fg': 26 },
-                'action_lt':        {'form': 'b8', 'fg': 172 },
-                'action_dk':        {'form': 'b8', 'fg': 130 },
-            },
-            'colors_named': {
-                'off':              {'form': 'off' },
-                'success':          {'form': 'named', 'fg': 'bright green' },
-                'fail':             {'form': 'named', 'fg': 'bright red' },
-                'phase_lt':         {'form': 'named', 'fg': 'bright blue' },
-                'phase_dk':         {'form': 'named', 'fg': 'blue' },
-                'step_lt':          {'form': 'named', 'fg': 'bright yellow' },
-                'step_dk':          {'form': 'named', 'fg': 'yellow' },
-                'shell_cmd':        {'form': 'named', 'fg': 'bright black' },
-                'key':              {'form': 'named', 'fg': 'yellow' },
-                'val_uninterp_lt':  {'form': 'named', 'fg': 'bright magenta' },
-                'val_uninterp_dk':  {'form': 'named', 'fg': 'magenta' },
-                'val_interp':       {'form': 'named', 'fg': 'bright blue' },
-                'token_type':       {'form': 'named', 'fg': 'bright cyan' },
-                'token_value':      {'form': 'named', 'fg': 'bright magenta' },
-                'token_depth':      {'form': 'named', 'fg': 'bright green' },
-                'path_lt':          {'form': 'named', 'fg': 'bright cyan' },
-                'path_dk':          {'form': 'named', 'fg': 'cyan' },
-                'file_type_lt':     {'form': 'named', 'fg': 'bright blue' },
-                'file_type_dk':     {'form': 'named', 'fg': 'blue' },
-                'action_lt':        {'form': 'named', 'fg': 'bright yellow' },
-                'action_dk':        {'form': 'named', 'fg': 'yellow' },
-            },
-            'colors_none': {
-                'off':              {},
-                'success':          {},
-                'fail':             {},
-                'phase_lt':         {},
-                'phase_dk':         {},
-                'step_lt':          {},
-                'step_dk':          {},
-                'shell_cmd':        {},
-                'key':              {},
-                'val_uninterp_lt':  {},
-                'val_uninterp_dk':  {},
-                'val_interp':       {},
-                'token_type':       {},
-                'token_value':      {},
-                'token_depth':      {},
-                'path_lt':          {},
-                'path_dk':          {},
-            },
-            'colors': '{colors_24bit}',
+            'colors_24bit': deepcopy(ansi_colors['colors_24bit']),
+            'colors_8bit': deepcopy(ansi_colors['colors_8bit']),
+            'colors_named': deepcopy(ansi_colors['colors_named']),
+            'colors_none': deepcopy(ansi_colors['colors_none']),
+            'colors': f'{{colors_{determine_color_support()}}}',
         }
         self.options |= (options or {})
 
@@ -268,6 +183,8 @@ class Phase:
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a T. '''
         val = self.opt(key, overrides, interpolate)
+        if not isinstance(val, obj_type):
+            breakpoint()
         assert isinstance(val, obj_type)
         return val
 
@@ -335,29 +252,12 @@ class Phase:
         obj.options |= (options or {})
         return obj
 
-    def c(self, color):
-        ''' Returns the ANSI color code for the specified thematic element.'''
-        color_desc = self.opt_dict('colors')[color]
-        if color_desc is not None:
-            fg = color_desc.get('fg')
-            bg = color_desc.get('bg')
-            form = color_desc.get('form')
-            if form == 'off':
-                return a.off
-            if form == 'b24':
-                return (f'{a.b24_fg(*fg) if fg else ""}'
-                        f'{a.b24_bg(*bg) if bg else ""}')
-            if form == 'b8':
-                return (f'{a.b8_fg(fg) if fg else ""}'
-                        f'{a.b8_bg(bg) if bg else ""}')
-            if form == 'named':
-                return (f'{a.named_fg[fg] if fg else ""}'
-                        f'{a.named_bg[bg] if bg else ""}')
-        return ''
-
     def make_cmd_delete_file(self, path: Path):
         ''' Returns an appropriate command for deleting a file. '''
         return f'rm {str(path)}'
+
+    def c(self, color):
+        return set_color(self.opt_dict('colors'), color)
 
     def color_path(self, path: Path | str):
         ''' Returns a colorized and possibly CWD-relative version of a path. '''

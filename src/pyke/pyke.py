@@ -34,7 +34,6 @@ class ReturnCode(Enum):
     INVALID_ARGS = 3
     ACTION_FAILED = 4
 
-
 def run_make_file(pyke_path, cache_make):
     ''' Loads and runs the user-created make file.'''
     if pyke_path.exists():
@@ -365,8 +364,9 @@ def main():
             if '=' in override:
                 k, v = override.split('=', 1)
                 if k[-1] in ['+', '*', '-', '|', '&', '\\', '^']:
-                    op = f'{k[-1]}='
-                    k = OptionOp(k[:-1].strip()).name
+                    op_str = f'{k[-1]}='
+                    op = {member.value: member for member in OptionOp}[k[-1]]
+                    k = k[:-1].strip()
                 else:
                     op = OptionOp.REPLACE
                 v = parse_value(v.strip())
@@ -397,6 +397,7 @@ def main():
         idx += 1
 
     for action in actions:
+
         res = action.run()
         if res.failed():
             return ReturnCode.ACTION_FAILED.value

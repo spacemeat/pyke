@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing_extensions import Self
 
-from .utilities import ensure_list, InvalidActionError
+from .utilities import ensure_list, InvalidActionError, WorkingSet
 
 # pylint: disable=too-few-public-methods
 

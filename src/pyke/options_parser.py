@@ -7,17 +7,6 @@ from typing import Any, Callable
 from .utilities import InvalidOptionValue
 from .ansi import named_fg, off
 
-
-def c(color: str):
-    ''' Wee colorset.'''
-    colors = {
-        'off': off,
-        'token_type': named_fg['green'],
-        'token_depth': named_fg['bright blue'],
-        'token_value': named_fg['bright green'],
-    }
-    return colors[color]
-
 class Token(Enum):
     ''' Encodes tokens found in override values parsed from a string. '''
     QSTRING = '\''
@@ -38,7 +27,7 @@ class Token(Enum):
     SPACE = ' '
 
     def __str__(self):
-        return f"{c('token_type')}{self.name}{c('off')}"
+        return f"{self.name}"
 
     def __repr__(self):
         return str(self)
@@ -51,9 +40,7 @@ class TokenObj:
     depth: int
 
     def __str__(self):
-        return (f"{c('token_type')}{self.token.name}{c('off')}"
-                f" ({c('token_depth')}{self.depth}{c('off')})"
-                f" {c('token_value')}{self.value}{c('off')}")
+        return f'{self.token.name} ({self.depth}): {self.value}'
 
     def __repr__(self):
         return str(self)
