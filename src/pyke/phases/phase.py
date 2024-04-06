@@ -104,11 +104,6 @@ class Phase:
         depend on this phase already (no circular references allowed). '''
         new_deps = ensure_list(new_deps)
         for new_dep in new_deps:
-            if (not self.is_project_phase and
-                new_dep.is_project_phase):
-                raise ProjectPhaseDependencyError(
-                    f'Attempt by non-project phase "{self.name}" to depend on a '
-                    f'project phase "{new_dep.opt_str("name")}.')
             if new_dep.find_in_dependency_tree(self) is not None:
                 raise CircularDependencyError(
                     f'Attempt to set a circular dependency {new_dep.opt_str("name")} '

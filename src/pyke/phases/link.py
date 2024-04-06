@@ -41,14 +41,10 @@ class LinkPhase(CFamilyBuildPhase):
         Builds all object paths.
         '''
         exe_path = self.get_exe_path()
-
-        prefix = self.make_build_command_prefix()
-        args = self.make_link_arguments()
-
         object_paths = [file_data.path for op in self.files.get_operations('link')
                                        for file_data in op.input_files]
 
         step = self.do_step_create_directory(action, None, exe_path.parent)
 
         self.do_step_link_objects_to_exe(action, step,
-            prefix, args, exe_path, object_paths)
+            object_paths, exe_path)

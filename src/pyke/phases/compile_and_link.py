@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..action import Action, ResultCode, FileData
+from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
 
 class CompileAndLinkPhase(CFamilyBuildPhase):
@@ -28,23 +28,27 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         if self.opt_bool('incremental_build'):
             for src in self.get_dependency_output_files('source'):
                 obj_path = self.make_obj_path_from_src(src.path)
+                include_files = [FileData(path, 'header', None) for path in
+                    self.get_includes_src_to_object(src.path, obj_path)]
                 self.record_file_operation(
                     None,
                     FileData(obj_path.parent, 'dir', self),
                     'create directory')
                 self.record_file_operation(
-                    src,
+                    [src, *include_files],
                     FileData(obj_path, 'object', self),
                     'compile')
 
             for src_path in self.get_all_src_paths():
                 obj_path = self.make_obj_path_from_src(src_path)
+                include_files = [FileData(path, 'header', None) for path in
+                    self.get_includes_src_to_object(src_path, obj_path)]
                 self.record_file_operation(
                     None,
                     FileData(obj_path.parent, 'dir', self),
                     'create directory')
                 self.record_file_operation(
-                    FileData(src_path, 'source', None),
+                    [FileData(src_path, 'source', None), *include_files],
                     FileData(obj_path, 'object', self),
                     'compile')
 
@@ -68,10 +72,13 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
                 'create directory')
 
             srcs = self.get_dependency_output_files('source')
-            for src_path in self.get_all_src_paths():
+            src_paths = self.get_all_src_paths()
+            for src_path in src_paths:
                 srcs.append(FileData(src_path, 'source', None))
+            include_files = [FileData(path, 'header', None) for path in
+                self.get_includes_srcs_to_exe(src_paths, obj_path)]
             self.record_file_operation(
-                srcs,
+                [*srcs, *include_files],
                 FileData(exe_path, 'executable', self),
                 'compile and link')
 
@@ -81,10 +88,6 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         '''
         exe_path = self.get_exe_path()
 
-        prefix = self.make_build_command_prefix()
-        c_args = self.make_compile_arguments()
-        l_args = self.make_link_arguments()
-
         dirs = {}
         all_dirs = [fd.path for fd in self.files.get_output_files('dir')]
         for direc in list(dict.fromkeys(all_dirs)):
@@ -93,19 +96,28 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         if self.opt_bool('incremental_build'):
             compile_steps = []
             for file_op in self.files.get_operations('compile'):
-                for src, obj in zip(file_op.input_files, file_op.output_files):
-                    compile_steps.append(
-                        self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
-                            prefix, c_args, src.path, obj.path))
+                deps = file_op.input_files
+                obj = file_op.output_files[0]
+                src = None
+                inc_paths = []
+                for dep in deps:
+                    if dep.file_type == 'source':
+                        src = dep
+                    else:
+                        inc_paths.append(dep.path)
+                compile_steps.append(
+                    self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
+                        src.path, inc_paths, obj.path))
 
             object_paths = [src.path
                 for file_op in self.files.get_operations('link')
                 for src in file_op.input_files]
 
             self.do_step_link_objects_to_exe(action, [*compile_steps, dirs[exe_path.parent]],
-                prefix, l_args, exe_path, object_paths)
+                object_paths, exe_path)
         else:
             src_paths = [src.path for src in self.files.get_input_files('source')]
+            inc_paths = [src.path for src in self.files.get_input_files('header')]
 
             self.do_step_compile_srcs_to_exe(action, dirs[exe_path.parent],
-                prefix, c_args | l_args, src_paths, exe_path)
+                src_paths, inc_paths, exe_path)

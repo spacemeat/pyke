@@ -87,6 +87,18 @@ class CFamilyBuildPhase(Phase):
             'archive_anchor': '{build_detail_anchor}/{archive_dir}',
             'archive_path': '{archive_anchor}/{archive_file}',
 
+            'rpath_dirs': [],   # each entry is (dir: str, uses_ORIGIN: bool)
+            'position_independent_code': False,
+            'symbol_visibility': 'hidden', # see https://gcc.gnu.org/wiki/Visibility
+
+            'shared_object_dir': 'bin',
+            'shared_object_basename': '{name}',
+            'posix_shared_object_file': 'lib{shared_object_basename}.so',
+            'windows_shared_object_file': '{shared_object_basename}.dll',
+            'shared_object_file': '{{target_os_{toolkit}}_shared_object_file}',
+            'shared_object_anchor': '{build_detail_anchor}/{shared_object_dir}',
+            'shared_object_path': '{shared_object_anchor}/{shared_object_file}',
+
             'exe_dir':'bin',
             'exe_basename': '{name}',
             'posix_exe_file': '{exe_basename}',
@@ -357,12 +369,85 @@ class CFamilyBuildPhase(Phase):
         action.set_step(step)
         return step
 
-    def do_step_compile_src_to_object(self, action: Action, depends_on: Steps, prefix: str,
-                                      args: list[str], src_path: Path, obj_path: Path) -> Step:
+    def make_cmd_compile_src_to_object(self, src_path: Path, obj_path: Path,
+                                       just_get_includes: bool = False) -> str:
+        ''' Create the full command to build an object from a single source.'''
+        prefix = self.make_build_command_prefix()
+        c_args = self.make_compile_arguments()
+        if just_get_includes:
+            obj_path = '/dev/null'
+        cmd = (f'{prefix}-c {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} -o {obj_path} '
+               f'{src_path}{" -pthread" if c_args["posix_threads"] else ""}')
+        if just_get_includes:
+            cmd += ' -E -H 1>/dev/null'
+        return cmd
+
+    def make_cmd_archive_objects_to_library(self, object_paths: list[Path],
+                                            archive_path: Path) -> str:
+        ''' Create the full command to build a static lib from objects.'''
+        prefix = self.make_archive_command_prefix()
+        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
+        cmd = f'{prefix}{archive_path} {object_paths_cmd}'
+        return cmd
+
+    def make_cmd_link_objects_to_exe(self, object_paths: list[Path], exe_path: Path) -> str:
+        ''' Create the full command to build an exe binary from objects.'''
+        prefix = self.make_build_command_prefix()
+        l_args = self.make_link_arguments()
+        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
+        cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
+               f'{" -pthread" if l_args["posix_threads"] else ""}{l_args["lib_dirs"]}'
+               f'{l_args["pkg_libs_bits"]} {l_args["static_libs"]}{l_args["shared_libs"]}')
+        return cmd
+
+    def make_cmd_compile_srcs_to_exe(self, src_paths: list[Path], exe_path: Path,
+                                     just_get_includes: bool = False) -> str:
+        ''' Create the full command to build an object form a single source.'''
+        prefix = self.make_build_command_prefix()
+        c_args = self.make_compile_arguments()
+        l_args = self.make_link_arguments()
+        if just_get_includes:
+            exe_path = '/dev/null'
+        src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
+        cmd = (f'{prefix} {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} -o {exe_path} '
+               f'{" -pthread" if c_args["posix_threads"] else ""}'
+               f'{src_paths_cmd}{l_args["lib_dirs"]} {l_args["pkg_libs_bits"]} '
+               f'{l_args["static_libs"]}{l_args["shared_libs"]}')
+        if just_get_includes:
+            cmd += ' -E -H 1>/dev/null'
+        return cmd
+
+    def parse_include_report(self, report):
+        ''' Turn GCC's -H output into a list of include paths.'''
+        paths = []
+        for line in report.splitlines():
+            if line.startswith('.'):
+                line = line.lstrip('. ')
+                paths.append(Path(line))
+        return paths
+
+    def get_includes_src_to_object(self, src_path: Path, obj_path: Path) -> list[Path]:
+        ''' Get all the headers used by the given src_path, including system headers.'''
+        cmd = self.make_cmd_compile_src_to_object(src_path, obj_path, True)
+        ret, _, err = do_shell_command(cmd)
+        if ret == 0:
+            return self.parse_include_report(err)
+        raise ValueError('Header discovery failed.')
+
+    def get_includes_srcs_to_exe(self, src_paths: list[Path], obj_path: Path) -> list[Path]:
+        ''' Get all the headers used by the given src_path, including system headers.'''
+        cmd = self.make_cmd_compile_srcs_to_exe(src_paths, obj_path, True)
+        ret, _, err = do_shell_command(cmd)
+        if ret == 0:
+            return self.parse_include_report(err)
+        raise ValueError('Header discovery failed.')
+
+    def do_step_compile_src_to_object(self, action: Action, depends_on: Steps, src_path: Path,
+                                      inc_paths: list[Path], obj_path: Path) -> Step:
         '''
         Perform a C or C++ source compile operation as an action step.
         '''
-        def act(cmd: str, src_path: Path, obj_path: Path):
+        def act(cmd: str, src_path: Path, inc_paths: list[Path], obj_path: Path):
             step_result = ResultCode.SUCCEEDED
             step_notes = None
 
@@ -370,7 +455,8 @@ class CFamilyBuildPhase(Phase):
                 step_result = ResultCode.MISSING_INPUT
                 step_notes = src_path
             else:
-                if not obj_path.exists() or input_path_is_newer(src_path, obj_path):
+                if not obj_path.exists() or any(input_path_is_newer(dep_path, obj_path)
+                                                for dep_path in [src_path, *inc_paths]):
                     res, _, err = do_shell_command(cmd)
                     if res != 0:
                         step_result = ResultCode.COMMAND_FAILED
@@ -382,15 +468,14 @@ class CFamilyBuildPhase(Phase):
 
             return Result(step_result, step_notes)
 
-        cmd = (f'{prefix}-c {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {obj_path} '
-               f'{src_path}{" -pthread" if args["posix_threads"] else ""}')
+        cmd = self.make_cmd_compile_src_to_object(src_path, obj_path)
         step = Step('compile', depends_on, [src_path], [obj_path],
-                             partial(act, cmd=cmd, src_path=src_path, obj_path=obj_path), cmd)
+                             partial(act, cmd, src_path, inc_paths, obj_path), cmd)
         action.set_step(step)
         return step
 
-    def do_step_archive_objects_to_library(self, action: Action, depends_on: Steps, prefix: str,
-                                           archive_path: Path, object_paths: list[Path]) -> Step:
+    def do_step_archive_objects_to_library(self, action: Action, depends_on: Steps,
+                                           object_paths: list[Path], archive_path: Path) -> Step:
         '''
         Perform an archive operaton on built object files.
         '''
@@ -423,15 +508,14 @@ class CFamilyBuildPhase(Phase):
 
             return Result(step_result, step_notes)
 
-        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
-        cmd = f'{prefix}{archive_path} {object_paths_cmd}'
+        cmd = self.make_cmd_archive_objects_to_library(object_paths, archive_path)
         step = Step('archive', depends_on, object_paths, [archive_path],
                     partial(act, cmd, object_paths, archive_path), cmd)
         action.set_step(step)
         return step
 
-    def do_step_link_objects_to_exe(self, action: Action, depends_on: Steps, prefix: str, args: dict,
-                                    exe_path: Path, object_paths: list[Path]) -> Step:
+    def do_step_link_objects_to_exe(self, action: Action, depends_on: Steps,
+                                    object_paths: list[Path], exe_path: Path) -> Step:
         '''
         Perform a link to executable operation as an action step.
         '''
@@ -464,21 +548,19 @@ class CFamilyBuildPhase(Phase):
 
             return Result(step_result, step_notes)
 
-        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
-        cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
-               f'{" -pthread" if args["posix_threads"] else ""}{args["lib_dirs"]}'
-               f'{args["pkg_libs_bits"]} {args["static_libs"]}{args["shared_libs"]}')
+        cmd = self.make_cmd_link_objects_to_exe(object_paths, exe_path)
         step = Step('link', depends_on, object_paths, [exe_path],
                     partial(act, cmd, object_paths, exe_path), cmd)
         action.set_step(step)
         return step
 
-    def do_step_compile_srcs_to_exe(self, action: Action, depends_on: Steps, prefix: str,
-                                    args: dict, src_paths: list[Path], exe_path: Path) -> Step:
+    def do_step_compile_srcs_to_exe(self, action: Action, depends_on: Steps,
+                                    src_paths: list[Path], inc_paths: list[Path],
+                                    exe_path: Path) -> Step:
         '''
         Perform a multiple C or C++ source compile to executable operation as an action step.
         '''
-        def act(cmd, src_paths, exe_path):
+        def act(cmd, src_paths: list[Path], inc_paths: list[Path], exe_path: Path):
             step_result = ResultCode.SUCCEEDED
             step_notes = None
             missing_srcs = []
@@ -491,11 +573,8 @@ class CFamilyBuildPhase(Phase):
                 step_notes = missing_srcs
             else:
                 exe_exists = exe_path.exists()
-                must_build = not exe_exists
-                for src_path in src_paths:
-                    if not exe_exists or input_path_is_newer(src_path, exe_path):
-                        must_build = True
-                if must_build:
+                if not exe_exists or any(input_path_is_newer(dep_path, exe_path)
+                                         for dep_path in [*src_paths, *inc_paths]):
                     res, _, err = do_shell_command(cmd)
                     if res != 0:
                         step_result = ResultCode.COMMAND_FAILED
@@ -507,11 +586,7 @@ class CFamilyBuildPhase(Phase):
 
             return Result(step_result, step_notes)
 
-        src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
-        cmd = (f'{prefix} {args["inc_dirs"]} {args["pkg_inc_bits"]} -o {exe_path} '
-               f'{" -pthread" if args["posix_threads"] else ""}'
-               f'{src_paths_cmd}{args["lib_dirs"]} {args["pkg_libs_bits"]} '
-               f'{args["static_libs"]}{args["shared_libs"]}')
+        cmd = self.make_cmd_compile_srcs_to_exe(src_paths, inc_paths, exe_path)
         step = Step('compile and link', depends_on, src_paths, [exe_path],
                     partial(act, cmd, src_paths, exe_path), cmd)
         action.set_step(step)

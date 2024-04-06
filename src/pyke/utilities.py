@@ -93,19 +93,7 @@ def do_shell_command(cmd):
 # https://gist.github.com/kurahaupo/6ce0eaefe5e730841f03cb82b061daa2
 def determine_color_support() -> str:
     ''' Returns whether we can support 24-bit color on this terminal.'''
-    subcmd = r"\e[48:2:1:2:3m\eP$qm\e\\"
-    cmd = rf"(echo -e '{subcmd}' | xxd)"
-    ret, out, _ = do_shell_command(cmd)
-    if ret == 0 and subcmd in out:
-        return '24bit'
-
-    subcmd = subcmd.replace(':', ';')
-    cmd = rf"(echo -e '{subcmd}' | xxd)"
-    ret, out, _ = do_shell_command(cmd)
-    if ret == 0 and subcmd in out:
-        return '24bit'
-
-    if 'COLORTERM' in os.environ and os.environ['COLORTERM'] == 'truecolor':
+    if 'COLORTERM' in os.environ and os.environ['COLORTERM'] in ['truecolor', '24bit']:
         return '24bit'
 
     cmd = 'tput colors'

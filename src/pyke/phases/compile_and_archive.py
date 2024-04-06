@@ -19,23 +19,27 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
         for src_file_data in self.get_dependency_output_files('source'):
             obj_path = self.make_obj_path_from_src(src_file_data.path)
+            include_files = [FileData(path, 'header', None) for path in
+                self.get_includes_src_to_object(src_file_data.path, obj_path)]
             self.record_file_operation(
                 None,
                 FileData(obj_path.parent, 'dir', self),
                 'create directory')
             self.record_file_operation(
-                src_file_data,
+                [src_file_data, *include_files],
                 FileData(obj_path, 'object', self),
                 'compile')
 
         for src_path in self.get_all_src_paths():
             obj_path = self.make_obj_path_from_src(src_path)
+            include_files = [FileData(path, 'header', None) for path in
+                self.get_includes_src_to_object(src_path, obj_path)]
             self.record_file_operation(
                 None,
                 FileData(obj_path.parent, 'dir', self),
                 'create directory')
             self.record_file_operation(
-                FileData(src_path, 'source', None),
+                [FileData(src_path, 'source', None), *include_files],
                 FileData(obj_path, 'object', self),
                 'compile')
 
@@ -61,9 +65,6 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
         '''
         archive_path = self.get_archive_path()
 
-        prefix = self.make_build_command_prefix()
-        c_args = self.make_compile_arguments()
-
         dirs = {}
         all_dirs = [fd.path for fd in self.files.get_output_files('dir')]
         for direc in list(dict.fromkeys(all_dirs)):
@@ -71,12 +72,19 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
 
         compile_steps = []
         for file_op in self.files.get_operations('compile'):
-            for src, obj in zip(file_op.input_files, file_op.output_files):
-                compile_steps.append(self.do_step_compile_src_to_object(
-                    action, dirs[obj.path.parent], prefix, c_args, src.path, obj.path))
+            deps = file_op.input_files
+            obj = file_op.output_files[0]
+            src = None
+            inc_paths = []
+            for dep in deps:
+                if dep.file_type == 'source':
+                    src = dep
+                else:
+                    inc_paths.append(dep.path)
+            compile_steps.append(self.do_step_compile_src_to_object(
+                action, dirs[obj.path.parent], src.path, inc_pahts, obj.path))
 
-        prefix = self.make_archive_command_prefix()
         object_paths = list(obj.path for obj in self.files.get_output_files('object'))
 
         self.do_step_archive_objects_to_library(action, [*compile_steps, dirs[archive_path.parent]],
-            prefix, archive_path, object_paths)
+            object_paths, archive_path)

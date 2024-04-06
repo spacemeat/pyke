@@ -7,7 +7,7 @@ c_to_o_phases = []
 proto = p.CompilePhase()
 
 for src in ('a.c', 'b.c', 'c.c', 'main.c'):
-    c_to_o_phases.append(proto.clone(f'compile_{src}', {'sources': [src]}))
+    c_to_o_phases.append(proto.clone({'name': f'compile_{src}', 'sources': [src]}))
 
 proto = p.CompilePhase({
     'src_dir': 'exp',
@@ -15,7 +15,7 @@ proto = p.CompilePhase({
 })
 
 for src in ('a.c', 'b.c'):
-    c_to_o_phases.append(proto.clone(f'compile_{src}', {'sources': [src]}))
+    c_to_o_phases.append(proto.clone({'name': f'compile_{src}', 'sources': [src]}))
 
 o_to_exe_phase = p.LinkPhase({
     'name': 'link',
