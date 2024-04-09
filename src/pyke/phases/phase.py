@@ -110,9 +110,6 @@ class Phase:
                     f'to phase {self.name}. Not cool.')
             self.dependencies.append(new_dep)
 
-    def set_object_compiles_relocatable(self):
-        ''' Only phases which make objects should care.'''
-
     def patch_options(self):
         ''' Fixups run before file operations.'''
 
@@ -124,11 +121,10 @@ class Phase:
     def patch_options_post_files(self):
         ''' Fixups run after file operations.'''
 
-    def get_dependency_output_files(self, file_type: str):
+    def get_direct_dependency_output_files(self, file_type: str):
         ''' Returns all the generated files of a type by this phase or any dependency phases.'''
-        deps = list(self.enumerate_dependencies())[:-1]
         return [file_data
-            for dep in deps
+            for dep in self.dependencies
             for file_data in dep.files.get_output_files(file_type)]
 
     def patch_options_in_dependencies(self):

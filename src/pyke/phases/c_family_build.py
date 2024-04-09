@@ -281,11 +281,11 @@ class CFamilyBuildPhase(Phase):
         inc_dirs = ''.join((f'-I{inc_anchor}/{inc} ' for inc in inc_dirs))
         pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' +
                    ' '.join(pkg for pkg in pkg_configs) +
-                   ')') if len(pkg_configs) > 0 else ''
+                   ') ') if len(pkg_configs) > 0 else ''
 
         pkg_inc_bits_cmd = ('$(pkg-config --cflags-only-other ' +
                    ' '.join(pkg for pkg in pkg_configs) +
-                   ')') if len(pkg_configs) > 0 else ''
+                   ') ') if len(pkg_configs) > 0 else ''
 
         return {
             'inc_dirs': inc_dirs + pkg_inc_cmd,
@@ -327,54 +327,6 @@ class CFamilyBuildPhase(Phase):
             'rpath': rpath_cmd,
         }
 
-    def do_step_delete_directory(self, action: Action, depends_on: Steps, direc: Path) -> Step:
-        ''' Perfoems a file deletion operation as an action step. '''
-        def act(cmd: str, direc: Path) -> Result:
-            step_result = ResultCode.SUCCEEDED
-            step_notes = None
-            if direc.exists():
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-            return Result(step_result, step_notes)
-
-        cmd = f'rm -r {direc}'
-        step = Step('delete directory', depends_on, [direc], [],
-                             partial(act, cmd=cmd, direc=direc), cmd)
-        action.set_step(step)
-        return step
-
-    def do_step_create_directory(self, action: Action, depends_on: Steps, new_dir: Path) -> Step:
-        '''
-        Performs a directory creation operation as an action step.
-        '''
-        def act(cmd: str, new_dir: Path):
-            step_result = ResultCode.SUCCEEDED
-            step_notes = None
-            if not new_dir.is_dir():
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-            return Result(step_result, step_notes)
-
-        cmd = f'mkdir -p {new_dir}'
-        step = Step('create directory', depends_on, [], [new_dir],
-                             partial(act, cmd=cmd, new_dir=new_dir), cmd)
-        action.set_step(step)
-        return step
-
     def make_cmd_compile_src_to_object(self, src_path: Path, obj_path: Path,
                                        just_get_includes: bool = False) -> str:
         ''' Create the full command to build an object from a single source.'''
@@ -382,10 +334,10 @@ class CFamilyBuildPhase(Phase):
         c_args = self.make_compile_arguments()
         if just_get_includes:
             obj_path = '/dev/null'
-        cmd = (f'{prefix}-c {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} -o {obj_path} '
-               f'{" -fPIC" if c_args["relocatable"] else ""}'
-               f'{" -pthread" if c_args["posix_threads"] else ""}'
-               f' {src_path}'
+        cmd = (f'{prefix}-c {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]}'
+               f'{"-fPIC " if c_args["relocatable"] else ""}'
+               f'{"-pthread " if c_args["posix_threads"] else ""}'
+               f'-o {obj_path} {src_path}'
         )
         if just_get_includes:
             cmd += ' -E -H 1>/dev/null'
@@ -405,8 +357,10 @@ class CFamilyBuildPhase(Phase):
         prefix = self.make_build_command_prefix()
         l_args = self.make_link_arguments()
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
+        soname = (f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
+                  if self.opt_bool('build_for_deployment') else '')
         cmd = (f'{prefix}-shared -o {shared_object_path} '
-               f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
+               f'{soname}'
                f'{object_paths_cmd}'
                f'{" -pthread" if l_args["posix_threads"] else ""}{l_args["lib_dirs"]}'
                f'{l_args["lib_bits"]} {l_args["libs"]}{l_args["rpath"]}')
@@ -432,10 +386,12 @@ class CFamilyBuildPhase(Phase):
         if just_get_includes:
             shared_object_path = '/dev/null'
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
+        soname = (f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
+                  if self.opt_bool('build_for_deployment') else '')
         cmd = (f'{prefix}-shared {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} '
                f'-o {shared_object_path} '
                f'{" -fPIC" if c_args["relocatable"] else ""}'
-               f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
+               f'{soname}'
                f'{" -pthread" if l_args["posix_threads"] else ""}'
                f'{src_paths_cmd}'
                f'{l_args["lib_dirs"]} {l_args["lib_bits"]} {l_args["libs"]}'
@@ -486,6 +442,54 @@ class CFamilyBuildPhase(Phase):
         if ret == 0:
             return self.parse_include_report(err)
         raise ValueError('Header discovery failed.')
+
+    def do_step_delete_directory(self, action: Action, depends_on: Steps, direc: Path) -> Step:
+        ''' Perfoems a file deletion operation as an action step. '''
+        def act(cmd: str, direc: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if direc.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        cmd = f'rm -r {direc}'
+        step = Step('delete directory', depends_on, [direc], [],
+                             partial(act, cmd=cmd, direc=direc), cmd)
+        action.set_step(step)
+        return step
+
+    def do_step_create_directory(self, action: Action, depends_on: Steps, new_dir: Path) -> Step:
+        '''
+        Performs a directory creation operation as an action step.
+        '''
+        def act(cmd: str, new_dir: Path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if not new_dir.is_dir():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        cmd = f'mkdir -p {new_dir}'
+        step = Step('create directory', depends_on, [], [new_dir],
+                             partial(act, cmd=cmd, new_dir=new_dir), cmd)
+        action.set_step(step)
+        return step
 
     def do_step_compile_src_to_object(self, action: Action, depends_on: Steps, src_path: Path,
                                       inc_paths: list[Path], obj_path: Path) -> Step:
@@ -694,7 +698,7 @@ class CFamilyBuildPhase(Phase):
 
             return Result(step_result, step_notes)
 
-        anchor = Path(self.opt_str('shared_object_anchor')) 
+        anchor = Path(self.opt_str('shared_object_anchor'))
         realname = anchor / Path(self.opt_str("posix_so_real_name"))
         soname = anchor / Path(self.opt_str("posix_so_soname"))
         cmd = f'ln -s {realname} {soname}'
@@ -720,7 +724,7 @@ class CFamilyBuildPhase(Phase):
 
             return Result(step_result, step_notes)
 
-        anchor = Path(self.opt_str('shared_object_anchor')) 
+        anchor = Path(self.opt_str('shared_object_anchor'))
         soname = anchor / Path(self.opt_str("posix_so_soname"))
         linkername = anchor / Path(self.opt_str("posix_so_linker_name"))
         cmd = f'ln -s {soname} {linkername}'

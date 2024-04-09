@@ -1,4 +1,4 @@
-'Bsic test for lib archive'
+'Bsic test for shared object'
 
 import pyke as p
 

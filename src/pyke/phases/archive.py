@@ -29,7 +29,7 @@ class ArchivePhase(CFamilyBuildPhase):
         prebuilt_objs = [FileData(prebuilt_obj_path, 'object', None)
                          for prebuilt_obj_path in self.get_all_prebuilt_obj_paths()]
 
-        objs = self.get_dependency_output_files('object')
+        objs = self.get_direct_dependency_output_files('object')
         objs.extend(prebuilt_objs)
         self.record_file_operation(
             objs,
@@ -41,12 +41,11 @@ class ArchivePhase(CFamilyBuildPhase):
         Builds all object paths.
         '''
         archive_path = self.get_archive_path()
-        prefix = self.make_build_command_prefix()
 
-        object_paths = [file_data.path for op in self.files.get_operations('archive')
-                                       for file_data in op.input_files]
+        object_paths = [file.path for op in self.files.get_operations('archive')
+                                  for file in op.input_files if file.file_type == 'object']
 
         step = self.do_step_create_directory(action, None, archive_path.parent)
 
         self.do_step_archive_objects_to_library(action, step,
-            prefix, archive_path, object_paths)
+            archive_path, object_paths)

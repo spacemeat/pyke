@@ -13,13 +13,9 @@ class CompilePhase(CFamilyBuildPhase):
         } | (options or {})
         super().__init__(options, dependencies)
 
-    def set_object_compiles_relocatable(self):
-        ''' Only phases which make objects should care.'''
-        self.push_opts({'relocatable': True})
-
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
-        for src_file_data in self.get_dependency_output_files('source'):
+        for src_file_data in self.get_direct_dependency_output_files('source'):
             obj_path = self.make_obj_path_from_src(src_file_data.path)
             include_files = [FileData(path, 'header', None) for path in
                 self.get_includes_src_to_object(src_file_data.path, obj_path)]

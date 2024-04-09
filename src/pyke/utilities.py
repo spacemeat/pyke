@@ -72,6 +72,10 @@ def ensure_tuple(o):
     ''' Places an object in a tuple if it isn't already. '''
     return o if isinstance(o, tuple) else (o,)
 
+def uniquify_list(o):
+    ''' Returns a list of unique items. '''
+    return list(dict.fromkeys(o).keys())
+
 def input_path_is_newer(in_path: Path, out_path: Path):
     ''' Compares the modified times of two files.
     in_path: Path to an input file. This file must exist.

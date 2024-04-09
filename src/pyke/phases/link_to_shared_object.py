@@ -20,7 +20,7 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
     def patch_options(self):
         ''' Fixups run before file operations.'''
         for dep in self.enumerate_dependencies():
-            dep.set_object_compiles_relocatable()
+            dep.push_opts({'relocatable': True}, True, True)
 
         if not self.opt_bool('build_for_deployment'):
             self.push_opts({'posix_shared_object_file': '{posix_so_linker_name}'})
@@ -39,7 +39,7 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
         prebuilt_objs = [FileData(prebuilt_obj_path, 'object', None)
                          for prebuilt_obj_path in self.get_all_prebuilt_obj_paths()]
 
-        objs = self.get_dependency_output_files('object')
+        objs = self.get_direct_dependency_output_files('object')
         objs.extend(prebuilt_objs)
         self.record_file_operation(
             objs,
@@ -64,8 +64,8 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
         Builds all object paths.
         '''
         so_path = Path(self.opt_str('shared_object_path'))
-        object_paths = [file_data.path for op in self.files.get_operations('link to shared object')
-                                       for file_data in op.input_files]
+        object_paths = [file.path for op in self.files.get_operations('link to shared object')
+                                  for file in op.input_files if file.file_type == 'object']
 
         step = self.do_step_create_directory(action, None, so_path.parent)
 

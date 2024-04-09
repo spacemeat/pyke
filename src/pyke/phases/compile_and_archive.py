@@ -16,13 +16,9 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
         } | (options or {})
         super().__init__(options, dependencies)
 
-    def set_object_compiles_relocatable(self):
-        ''' Only phases which make objects should care.'''
-        self.push_opts({'relocatable': True})
-
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
-        for src_file_data in self.get_dependency_output_files('source'):
+        for src_file_data in self.get_direct_dependency_output_files('source'):
             obj_path = self.make_obj_path_from_src(src_file_data.path)
             include_files = [FileData(path, 'header', None) for path in
                 self.get_includes_src_to_object(src_file_data.path, obj_path)]
@@ -56,12 +52,12 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
         prebuilt_objs = [FileData(prebuilt_obj_path, 'object', None)
                          for prebuilt_obj_path in self.get_all_prebuilt_obj_paths()]
 
-        objs = self.get_dependency_output_files('object')
+        objs = self.get_direct_dependency_output_files('object')
         objs.extend(self.files.get_output_files('object'))
         objs.extend(prebuilt_objs)
         self.record_file_operation(
             objs,
-            FileData(Path(self.opt_str('archive_path')), 'static_library', self),
+            FileData(Path(self.opt_str('archive_path')), 'archive', self),
             'archive')
 
     def do_action_build(self, action: Action):
@@ -89,7 +85,10 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
             compile_steps.append(self.do_step_compile_src_to_object(
                 action, dirs[obj.path.parent], src.path, inc_paths, obj.path))
 
-        object_paths = list(obj.path for obj in self.files.get_output_files('object'))
+        object_paths = []
+        for file_op in self.files.get_operations('archive'):
+            object_paths.extend([obj.path for obj in file_op.input_files
+                                          if obj.file_type == 'object'])
 
         self.do_step_archive_objects_to_library(action, [*compile_steps, dirs[archive_path.parent]],
             object_paths, archive_path)
