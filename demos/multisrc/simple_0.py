@@ -23,7 +23,7 @@ c_to_o_phases.append(p.CompilePhase({
 
 phases.extend(c_to_o_phases)
 
-o_to_exe_phase = p.LinkPhase({
+o_to_exe_phase = p.LinkToExePhase({
     'name': 'link',
     'exe_basename': 'simple_0',
 }, c_to_o_phases)

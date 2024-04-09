@@ -17,7 +17,7 @@ proto = p.CompilePhase({
 for src in ('a.c', 'b.c'):
     c_to_o_phases.append(proto.clone({'name': f'compile_{src}', 'sources': [src]}))
 
-o_to_exe_phase = p.LinkPhase({
+o_to_exe_phase = p.LinkToExePhase({
     'name': 'link',
     'exe_basename': 'simple_1',
 }, c_to_o_phases)

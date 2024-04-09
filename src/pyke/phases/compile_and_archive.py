@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..action import Action, ResultCode, FileData
+from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
 
 class CompileAndArchivePhase(CFamilyBuildPhase):
@@ -11,9 +11,14 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
         options = {
+            'target_path': '{archive_path}',
             'build_operation': 'compile_to_archive',
         } | (options or {})
         super().__init__(options, dependencies)
+
+    def set_object_compiles_relocatable(self):
+        ''' Only phases which make objects should care.'''
+        self.push_opts({'relocatable': True})
 
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
@@ -82,7 +87,7 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
                 else:
                     inc_paths.append(dep.path)
             compile_steps.append(self.do_step_compile_src_to_object(
-                action, dirs[obj.path.parent], src.path, inc_pahts, obj.path))
+                action, dirs[obj.path.parent], src.path, inc_paths, obj.path))
 
         object_paths = list(obj.path for obj in self.files.get_output_files('object'))
 

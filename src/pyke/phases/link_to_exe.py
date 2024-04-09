@@ -5,13 +5,14 @@ from pathlib import Path
 from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
 
-class LinkPhase(CFamilyBuildPhase):
+class LinkToExePhase(CFamilyBuildPhase):
     '''
     Phase class for linking object files to build executable binaries.
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
         options = {
             'name': 'link',
+            'target_path': '{exe_path}',
             'build_operation': 'link_to_executable',
         } | (options or {})
         super().__init__(options, dependencies)

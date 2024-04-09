@@ -1,6 +1,7 @@
 ''' Contains the BuildPhase intermediate phase class. '''
 
 from functools import partial
+import os
 from pathlib import Path
 from typing import TypeAlias
 
@@ -53,6 +54,8 @@ class CFamilyBuildPhase(Phase):
             'incremental_build': True,
 
             'thin_archive': False,
+            'relocatable': False,
+            'export_dynamic': False,
 
             'inc_dir': '.',
             'include_anchor': '{static_anchor}/{inc_dir}',
@@ -65,6 +68,10 @@ class CFamilyBuildPhase(Phase):
             'prebuilt_obj_dir': 'prebuilt_obj',
             'prebuilt_obj_anchor': '{static_anchor}/{prebuilt_obj_dir}',
             'prebuilt_objs': [],
+
+            'target_path': '',
+            'build_for_deployment': True,
+            'generate_versioned_sonames': True,
 
             'build_dir': 'build',
             'build_detail': '{kind}.{toolkit}',
@@ -87,13 +94,19 @@ class CFamilyBuildPhase(Phase):
             'archive_anchor': '{build_detail_anchor}/{archive_dir}',
             'archive_path': '{archive_anchor}/{archive_file}',
 
-            'rpath_dirs': [],   # each entry is (dir: str, uses_ORIGIN: bool)
+            'rpath': {},   # {dir: str, uses_ORIGIN: bool}
             'position_independent_code': False,
-            'symbol_visibility': 'hidden', # see https://gcc.gnu.org/wiki/Visibility
+            # TODO: 'symbol_visibility': 'hidden', # see https://gcc.gnu.org/wiki/Visibility
 
             'shared_object_dir': 'bin',
             'shared_object_basename': '{name}',
-            'posix_shared_object_file': 'lib{shared_object_basename}.so',
+            'so_major': 1,
+            'so_minor': 0,
+            'so_patch': 0,
+            'posix_so_linker_name': 'lib{shared_object_basename}.so',
+            'posix_so_soname': '{posix_so_linker_name}.{so_major}',
+            'posix_so_real_name': '{posix_so_soname}.{so_minor}.{so_patch}',
+            'posix_shared_object_file': '{posix_so_real_name}',
             'windows_shared_object_file': '{shared_object_basename}.dll',
             'shared_object_file': '{{target_os_{toolkit}}_shared_object_file}',
             'shared_object_anchor': '{build_detail_anchor}/{shared_object_dir}',
@@ -108,8 +121,7 @@ class CFamilyBuildPhase(Phase):
             'exe_path': '{exe_anchor}/{exe_file}',
 
             'lib_dirs': [],
-            'libs': [],
-            'shared_libs': [],
+            'libs': {},
         } | (options or {})
         super().__init__(options, dependencies)
 
@@ -278,51 +290,45 @@ class CFamilyBuildPhase(Phase):
         return {
             'inc_dirs': inc_dirs + pkg_inc_cmd,
             'pkg_inc_bits': pkg_inc_bits_cmd,
-            'posix_threads': self.opt('posix_threads'),
+            'relocatable': self.opt_bool('relocatable'),
+            'posix_threads': self.opt_bool('posix_threads'),
         }
 
-    def make_link_arguments(self):
+    def make_link_arguments(self) -> dict:
         ''' Constructs the linking arguments of a gcc command.'''
-        pkg_configs = self.opt_list('pkg_config')
-
-        pkg_dirs_cmd = ('$(pkg-config --libs-only-L ' +
-                   ' '.join(pkg for pkg in pkg_configs) +
-                   ')') if len(pkg_configs) > 0 else ''
-        pkg_libs_cmd = ('$(pkg-config --libs-only-l ' +
-                   ' '.join(pkg for pkg in pkg_configs) +
-                   ')') if len(pkg_configs) > 0 else ''
-        pkg_libs_bits_cmd = ('$(pkg-config --libs-only-other ' +
-                   ' '.join(pkg for pkg in pkg_configs) +
-                   ')') if len(pkg_configs) > 0 else ''
+        lib_bits_cmd = ''
 
         lib_dirs = self.opt_list('lib_dirs')
         lib_dirs_cmd = ''.join((f'-L{lib_dir} ' for lib_dir in lib_dirs))
-        lib_dirs_cmd += pkg_dirs_cmd
 
-        static_libs = self.opt_list('libs')
-        static_libs_cmd = ''.join((f'-l{lib} ' for lib in static_libs))
-        static_libs_cmd += pkg_libs_cmd
-        #if len(static_libs_cmd) > 0:
-        #    static_libs_cmd = f'-Wl,-static {static_libs_cmd}'
+        libs_cmd = ''
+        libs = self.opt_dict('libs')        # { lib_name: 'archive' or 'shared' or 'package' }
+        for lib, method in libs.items():
+            if method in ['archive', 'shared_object']:
+                libs_cmd += f'-l{lib} '
+            elif method == 'package':
+                libs_cmd += f'$(pkg-config --libs-only-l {lib}) '
+                lib_dirs_cmd += f'$(pkg-config --libs-only-L {lib}) '
+                lib_bits_cmd += f'$(pkg-config --libs-only-other {lib}) '
 
-        # TODO: Ensure this is all kinda correct. I'm learning about rpath/$ORIGIN.
-        shared_libs = self.opt_list('shared_libs')
-        shared_libs_cmd = ''.join((f'-l{so} ' for so in shared_libs))
-        #if len(shared_libs_cmd) > 0:
-        #    shared_libs_cmd = f'-Wl,-dynamic {shared_libs_cmd} -Wl,-rpath,$ORIGIN -Wl,-z,origin'
+        rpath_cmd = ''
+        target_path = str(Path(self.opt_str('target_path')).parent)
+        for rpath, origin in self.opt_dict('rpath').items():    # { '../lib', True or False }
+            if origin:
+                rpath_cmd += f'-Wl,-rpath=\'$ORIGIN{os.path.relpath(rpath, target_path)}\' '
+            else:
+                rpath_cmd += f'-Wl,-rpath={rpath} '
 
         return {
             'lib_dirs': lib_dirs_cmd,
-            'static_libs': static_libs_cmd,
-            'shared_libs': shared_libs_cmd,
-            'pkg_libs_bits': pkg_libs_bits_cmd,
+            'libs': libs_cmd,
+            'lib_bits': lib_bits_cmd,
             'posix_threads': self.opt('posix_threads'),
+            'rpath': rpath_cmd,
         }
 
     def do_step_delete_directory(self, action: Action, depends_on: Steps, direc: Path) -> Step:
-        '''
-        Perfoems a file deletion operation as an action step.
-        '''
+        ''' Perfoems a file deletion operation as an action step. '''
         def act(cmd: str, direc: Path) -> Result:
             step_result = ResultCode.SUCCEEDED
             step_notes = None
@@ -377,7 +383,10 @@ class CFamilyBuildPhase(Phase):
         if just_get_includes:
             obj_path = '/dev/null'
         cmd = (f'{prefix}-c {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} -o {obj_path} '
-               f'{src_path}{" -pthread" if c_args["posix_threads"] else ""}')
+               f'{" -fPIC" if c_args["relocatable"] else ""}'
+               f'{" -pthread" if c_args["posix_threads"] else ""}'
+               f' {src_path}'
+        )
         if just_get_includes:
             cmd += ' -E -H 1>/dev/null'
         return cmd
@@ -390,6 +399,19 @@ class CFamilyBuildPhase(Phase):
         cmd = f'{prefix}{archive_path} {object_paths_cmd}'
         return cmd
 
+    def make_cmd_link_objects_to_shared_object(self, object_paths: list[Path],
+                                               shared_object_path: Path) -> str:
+        ''' Create the full command to build an exe binary from objects.'''
+        prefix = self.make_build_command_prefix()
+        l_args = self.make_link_arguments()
+        object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
+        cmd = (f'{prefix}-shared -o {shared_object_path} '
+               f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
+               f'{object_paths_cmd}'
+               f'{" -pthread" if l_args["posix_threads"] else ""}{l_args["lib_dirs"]}'
+               f'{l_args["lib_bits"]} {l_args["libs"]}{l_args["rpath"]}')
+        return cmd
+
     def make_cmd_link_objects_to_exe(self, object_paths: list[Path], exe_path: Path) -> str:
         ''' Create the full command to build an exe binary from objects.'''
         prefix = self.make_build_command_prefix()
@@ -397,7 +419,29 @@ class CFamilyBuildPhase(Phase):
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
         cmd = (f'{prefix}-o {exe_path} {object_paths_cmd}'
                f'{" -pthread" if l_args["posix_threads"] else ""}{l_args["lib_dirs"]}'
-               f'{l_args["pkg_libs_bits"]} {l_args["static_libs"]}{l_args["shared_libs"]}')
+               f'{l_args["lib_bits"]} {l_args["libs"]}{l_args["rpath"]}')
+        return cmd
+
+    def make_cmd_compile_srcs_to_shared_object(self, src_paths: list[Path],
+                                               shared_object_path: Path,
+                                               just_get_includes: bool = False) -> str:
+        ''' Create the full command to build an object form a single source.'''
+        prefix = self.make_build_command_prefix()
+        c_args = self.make_compile_arguments()
+        l_args = self.make_link_arguments()
+        if just_get_includes:
+            shared_object_path = '/dev/null'
+        src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
+        cmd = (f'{prefix}-shared {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} '
+               f'-o {shared_object_path} '
+               f'{" -fPIC" if c_args["relocatable"] else ""}'
+               f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
+               f'{" -pthread" if l_args["posix_threads"] else ""}'
+               f'{src_paths_cmd}'
+               f'{l_args["lib_dirs"]} {l_args["lib_bits"]} {l_args["libs"]}'
+               f'{l_args["rpath"]}')
+        if just_get_includes:
+            cmd += ' -E -H 1>/dev/null'
         return cmd
 
     def make_cmd_compile_srcs_to_exe(self, src_paths: list[Path], exe_path: Path,
@@ -410,9 +454,10 @@ class CFamilyBuildPhase(Phase):
             exe_path = '/dev/null'
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
         cmd = (f'{prefix} {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} -o {exe_path} '
-               f'{" -pthread" if c_args["posix_threads"] else ""}'
-               f'{src_paths_cmd}{l_args["lib_dirs"]} {l_args["pkg_libs_bits"]} '
-               f'{l_args["static_libs"]}{l_args["shared_libs"]}')
+               f'{" -fPIC" if c_args["relocatable"] else ""}'
+               f'{" -pthread" if l_args["posix_threads"] else ""}{l_args["lib_dirs"]}'
+               f'{src_paths_cmd}'
+               f'{l_args["lib_bits"]} {l_args["libs"]}{l_args["rpath"]}')
         if just_get_includes:
             cmd += ' -E -H 1>/dev/null'
         return cmd
@@ -514,6 +559,46 @@ class CFamilyBuildPhase(Phase):
         action.set_step(step)
         return step
 
+    def do_step_link_objects_to_shared_object(self, action: Action, depends_on: Steps,
+                                    object_paths: list[Path], shared_object_path: Path) -> Step:
+        '''
+        Perform a link to shared object operation as an action step.
+        '''
+        def act(cmd, object_paths, exe_path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            missing_objs = []
+
+            for obj_path in object_paths:
+                if not obj_path.exists():
+                    missing_objs.append(obj_path)
+            if len(missing_objs) > 0:
+                step_result = ResultCode.MISSING_INPUT
+                step_notes = missing_objs
+            else:
+                exe_exists = exe_path.exists()
+                must_build = not exe_exists
+                for obj_path in object_paths:
+                    if not exe_exists or input_path_is_newer(obj_path, exe_path):
+                        must_build = True
+                if must_build:
+                    res, _, err = do_shell_command(cmd)
+                    if res != 0:
+                        step_result = ResultCode.COMMAND_FAILED
+                        step_notes = err
+                    else:
+                        step_result = ResultCode.SUCCEEDED
+                else:
+                    step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        cmd = self.make_cmd_link_objects_to_shared_object(object_paths, shared_object_path)
+        step = Step('link to shared object', depends_on, object_paths, [shared_object_path],
+                    partial(act, cmd, object_paths, shared_object_path), cmd)
+        action.set_step(step)
+        return step
+
     def do_step_link_objects_to_exe(self, action: Action, depends_on: Steps,
                                     object_paths: list[Path], exe_path: Path) -> Step:
         '''
@@ -589,6 +674,58 @@ class CFamilyBuildPhase(Phase):
         cmd = self.make_cmd_compile_srcs_to_exe(src_paths, inc_paths, exe_path)
         step = Step('compile and link', depends_on, src_paths, [exe_path],
                     partial(act, cmd, src_paths, exe_path), cmd)
+        action.set_step(step)
+        return step
+
+    def do_step_softlink_soname_to_real_name(self, action: Action, depends_on: Steps) -> Step:
+        ''' Create the standard soname softlink for shared objects.'''
+        def act(cmd: str, realname: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if realname.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        anchor = Path(self.opt_str('shared_object_anchor')) 
+        realname = anchor / Path(self.opt_str("posix_so_real_name"))
+        soname = anchor / Path(self.opt_str("posix_so_soname"))
+        cmd = f'ln -s {realname} {soname}'
+        step = Step('create softlink', depends_on, [realname], [soname],
+                             partial(act, cmd, realname), cmd)
+        action.set_step(step)
+        return step
+
+    def do_step_softlink_linker_name_to_soname(self, action: Action, depends_on: Steps) -> Step:
+        ''' Create the standard linker name softlink for shared objects.'''
+        def act(cmd: str, realname: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if realname.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        anchor = Path(self.opt_str('shared_object_anchor')) 
+        soname = anchor / Path(self.opt_str("posix_so_soname"))
+        linkername = anchor / Path(self.opt_str("posix_so_linker_name"))
+        cmd = f'ln -s {soname} {linkername}'
+        step = Step('create softlink', depends_on, [soname], [linkername],
+                             partial(act, cmd, soname), cmd)
         action.set_step(step)
         return step
 

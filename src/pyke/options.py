@@ -10,6 +10,7 @@ from .utilities import (re_interp_option, InvalidOptionOperation)
 class OptionOp(Enum):
     ''' The operations you can perform with option overrides.'''
     REPLACE = '='
+    NOT = '!'       # not booleans
     ADD = '+'       # add numbers, add to strings
     SUBTRACT = '-'  # subtract numbers, remove matching substrings
     MULTIPLY = '*'  # multiply numbers
@@ -138,6 +139,13 @@ class Options:
     def _apply_op(self, computed, override, op):
         if op == OptionOp.REPLACE:
             return override
+
+        if isinstance(computed, bool):
+            if op == OptionOp.NOT:
+                if isinstance(override):
+                    return not override
+            raise InvalidOptionOperation(
+                'Operator on bools must be !.')
 
         if isinstance(computed, (int, float)):
             if op == OptionOp.ADD:

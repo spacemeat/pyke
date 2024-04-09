@@ -1,0 +1,23 @@
+'Bsic test for lib archive'
+
+import pyke as p
+
+obj_phase = p.CompilePhase({
+    'name': 'simple_objs',
+    'sources': ['a.c', 'b.c', 'c.c'],
+})
+
+so_phase = p.LinkToSharedObjectPhase({
+    'name': 'simple_so',
+}, obj_phase)
+
+exe_phase = p.CompileAndLinkPhase({
+    'name': 'simple_exe',
+    'sources': ['main.c'],
+    'lib_dirs': [so_phase.opt_str('shared_object_anchor')],
+    'libs': {'simple_so': 'shared'},
+    'rpath': {'{shared_object_anchor}': '{build_for_deployment}'},
+    'build_local': ('{build_for_deployment}', p.OptionOp.NOT),
+}, so_phase)
+
+p.main_project().set_dependency(exe_phase)

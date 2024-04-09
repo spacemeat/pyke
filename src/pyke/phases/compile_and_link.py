@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
+from ..options import OptionOp
 
 class CompileAndLinkPhase(CFamilyBuildPhase):
     '''
@@ -11,9 +12,20 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
         options = {
+            'target_path': '{exe_path}',
             'build_operation': 'compile_to_executable',
         } | (options or {})
         super().__init__(options, dependencies)
+
+    def set_object_compiles_relocatable(self):
+        ''' Only phases which make objects should care.'''
+        self.push_opts({'relocatable': True})
+
+    def patch_options(self):
+        ''' Fixups run before file operations are computed.'''
+        num_prebuilt = self.get_all_prebuilt_obj_paths()
+        if len(num_prebuilt) and self.opt_bool('incremental_build') == False > 0:
+            self.push_opts({'incremental_build': True})
 
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
@@ -58,6 +70,8 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
                 'create directory')
 
             objs = self.get_dependency_output_files('object')
+            objs.extend(self.get_dependency_output_files('archive'))
+            objs.extend(self.get_dependency_output_files('shared_object'))
             objs.extend(self.files.get_output_files('object'))
             objs.extend(prebuilt_objs)
             self.record_file_operation(
@@ -77,10 +91,32 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
                 srcs.append(FileData(src_path, 'source', None))
             include_files = [FileData(path, 'header', None) for path in
                 self.get_includes_srcs_to_exe(src_paths, obj_path)]
+            archive_objs = self.get_dependency_output_files('archive')
+            shared_objs = self.get_dependency_output_files('shared_object')
             self.record_file_operation(
-                [*srcs, *include_files],
+                [*srcs, *archive_objs, *shared_objs, *include_files],
                 FileData(exe_path, 'executable', self),
                 'compile and link')
+
+    def patch_options_post_files(self):
+        ''' Fixup options after file operations.'''
+        archive_objs = self.get_dependency_output_files('archive')
+        shared_objs = self.get_dependency_output_files('shared_object')
+        # fill in lib_dirs
+        self.push_opts({'lib_dirs': ([OptionOp.APPEND,
+                *[file.path.parent for file in archive_objs],
+                *[file.path.parent for file in shared_objs]]
+            )})
+        # fill in rpath
+        if not self.opt_bool('build_for_deployment'):
+            self.push_opts({'rpath': ({ file.path.parent: True for file in shared_objs })})
+        # fill in libs
+        self.push_opts({'libs':
+            ({file.generating_phase.opt_str('archive_basename'): 'archive'
+                        for file in archive_objs})})
+        self.push_opts({'libs':
+            ({file.generating_phase.opt_str('shared_object_basename'): 'shared_object'
+                        for file in shared_objs})})
 
     def do_action_build(self, action: Action):
         '''

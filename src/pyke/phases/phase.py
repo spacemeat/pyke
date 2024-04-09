@@ -110,10 +110,19 @@ class Phase:
                     f'to phase {self.name}. Not cool.')
             self.dependencies.append(new_dep)
 
+    def set_object_compiles_relocatable(self):
+        ''' Only phases which make objects should care.'''
+
+    def patch_options(self):
+        ''' Fixups run before file operations.'''
+
     def record_file_operation(self, input_files: list[FileData] | FileData | None,
                               output_files: list[FileData] | FileData | None, step_name: str):
         ''' Record a file transform this phase can perform.'''
         self.files.record(FileOperation(input_files, output_files, step_name))
+
+    def patch_options_post_files(self):
+        ''' Fixups run after file operations.'''
 
     def get_dependency_output_files(self, file_type: str):
         ''' Returns all the generated files of a type by this phase or any dependency phases.'''
@@ -121,6 +130,11 @@ class Phase:
         return [file_data
             for dep in deps
             for file_data in dep.files.get_output_files(file_type)]
+
+    def patch_options_in_dependencies(self):
+        ''' Opportunity for phases to fix up options before running file operations.'''
+        for dep in list(self.enumerate_dependencies()):
+            dep.patch_options()
 
     def compute_file_operations_in_dependencies(self):
         ''' Compute file operations dwon the dependency hierarchy.'''
@@ -130,6 +144,11 @@ class Phase:
 
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
+
+    def patch_options_in_dependencies_post_files(self):
+        ''' Opportunity for phases to fix up options before running file operations.'''
+        for dep in list(self.enumerate_dependencies()):
+            dep.patch_options_post_files()
 
     @property
     def name(self):
@@ -178,8 +197,6 @@ class Phase:
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a T. '''
         val = self.opt(key, overrides, interpolate)
-        if not isinstance(val, obj_type):
-            breakpoint()
         assert isinstance(val, obj_type)
         return val
 
