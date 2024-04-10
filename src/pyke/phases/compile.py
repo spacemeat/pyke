@@ -1,6 +1,6 @@
 ''' This is the compile phase of a multi-phase build.'''
 
-from ..action import Action, ResultCode, FileData
+from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
 
 class CompilePhase(CFamilyBuildPhase):

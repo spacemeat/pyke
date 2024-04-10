@@ -389,7 +389,6 @@ def main():
             if file_operations_are_dirty:
                 WorkingSet.main_phase.patch_options_in_dependencies()
                 WorkingSet.main_phase.compute_file_operations_in_dependencies()
-                WorkingSet.main_phase.patch_options_in_dependencies_post_files()
                 file_operations_are_dirty = False
 
             action = Action(arg)

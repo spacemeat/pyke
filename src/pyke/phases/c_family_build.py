@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TypeAlias
 
 from ..action import Action, Step, Result, ResultCode
-from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError,
+from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError, uniquify_list,
                          input_path_is_newer, do_shell_command)
 from .phase import Phase
 
@@ -294,15 +294,40 @@ class CFamilyBuildPhase(Phase):
             'posix_threads': self.opt_bool('posix_threads'),
         }
 
+    def inherit_libs(self):
+        ''' Computes lib_dirs and libs from dependency library phases.'''
+        archive_objs = self.get_direct_dependency_output_files('archive')
+        shared_objs = self.get_direct_dependency_output_files('shared_object')
+        # fill in lib_dirs
+        lib_dirs = [ *[str(file.path.parent) for file in archive_objs],
+                     *[str(file.path.parent) for file in shared_objs] ]
+        lib_dirs.extend(self.opt_list('lib_dirs'))
+        lib_dirs = uniquify_list(lib_dirs)
+
+        # fill in rpath
+        rpath = {}
+        if not self.opt_bool('build_for_deployment'):
+            rpath = { str(file.path.parent): True for file in shared_objs } | self.opt_dict('rpath')
+
+        # fill in libs
+        libs = {}
+        libs |= {file.generating_phase.opt_str('archive_basename'): 'archive'
+                        for file in archive_objs}
+        libs |= {file.generating_phase.opt_str('shared_object_basename'): 'shared_object'
+                        for file in shared_objs}
+        return (lib_dirs, rpath, libs)
+
     def make_link_arguments(self) -> dict:
         ''' Constructs the linking arguments of a gcc command.'''
+        lib_dirs, rpaths, libs = self.inherit_libs()
+
         lib_bits_cmd = ''
 
-        lib_dirs = self.opt_list('lib_dirs')
+        #lib_dirs = self.opt_list('lib_dirs')
         lib_dirs_cmd = ''.join((f'-L{lib_dir} ' for lib_dir in lib_dirs))
 
         libs_cmd = ''
-        libs = self.opt_dict('libs')        # { lib_name: 'archive' or 'shared' or 'package' }
+        #libs = self.opt_dict('libs')        # { lib_name: 'archive' or 'shared' or 'package' }
         for lib, method in libs.items():
             if method in ['archive', 'shared_object']:
                 libs_cmd += f'-l{lib} '
@@ -313,9 +338,11 @@ class CFamilyBuildPhase(Phase):
 
         rpath_cmd = ''
         target_path = str(Path(self.opt_str('target_path')).parent)
-        for rpath, origin in self.opt_dict('rpath').items():    # { '../lib', True or False }
+        #for rpath, origin in self.opt_dict('rpath').items():    # { '../lib', True or False }
+        for rpath, origin in rpaths.items():
             if origin:
-                rpath_cmd += f'-Wl,-rpath=\'$ORIGIN{os.path.relpath(rpath, target_path)}\' '
+                path = os.path.relpath(rpath, target_path)
+                rpath_cmd += f'-Wl,-rpath=\'$ORIGIN/{path}\' '
             else:
                 rpath_cmd += f'-Wl,-rpath={rpath} '
 
