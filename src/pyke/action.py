@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing_extensions import Self
 
-from .utilities import ensure_list, InvalidActionError, WorkingSet
+from .utilities import ensure_list, InvalidActionError
 
 # pylint: disable=too-few-public-methods
 
@@ -165,10 +165,10 @@ class PhaseAction:
             self.phase.report_action_phase_end(final_res)
         return final_res
 
-class ProjectAction:
+class Action:
     ''' Records an action's project phases.'''
-    def __init__(self, project_name: str):
-        self.name = project_name
+    def __init__(self, action_name: str):
+        self.name = action_name
         self.current_phase: str = ''
         self.phases = {}
 
@@ -200,61 +200,11 @@ class ProjectAction:
             return self.phases[self.current_phase].set_step(step)
         raise InvalidActionError('No phase set.')
 
-    def run(self, action_name: str):
+    def run(self):
         ''' Run all the steps recorded for this project.'''
         final_res = ResultCode.SUCCEEDED
         for _, phase in self.phases.items():
-            res = phase.run(action_name)
-            if res.failed() and final_res.succeeded():
-                final_res = res
-        return final_res
-
-class Action:
-    ''' Records an action's flow through phases and results.'''
-    def __init__(self, action_name: str):
-        self.name = action_name
-        self.current_project: str = ''
-        self.projects = {}
-
-    def __repr__(self):
-        s = f'{self.name} - current_phase = {self.current_project}'
-        s += ''.join([repr(pr) for pr in self.projects])
-        return s
-
-    def get_result(self):
-        ''' Gets the result code.'''
-        res = ResultCode.NOT_YET_RUN
-        for pv in self.projects:
-            res = pv.get_result()
-            if not res.succeeded():
-                break
-        return res if res.failed() else ResultCode.SUCCEEDED
-
-    def set_project(self, project: 'Phase'):
-        ''' Begins recording a project phase.'''
-        self.current_project = project.name
-        if self.current_project not in self.projects:
-            self.projects[self.current_project] = ProjectAction(project.name)
-            return ResultCode.NOT_YET_RUN
-        return ResultCode.ALREADY_RUN
-
-    def set_phase(self, phase: 'Phase'):
-        ''' Begins recording a non-project phase.'''
-        if self.current_project:
-            return self.projects[self.current_project].set_phase(phase)
-        raise InvalidActionError('No project set.')
-
-    def set_step(self, step: Step):
-        ''' Begins recording a step.'''
-        if self.current_project:
-            return self.projects[self.current_project].set_step(step)
-        raise InvalidActionError('No project set.')
-
-    def run(self):
-        ''' Run all the steps recorded for this action.'''
-        final_res = ResultCode.SUCCEEDED
-        for _, project in self.projects.items():
-            res = project.run(self.name)
+            res = phase.run(self.name)
             if res.failed() and final_res.succeeded():
                 final_res = res
         return final_res

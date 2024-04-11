@@ -113,11 +113,9 @@ def determine_color_support() -> str:
 class WorkingSet:
     ''' Keeps track of globally-available values.'''
     makefile_dir = ''
+    argument_aliases = {}
     action_aliases = {}
     main_phase = None
-    phase_map = {}
-    report_verbosity = 2
-    verbosity = 0
 
 ansi_colors = {
     'colors_24bit': {
@@ -129,7 +127,7 @@ ansi_colors = {
         'step_lt':          {'form': 'b24', 'fg': [0xb3, 0x8f, 0x4f] },
         'step_dk':          {'form': 'b24', 'fg': [0x93, 0x5f, 0x2f] },
         'shell_cmd':        {'form': 'b24', 'fg': [0x31, 0x31, 0x32] },
-        'key':              {'form': 'b24', 'fg': [0xff, 0x8f, 0x23] },
+        'key':              {'form': 'b24', 'fg': [0x9f, 0x9f, 0x9f] },
         'val_uninterp_lt':  {'form': 'b24', 'fg': [0xaf, 0x23, 0xaf] },
         'val_uninterp_dk':  {'form': 'b24', 'fg': [0x5f, 0x13, 0x5f] },
         'val_interp':       {'form': 'b24', 'fg': [0x33, 0x33, 0xff] },
@@ -152,7 +150,7 @@ ansi_colors = {
         'step_lt':          {'form': 'b8', 'fg': 215 },
         'step_dk':          {'form': 'b8', 'fg': 137 },
         'shell_cmd':        {'form': 'b8', 'fg': 237 },
-        'key':              {'form': 'b8', 'fg': 202 },
+        'key':              {'form': 'b8', 'fg': 8 },
         'val_uninterp_lt':  {'form': 'b8', 'fg': 201 },
         'val_uninterp_dk':  {'form': 'b8', 'fg': 90 },
         'val_interp':       {'form': 'b8', 'fg': 27 },
@@ -175,7 +173,7 @@ ansi_colors = {
         'step_lt':          {'form': 'named', 'fg': 'bright yellow' },
         'step_dk':          {'form': 'named', 'fg': 'yellow' },
         'shell_cmd':        {'form': 'named', 'fg': 'bright black' },
-        'key':              {'form': 'named', 'fg': 'yellow' },
+        'key':              {'form': 'named', 'fg': 'white' },
         'val_uninterp_lt':  {'form': 'named', 'fg': 'bright magenta' },
         'val_uninterp_dk':  {'form': 'named', 'fg': 'magenta' },
         'val_interp':       {'form': 'named', 'fg': 'bright blue' },

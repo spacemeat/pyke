@@ -16,7 +16,7 @@ from ..action import (Action, ResultCode, Step, Result,
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, do_shell_command,
                          determine_color_support, ansi_colors, set_color,
-                         CircularDependencyError, ProjectPhaseDependencyError)
+                         CircularDependencyError)
 
 T = TypeVar('T')
 Steps: TypeAlias = list[Step] | Step | None
@@ -37,10 +37,10 @@ class Phase:
     '''
     def __init__(self, options: dict | None = None,
                  dependencies: Self | list[Self] | None = None):
-        self.phase_names = {}
         self.options = Options()
         self.options |= {
             'name': '',
+            'group': '',
             'report_verbosity': 2,
             'report_relative_paths': True,
             'verbosity': 0,
@@ -147,6 +147,17 @@ class Phase:
     def name(self, value):
         ''' Quick property to set the name options.'''
         self.push_opts({'name': value})
+
+    @property
+    def group(self):
+        ''' Quick property to get the group name.'''
+        return self.opt_str('group')
+
+    @property
+    def full_name(self):
+        """The def full_name property."""
+        group = self.opt_str('group')
+        return f"{self.opt_str('group')}.{self.name}" if len(group) > 0 else self.name
 
     def push_opts(self, overrides: dict,
                   include_deps: bool = False, include_project_deps: bool = False):

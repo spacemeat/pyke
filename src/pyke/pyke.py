@@ -20,7 +20,7 @@ from .options import OptionOp
 from .options_parser import parse_value
 from .phases.phase import Phase
 from .phases.project import ProjectPhase
-from .utilities import WorkingSet, MalformedConfigError, ProjectNameCollisionError
+from .utilities import WorkingSet, MalformedConfigError, ensure_list
 
 def main_project():
     ''' Returns the main project created for the makefile.'''
@@ -133,50 +133,74 @@ $ pyke clean build -otime_run:true run
 def load_config():
     ''' Loads aliases from ~/.config/pyke/pyke-config.json or <project-root>/pyke-config.json or
         <cwd>/pyke-config.json, overriding in that order. '''
-    def set_default_config():
+    def set_default_config_old():
+        WorkingSet.argument_aliases = {
+            '-debug': '-okind=debug',
+            '-v0': '-overbosity=0',
+            '-v1': '-overbosity=1',
+            '-v2': '-overbosity=2',
+            '-rv0': '-oreport_verbosity=0',
+            '-rv1': '-oreport_verbosity=1',
+            '-rv2': '-oreport_verbosity=2',
+        }
         WorkingSet.action_aliases = {
             'report-options': 'report_options',
             'opts': 'report_options',
             'report-files': 'report_files',
             'files': 'report_files',
             'c': 'clean',
-            'clean-all': '@:clean',
-            'ca': '@:clean',
             'clean-build-directory': 'clean_build_directory',
-            'clean-build-directory-all': '@:clean_build_directory',
             'cbd': 'clean_build_directory',
-            'cbda': '@:clean_build_directory',
             'b': 'build',
-            'build-all': '@:build',
-            'ba': '@:build',
-
-            '-debug': '-o.@:kind=debug',
-            '-debug-all': '-o@,@.@:kind=debug',
-            '-v0': '-o@,@.@:verbosity=0',
-            '-v1': '-o@,@.@:verbosity=1',
-            '-v2': '-o@,@.@:verbosity=2',
         }
 
-    def validate_config(config):
+    def process_config(config):
         if not isinstance(config, dict):
             raise MalformedConfigError(f'Config file {file}: Must be a JSON dictonary.')
-        if 'aliases' in config:
-            aliases = config['aliases']
-            if not isinstance(aliases, dict):
-                raise MalformedConfigError(f'Config file {file}: "aliases" must be a dictionary.')
-            for action, aliases in aliases.items():
-                if not isinstance(action, str):
+
+        def read_block(config, subblock, keyname) -> list[str]:
+            rets = {}
+            if aliases := config.get(subblock):
+                if not isinstance(aliases, dict):
                     raise MalformedConfigError(
-                        f'Config file {file}: "aliases/action" key must be a string.')
-                if isinstance(aliases, str):
-                    aliases = [aliases]
-                if (not isinstance(aliases, list) or
-                    any(not isinstance(alias, str) for alias in aliases)):
-                    raise MalformedConfigError(
-                        f'Config file {file}: "aliases/action" value must be a string '
-                        'or a list of strings.')
-                for alias in aliases:
-                    WorkingSet.action_aliases[alias] = action
+                        f'Config file {file}: "{subblock}" must be a dictionary.')
+                for value, aliases in aliases.items():
+                    if not isinstance(value, str):
+                        raise MalformedConfigError(
+                            f'Config file {file}: "{config}/{keyname}" key must be a string.')
+                    if isinstance(aliases, str):
+                        aliases = [aliases]
+                    if (not isinstance(aliases, list) or
+                        any(not isinstance(alias, str) for alias in aliases)):
+                        raise MalformedConfigError(
+                            f'Config file {file}: "{config}/{keyname}" value must be a string '
+                            'or a list of strings.')
+                    for alias in aliases:
+                        rets[alias] = value
+            return rets
+
+        WorkingSet.argument_aliases |= read_block(config, 'argument_aliases', 'argument')
+        WorkingSet.action_aliases |= read_block(config, 'action_aliases', 'action')
+
+    def set_default_config():
+        default_config = '''
+{
+    "argument_aliases": {
+        "-okind=debug": "-debug",
+        "-overbosity=0": "-v0",
+        "-overbosity=1": "-v1",
+        "-overbosity=2": "-v2"
+    },
+    "action_aliases": {
+        "report_options": ["report-options", "opts"],
+        "report_files": ["report-files", "files"],
+        "clean": "c",
+        "clean_build_directory": ["clean-build-directory", "cbd"],
+        "build": "b"
+    }
+} '''
+        config = json.loads(default_config)
+        process_config(config)
 
     set_default_config()
 
@@ -188,90 +212,60 @@ def load_config():
         try:
             with open(file, 'r', encoding='utf-8') as fi:
                 config = json.load(fi)
-                validate_config(config)
+                process_config(config)
         except (FileNotFoundError, MalformedConfigError):
             pass
 
-def resolve_project_names():
-    ''' Uniquify project names, and the phase names within each project.'''
-    project_phases = [phase for phase in WorkingSet.main_phase.enumerate_dependencies()
-                          if phase.is_project_phase]
-    project_names = set()
-    for project_phase in project_phases:
-        if project_phase.name in project_names:
-            raise ProjectNameCollisionError(f'There is already a project named '
-                f'{project_phase.name}. Project names must be unique.')
-    for phase in project_phases:
-        phase.uniquify_phase_names()
+def uniquify_phase_names():
+    ''' Ensure phase names are unique within groups.'''
+    names = {}
+    for phase in WorkingSet.main_phase.enumerate_dependencies():
+        fullname = phase.full_name
+        if fullname in names:
+            c, lp = names[fullname]
+            lp.append(phase)
+            names[fullname] = (c + 1, lp)
+        else:
+            names[fullname] = (1, [phase])
+    for _, (count, phases) in names.items():
+        #count, phases = count_phases
+        if count > 1:
+            idx = 0
+            for phase in phases:
+                new_name = phase.name
+                while f'{phase.group}.{new_name}' in names:
+                    new_name = f'{phase.name}_{idx}'
+                    idx += 1
+                phase.name = new_name
 
-class PhaseMap:
-    def __init__(self, root_project):
-        self.root_project = root_project
-        self.project_phases = {
-            phase.name: phase
-            for phase in root_project.enumerate_dependencies()
-            if phase.is_project_phase
-        }
-        self.non_project_phases = {
-            f'{proj_name}.{phase.name}': phase
-            for proj_name, proj in self.project_phases.items()
-            for phase in proj.enumerate_dependencies()
-            if not phase.is_project_phase
-        }
-
-    def get_project_phase(self, name: str) -> Phase | None:
-        return self.project_phases.get(name, None)
-
-    def get_all_project_phases(self) -> list[Phase]:
-        return [v for _, v in self.project_phases.items()]
-
-    def get_non_project_phase(self, name: str) -> Phase | None:
-        return self.non_project_phases.get(name, None)
-
-    def get_all_non_project_phases(self) -> list[Phase]:
-        return [v for _, v in self.non_project_phases.items()]
-
-    def get_phase_list(self, all_labels: str) -> list[Phase]:
-        ''' Gets all the phases according to the following:
-        all_labels is a ,-separated least
-        for each clause, a label can be in the form x or x.y
-        for form x, the value is a project phase name, or *, or ''
-            * = all projects
-            '' = the main project
-        for form x.y, the value is a non-project phase name, or *
-            * = all non-project phases under all of the x projects
-        So, to select every phase, the right incantation is:
-            *, *.*
-        '''
-        proj_phases = []
-        all_named_phases = []
-        labels = all_labels.split(',')
-        for proj_name in labels:
-            proj_name = proj_name.strip()
-            nonproj_name = None
-            named_phases = []
-            if '.' in proj_name:
-                proj_name, nonproj_name = proj_name.split('.', 1)
-            if proj_name == '':
-                proj_phases = [self.root_project]
-            elif proj_name == '@':
-                proj_phases = self.get_all_project_phases()
-            else:
-                proj_phases = [self.get_project_phase(proj_name)]
-
-            if nonproj_name == '@':
-                named_phases = [v for k, v in self.non_project_phases.items()
-                                  for proj_phase in proj_phases
-                                if k.startswith(f'{proj_phase.name}.')]
-            elif nonproj_name:
-                named_phases = [self.get_non_project_phase(
-                                f'{project_phase.name}.{nonproj_name}')
-                                for project_phase in proj_phases]
-            else:
-                named_phases = proj_phases
-            all_named_phases.extend(named_phases)
-
-        return list(dict.fromkeys(all_named_phases))
+def get_phases(labels: list[str] | str) -> list[Phase]:
+    ''' Returns all phases that match the labels filter.
+    labels is a list of strings. For each label, some phases may be returned:
+    'foo' specifies a phase with no group set, whose name is 'foo'
+    '@' specifies all phases with no group set, with any name
+    '.foo' specifies a phase with no group set, whose name is 'foo'
+    '.@' specifies all phases with no group set, with any name
+    '@.foo' specifies all phases in any group (or none), whose name is 'foo'
+    'bar.@' specifies all phases in group 'bar'
+    'bar.foo' specifies a phase in group 'bar' named 'foo'
+    '@.@' specifies all phases
+    '''
+    phases = []
+    labels = ensure_list(labels)
+    for label in labels:
+        group_phase_label = label.split('.', 1)
+        if len(group_phase_label) == 1:
+            label = group_phase_label[0]
+            for phase in WorkingSet.main_phase.enumerate_dependencies():
+                if label in ['@', phase.full_name]:
+                    phases.append(phase)
+        elif len(group_phase_label) == 2:
+            grouplabel, namelabel = group_phase_label
+            for phase in WorkingSet.main_phase.enumerate_dependencies():
+                if grouplabel in ['@', phase.group]:
+                    if namelabel in ['@', phase.name]:
+                        phases.append(phase)
+    return reversed(phases)
 
 def main():
     '''Entrypoint for pyke.'''
@@ -316,22 +310,21 @@ def main():
 
     load_config()
 
-    WorkingSet.main_phase = ProjectPhase({
-        'name': make_path.parent.name if
+    project_phase_name = 'project_' + (make_path.parent.name if
         make_path.name == 'make.py'
-        else make_path.stem})
+        else make_path.stem)
+    WorkingSet.main_phase = ProjectPhase({
+        'name': project_phase_name})
 
     run_make_file(make_path, cache_make)
-    resolve_project_names()
-    phase_map = PhaseMap(WorkingSet.main_phase)
+    uniquify_phase_names()
 
     actions = []
     file_operations_are_dirty = True
 
     while idx < len(sys.argv):
         arg = sys.argv[idx]
-
-        arg = WorkingSet.action_aliases.get(arg, arg)
+        arg = WorkingSet.argument_aliases.get(arg, arg)
 
         if arg in ['-v', '--version']:
             print_version()
@@ -357,16 +350,16 @@ def main():
             affected_phases = []
             if ':' in override:
                 phase_labels, override = override.split(':', 1)
-                affected_phases = phase_map.get_phase_list(phase_labels)
+                affected_phases = get_phases(phase_labels)
             else:
-                affected_phases = [WorkingSet.main_phase]
+                affected_phases = get_phases('@.@')
 
             if '=' in override:
                 k, v = override.split('=', 1)
                 if k[-1] in ['+', '*', '-', '|', '&', '\\', '^']:
-                    op_str = f'{k[-1]}='
+                    #op_str = f'{k[-1]}='
                     op = {member.value: member for member in OptionOp}[k[-1]]
-                    k = k[:-1].strip()
+                    #k = k[:-1].strip()
                 else:
                     op = OptionOp.REPLACE
                 v = parse_value(v.strip())
@@ -379,18 +372,19 @@ def main():
             file_operations_are_dirty = True
 
         else:
-            affected_phases = []
-            if ':' in arg:
-                phase_labels, arg = arg.split(':', 1)
-                affected_phases = phase_map.get_phase_list(phase_labels)
-            else:
-                affected_phases = [WorkingSet.main_phase]
-
             if file_operations_are_dirty:
                 WorkingSet.main_phase.patch_options_in_dependencies()
                 WorkingSet.main_phase.compute_file_operations_in_dependencies()
                 file_operations_are_dirty = False
 
+            affected_phases = []
+            if ':' in arg:
+                phase_labels, arg = arg.split(':', 1)
+                affected_phases = get_phases(phase_labels)
+            else:
+                affected_phases = get_phases('@.@')
+
+            arg = WorkingSet.action_aliases.get(arg, arg)
             action = Action(arg)
             actions.append(action)
             for active_phase in affected_phases:
