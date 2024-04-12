@@ -20,11 +20,7 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
     def patch_options(self):
         ''' Fixups run before file operations.'''
         for dep in self.enumerate_dependencies():
-            dep.push_opts({'relocatable': True}, True, True)
-
-        if not self.opt_bool('build_for_deployment'):
-            self.push_opts({'posix_shared_object_file': '{posix_so_linker_name}'})
-            self.push_opts({'generate_versioned_sonames': False})
+            dep.push_opts({'relocatable_code': True}, True, True)
 
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''

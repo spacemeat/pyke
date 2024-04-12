@@ -164,19 +164,18 @@ def load_config():
                 if not isinstance(aliases, dict):
                     raise MalformedConfigError(
                         f'Config file {file}: "{subblock}" must be a dictionary.')
-                for value, aliases in aliases.items():
-                    if not isinstance(value, str):
+                for alias, values in aliases.items():
+                    if not isinstance(alias, str):
                         raise MalformedConfigError(
                             f'Config file {file}: "{config}/{keyname}" key must be a string.')
-                    if isinstance(aliases, str):
-                        aliases = [aliases]
-                    if (not isinstance(aliases, list) or
-                        any(not isinstance(alias, str) for alias in aliases)):
+                    if isinstance(values, str):
+                        values = [values]
+                    if (not isinstance(values, list) or
+                        any(not isinstance(value, str) for value in values)):
                         raise MalformedConfigError(
                             f'Config file {file}: "{config}/{keyname}" value must be a string '
                             'or a list of strings.')
-                    for alias in aliases:
-                        rets[alias] = value
+                    rets[alias] = values
             return rets
 
         WorkingSet.argument_aliases |= read_block(config, 'argument_aliases', 'argument')
@@ -186,17 +185,32 @@ def load_config():
         default_config = '''
 {
     "argument_aliases": {
-        "-okind=debug": "-debug",
-        "-overbosity=0": "-v0",
-        "-overbosity=1": "-v1",
-        "-overbosity=2": "-v2"
+        "-v0": "-overbosity=0",
+        "-v1": "-overbosity=1",
+        "-v2": "-overbosity=2",
+        "-release": "-okind=release",
+        "-versioned_sos": ["-oposix_shared_object_file={posix_so_real_name}",
+                           "-ogenerate_versioned_sonames=True"],
+        "vsos": ["-oposix_shared_object_file={posix_so_real_name}",
+                 "-ogenerate_versioned_sonames=True"],
+
+        "-deploy_install": ["-orpath_deps=False",
+                            "-omoveable_binaries=False",
+                            "-oposix_shared_object_file={posix_so_real_name}",
+                            "-ogenerate_versioned_sonames=true",
+                            "-okind=release"],
+        "-deploy_moveable": ["-orpath_deps=True",
+                             "-omoveable_binaries=True",
+                             "-oposix_shared_object_file={posix_so_linker_name}",
+                             "-ogenerate_versioned_sonames=false",
+                             "-okind=release"]
     },
     "action_aliases": {
-        "report_options": ["report-options", "opts"],
-        "report_files": ["report-files", "files"],
-        "clean": "c",
-        "clean_build_directory": ["clean-build-directory", "cbd"],
-        "build": "b"
+        "opts": "report_options",
+        "files": "report_files",
+        "c": "clean",
+        "cbd": "clean_build_directory",
+        "b": "build"
     }
 } '''
         config = json.loads(default_config)
@@ -228,13 +242,16 @@ def uniquify_phase_names():
         else:
             names[fullname] = (1, [phase])
     for _, (count, phases) in names.items():
-        #count, phases = count_phases
         if count > 1:
             idx = 0
             for phase in phases:
                 new_name = phase.name
-                while f'{phase.group}.{new_name}' in names:
+                new_full_name = new_name
+                if len(phase.group) > 0:
+                    new_full_name = f'{phase.group}.{new_name}'
+                while new_full_name in names:
                     new_name = f'{phase.name}_{idx}'
+                    new_full_name = f'{phase.group}.{new_name}'
                     idx += 1
                 phase.name = new_name
 
@@ -322,9 +339,13 @@ def main():
     actions = []
     file_operations_are_dirty = True
 
-    while idx < len(sys.argv):
-        arg = sys.argv[idx]
-        arg = WorkingSet.argument_aliases.get(arg, arg)
+    args = []
+    for arg in sys.argv[idx:]:
+        args.extend(WorkingSet.argument_aliases.get(arg, [arg]))
+
+    idx = 0
+    while idx < len(args):
+        arg = args[idx]
 
         if arg in ['-v', '--version']:
             print_version()
@@ -345,7 +366,7 @@ def main():
                 override = arg[2:]
             else:
                 idx += 1
-                override = sys.argv[idx]
+                override = args[idx]
 
             affected_phases = []
             if ':' in override:
@@ -384,7 +405,7 @@ def main():
             else:
                 affected_phases = get_phases('@.@')
 
-            arg = WorkingSet.action_aliases.get(arg, arg)
+            arg = WorkingSet.action_aliases.get(arg, [arg])[0]
             action = Action(arg)
             actions.append(action)
             for active_phase in affected_phases:

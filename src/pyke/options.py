@@ -83,7 +83,9 @@ class Options:
 
     def get(self, key, interpolate=True):
         ''' Get the ultimate value of the option.'''
-        opt = self.opts[key]
+        opt = self.opts.get(key)
+        if opt is None:
+            return f'!{key}!'
         values = copy.deepcopy(opt.value)
         if not interpolate:
             return values

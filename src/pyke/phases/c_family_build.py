@@ -22,7 +22,7 @@ class CFamilyBuildPhase(Phase):
             'toolkit': 'gnu',
             'language': 'c++',
             'language_version': '23',
-            'kind': 'release',
+            'kind': 'debug',
             'target_os_gnu': 'posix',
             'target_os_clang': 'posix',
             'target_os_visualstudio': 'windows',
@@ -51,10 +51,10 @@ class CFamilyBuildPhase(Phase):
             'posix_threads': False,
             'definitions': [],
             'additional_flags': [],
-            'incremental_build': True,
+            'relocatable_code': False,
 
-            'thin_archive': False,
-            'relocatable': False,
+            'rpath_deps': True,
+            'moveable_binaries': True,
             'export_dynamic': False,
 
             'inc_dir': '.',
@@ -70,8 +70,6 @@ class CFamilyBuildPhase(Phase):
             'prebuilt_objs': [],
 
             'target_path': '',
-            'build_for_deployment': True,
-            'generate_versioned_sonames': True,
 
             'build_dir': 'build',
             'build_detail': '{kind}.{toolkit}',
@@ -86,6 +84,8 @@ class CFamilyBuildPhase(Phase):
             'obj_anchor': '{build_detail_anchor}/{obj_dir}',
             'obj_path': '{obj_anchor}/{obj_file}',
 
+            'thin_archive': False,
+
             'archive_dir':'lib',
             'archive_basename': '{name}',
             'posix_archive_file': 'lib{archive_basename}.a',
@@ -95,18 +95,18 @@ class CFamilyBuildPhase(Phase):
             'archive_path': '{archive_anchor}/{archive_file}',
 
             'rpath': {},   # {dir: str, uses_ORIGIN: bool}
-            'position_independent_code': False,
             # TODO: 'symbol_visibility': 'hidden', # see https://gcc.gnu.org/wiki/Visibility
 
             'shared_object_dir': 'bin',
             'shared_object_basename': '{name}',
+            'generate_versioned_sonames': False,
             'so_major': 1,
             'so_minor': 0,
             'so_patch': 0,
             'posix_so_linker_name': 'lib{shared_object_basename}.so',
             'posix_so_soname': '{posix_so_linker_name}.{so_major}',
             'posix_so_real_name': '{posix_so_soname}.{so_minor}.{so_patch}',
-            'posix_shared_object_file': '{posix_so_real_name}',
+            'posix_shared_object_file': '{posix_so_linker_name}',
             'windows_shared_object_file': '{shared_object_basename}.dll',
             'shared_object_file': '{{target_os_{toolkit}}_shared_object_file}',
             'shared_object_anchor': '{build_detail_anchor}/{shared_object_dir}',
@@ -290,7 +290,7 @@ class CFamilyBuildPhase(Phase):
         return {
             'inc_dirs': inc_dirs + pkg_inc_cmd,
             'pkg_inc_bits': pkg_inc_bits_cmd,
-            'relocatable': self.opt_bool('relocatable'),
+            'relocatable_code': self.opt_bool('relocatable_code'),
             'posix_threads': self.opt_bool('posix_threads'),
         }
 
@@ -306,8 +306,10 @@ class CFamilyBuildPhase(Phase):
 
         # fill in rpath
         rpath = {}
-        if not self.opt_bool('build_for_deployment'):
-            rpath = { str(file.path.parent): True for file in shared_objs } | self.opt_dict('rpath')
+        moveable = self.opt_bool('moveable_binaries')
+        if self.opt_bool('rpath_deps'):
+            rpath = ({ str(file.path.parent): moveable for file in shared_objs } |
+                     self.opt_dict('rpath'))
 
         # fill in libs
         libs = {}
@@ -320,14 +322,9 @@ class CFamilyBuildPhase(Phase):
     def make_link_arguments(self) -> dict:
         ''' Constructs the linking arguments of a gcc command.'''
         lib_dirs, rpaths, libs = self.inherit_libs()
-
         lib_bits_cmd = ''
-
-        #lib_dirs = self.opt_list('lib_dirs')
         lib_dirs_cmd = ''.join((f'-L{lib_dir} ' for lib_dir in lib_dirs))
-
         libs_cmd = ''
-        #libs = self.opt_dict('libs')        # { lib_name: 'archive' or 'shared' or 'package' }
         for lib, method in libs.items():
             if method in ['archive', 'shared_object']:
                 libs_cmd += f'-l{lib} '
@@ -338,7 +335,6 @@ class CFamilyBuildPhase(Phase):
 
         rpath_cmd = ''
         target_path = str(Path(self.opt_str('target_path')).parent)
-        #for rpath, origin in self.opt_dict('rpath').items():    # { '../lib', True or False }
         for rpath, origin in rpaths.items():
             if origin:
                 path = os.path.relpath(rpath, target_path)
@@ -362,7 +358,7 @@ class CFamilyBuildPhase(Phase):
         if just_get_includes:
             obj_path = '/dev/null'
         cmd = (f'{prefix}-c {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]}'
-               f'{"-fPIC " if c_args["relocatable"] else ""}'
+               f'{"-fPIC " if c_args["relocatable_code"] else ""}'
                f'{"-pthread " if c_args["posix_threads"] else ""}'
                f'-o {obj_path} {src_path}'
         )
@@ -385,7 +381,7 @@ class CFamilyBuildPhase(Phase):
         l_args = self.make_link_arguments()
         object_paths_cmd = f'{" ".join((str(obj) for obj in object_paths))} '
         soname = (f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
-                  if self.opt_bool('build_for_deployment') else '')
+                  if self.opt_bool('generate_versioned_sonames') else '')
         cmd = (f'{prefix}-shared -o {shared_object_path} '
                f'{soname}'
                f'{object_paths_cmd}'
@@ -414,10 +410,10 @@ class CFamilyBuildPhase(Phase):
             shared_object_path = '/dev/null'
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
         soname = (f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
-                  if self.opt_bool('build_for_deployment') else '')
+                  if self.opt_bool('generate_versioned_sonames') else '')
         cmd = (f'{prefix}-shared {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} '
                f'-o {shared_object_path} '
-               f'{" -fPIC" if c_args["relocatable"] else ""}'
+               f'{" -fPIC" if c_args["relocatable_code"] else ""}'
                f'{soname}'
                f'{" -pthread" if l_args["posix_threads"] else ""}'
                f'{src_paths_cmd}'
@@ -437,7 +433,7 @@ class CFamilyBuildPhase(Phase):
             exe_path = '/dev/null'
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
         cmd = (f'{prefix} {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} -o {exe_path} '
-               f'{" -fPIC" if c_args["relocatable"] else ""}'
+               f'{" -fPIC" if c_args["relocatable_code"] else ""}'
                f'{" -pthread" if l_args["posix_threads"] else ""}{l_args["lib_dirs"]}'
                f'{src_paths_cmd}'
                f'{l_args["lib_bits"]} {l_args["libs"]}{l_args["rpath"]}')
@@ -462,7 +458,7 @@ class CFamilyBuildPhase(Phase):
             return self.parse_include_report(err)
         raise ValueError('Header discovery failed.')
 
-    def get_includes_srcs_to_exe(self, src_paths: list[Path], obj_path: Path) -> list[Path]:
+    def get_includes_srcs_to_so_or_exe(self, src_paths: list[Path], obj_path: Path) -> list[Path]:
         ''' Get all the headers used by the given src_path, including system headers.'''
         cmd = self.make_cmd_compile_srcs_to_exe(src_paths, obj_path, True)
         ret, _, err = do_shell_command(cmd)

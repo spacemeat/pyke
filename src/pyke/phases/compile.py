@@ -9,6 +9,7 @@ class CompilePhase(CFamilyBuildPhase):
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
         options = {
+            'name': 'compile',
             'build_operation': 'compile_to_object',
         } | (options or {})
         super().__init__(options, dependencies)

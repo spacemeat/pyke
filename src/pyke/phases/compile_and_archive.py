@@ -11,6 +11,7 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
         options = {
+            'name': 'compile_and_archive',
             'target_path': '{archive_path}',
             'build_operation': 'compile_to_archive',
         } | (options or {})

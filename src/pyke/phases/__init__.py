@@ -8,4 +8,5 @@ from .link_to_shared_object import LinkToSharedObjectPhase
 from .link_to_exe import LinkToExePhase
 from .compile_and_archive import CompileAndArchivePhase
 from .compile_and_link import CompileAndLinkPhase
+from .compile_and_link_to_so import CompileAndLinkToSharedObjectPhase
 from .project import ProjectPhase

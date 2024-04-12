@@ -4,8 +4,6 @@ from pathlib import Path
 
 from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
-from ..options import OptionOp
-from ..utilities import uniquify_list
 
 class LinkToExePhase(CFamilyBuildPhase):
     '''
@@ -13,7 +11,7 @@ class LinkToExePhase(CFamilyBuildPhase):
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
         options = {
-            'name': 'link',
+            'name': 'link_to_exe',
             'target_path': '{exe_path}',
             'build_operation': 'link_to_executable',
         } | (options or {})

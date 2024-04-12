@@ -46,7 +46,6 @@ class Phase:
             'verbosity': 0,
             'static_anchor': WorkingSet.makefile_dir,
             'gen_anchor': WorkingSet.makefile_dir,
-            'simulate': False,
             'colors_24bit': deepcopy(ansi_colors['colors_24bit']),
             'colors_8bit': deepcopy(ansi_colors['colors_8bit']),
             'colors_named': deepcopy(ansi_colors['colors_named']),

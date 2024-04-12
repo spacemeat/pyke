@@ -5,22 +5,27 @@ from pathlib import Path
 from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
 
-class CompileAndLinkPhase(CFamilyBuildPhase):
+class CompileAndLinkToSharedObjectPhase(CFamilyBuildPhase):
     '''
     Phase class for linking object files to build executable binaries.
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
         options = {
-            'name': 'compile_and_link',
-            'target_path': '{exe_path}',
-            'build_operation': 'compile_to_executable',
+            'name': 'compile_and_link_to_shared_object',
+            'target_path': '{shared_object_path}',
+            'build_operation': 'compile_and_link_to_shared_object',
+            'relocatable_code': True,
         } | (options or {})
         super().__init__(options, dependencies)
 
+    def patch_options(self):
+        ''' Fixups run before file operations.'''
+        for dep in self.enumerate_dependencies():
+            dep.push_opts({'relocatable_code': True}, True, True)
+
     def compute_file_operations(self):
         ''' Implelent this in any phase that uses input files or generates output fies.'''
-
-        exe_path = Path(self.opt_str('exe_path'))
+        so_path = Path(self.opt_str('shared_object_path'))
 
         prebuilt_objs = [FileData(prebuilt_obj_path, 'object', None)
                          for prebuilt_obj_path in self.get_all_prebuilt_obj_paths()]
@@ -53,7 +58,7 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
 
         self.record_file_operation(
             None,
-            FileData(exe_path.parent, 'dir', self),
+            FileData(so_path.parent, 'dir', self),
             'create directory')
 
         objs = self.get_direct_dependency_output_files('object')
@@ -63,14 +68,14 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
         objs.extend(prebuilt_objs)
         self.record_file_operation(
             objs,
-            FileData(exe_path, 'executable', self),
-            'link')
+            FileData(so_path, 'shared_object', self),
+            'link to shared object')
 
     def do_action_build(self, action: Action):
         '''
         Builds all object paths.
         '''
-        exe_path = self.get_exe_path()
+        so_path = Path(self.opt_str('shared_object_path'))
 
         dirs = {}
         all_dirs = [fd.path for fd in self.files.get_output_files('dir')]
@@ -93,8 +98,9 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
                     src.path, inc_paths, obj.path))
 
         object_paths = [src.path
-            for file_op in self.files.get_operations('link')
+            for file_op in self.files.get_operations('link to shared object')
             for src in file_op.input_files if src.file_type == 'object']
 
-        self.do_step_link_objects_to_exe(action, [*compile_steps, dirs[exe_path.parent]],
-            object_paths, exe_path)
+        self.do_step_link_objects_to_shared_object(
+            action, [*compile_steps, dirs[so_path.parent]],
+            object_paths, so_path)
