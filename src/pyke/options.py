@@ -10,19 +10,23 @@ from .utilities import (re_interp_option, InvalidOptionOperation)
 class OptionOp(Enum):
     ''' The operations you can perform with option overrides.'''
     REPLACE = '='
-    NOT = '!'       # not booleans
-    ADD = '+'       # add numbers, add to strings
-    SUBTRACT = '-'  # subtract numbers, remove matching substrings
-    MULTIPLY = '*'  # multiply numbers
-    DIVIDE = '/'    # divide numbers
-    APPEND = '+'    # append to lists/tuples, add to sets, union to dicts
-    REMOVE = '-'    # remove by value from lists and sets and tuples
-    EXTEND = '*'    # extend to lists/tuples
-    UNION = '|'     # union of sets and dicts
-    INTERSECT = '&' # intersection of sets
-    DIFF = '\\'     # remove by index from lists/tuples, by key from dict, difference of sets
-    SYM_DIFF = '^'  # sym_diff of sets
+    NOT = '!='       # not booleans
+    ADD = '+='       # add numbers, add to strings
+    SUBTRACT = '-='  # subtract numbers, remove matching substrings
+    MULTIPLY = '*='  # multiply numbers
+    DIVIDE = '/='    # divide numbers
+    APPEND = '+='    # append to lists/tuples, add to sets, union to dicts
+    REMOVE = '-='    # remove by value from lists and sets and tuples
+    EXTEND = '*='    # extend to lists/tuples
+    UNION = '|='     # union of sets and dicts
+    INTERSECT = '&=' # intersection of sets
+    DIFF = '\\='     # remove by index from lists/tuples, by key from dict, difference of sets
+    SYM_DIFF = '^='  # sym_diff of sets
 
+    @staticmethod
+    def get(op: str):
+        ''' Return the OptionOp by string.'''
+        return {member.value: member for member in OptionOp}.get(op)
 
 class Option:
     ''' Represents a named option. Stores all its overrides.'''

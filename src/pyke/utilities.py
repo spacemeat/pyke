@@ -126,6 +126,7 @@ class WorkingSet:
     makefile_dir = ''
     argument_aliases = {}
     action_aliases = {}
+    default_action = ''
     main_phase: Phase
 
 ansi_colors = {

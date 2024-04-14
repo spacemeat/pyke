@@ -65,34 +65,51 @@ def print_version():
 def print_help():
     ''' Send help.'''
     print (
-    '''
-Runs an action on a phase's dependencies, followed by the phase itself. The phase,
-action, and any overrides are extracted from args. The following arguments are available:
+    ''' Pyke - a Python-powered build system
+
+Usage:
+pyke [invocation] [overrides / actions]
+
+invocations:
 -v, --version: Prints the version information for pyke, and exits.
 -h, --help: Prints a help document.
--c, --cache_makefile: Allows the makefile's __cache__ to be generated. This might speed up
-    complex builds, but they'd hvae to be really complex. Must precede any arguments that 
-    are not -v, -h, or -m.
--m, --module: Specifies the module (pyke file) to be run. Must precede any arguments that
-    are not -v, -h, or -c. Actions are performed relative to the module's directory, unless an
-    option override (-o anchor:[dir]) is given, in which case they are performed relative to
-    the given working directory. Immediately after running the module, the active phase
-    is selected as the last phase added to use_phase()/use_phases(). This can be overridden
-    by -p.
-    If no -m argument is given, pyke will look for and run ./make.py.
--o, --override: Specifies an option override in all phases for subsequenet actions. If the
-    option is given as a key:value pair, the override is set; if it is only a key (with no
-    separator ':') the override is clear. Option overrides are kept as a stack; if you set
-    an override n times, you must clear it n times to restore the original value. Note,
-    you can set and clear individual overrides out of order:
-    $ pyke -o kind:debug -o kind:release -o exe_basename:whodunnit -o kind
-    will end up overriding "kind" to "debug" and "exe_basename" to "whodunnit", like one
-    might hope.
--p, --phase: Specifies the active phase to use for subsequent option overrides and actions.
-action: Arguments given without switches specify actions to be taken on the active phase's
-    dependencies, and then the active phase itself, in depth-first order. Any action on any
-    phase which doesn't support it is quietly ignored.
+-c, --cache_makefile: Allows the makefile's __cache__ to be generated. This
+    might speed up complex builds, but they'd hvae to be really complex to
+    make a noticeable difference.
+-m, --makefile: Specifies the makefile (pyke file) to be run. Actions are
+    performed relative to the makefile's directory, unless an option override
+    (-o gen_anchor=dir/to/gen) is given, in which case they are performed
+    relative to the given anchor directory. If no -m argument is given, pyke
+    will look for and run ./make.py.
 
+overrides:
+-o, --override: Specifies an option override for subsequenet actions. The
+    format for an override is:
+    -o [phases:]option[op-value]
+    'phases' is a comma-separated list of names of phase objects defined in
+    the makefile. Defaults to '@.@', which specifies all phases in the project.
+    'option' specifies the name of an option to modify. 
+    'op-value' specifies an operator and value to apply to the option. The
+    override is pushed onto a stack for that option. If 'op-value' is not
+    present, the option's override stack is popped.
+
+actions:
+    Actions are words given without switches. The format for an action is:
+    [phases:]action
+    'phases' is a comma-separated list of names of phase objects defined in
+    the makefile. Defaults to '@.@', which specifies all phases in the project.
+    Actions such as clean, build, run can be taken on any or all phases. They
+    are performed, along with any overrides, in command order. Typical usage
+    involves cleaning and building the entire project.
+    If no actions are specified, a default action is performed. The default
+    is, by default, 'report_actions' and can be overridden in pyke-config.json.
+
+aliases:
+    Aliases are provided for complex overrides, such as -v2 or -debug. These
+    are predefined, and can be extended via pyke-config.json, found in the
+    project root or ~/.config/pyke.
+
+Examples:
 Returns the version number.
 $ pyke -v
 
@@ -100,39 +117,40 @@ Looks for ./make.py && loads the project phase && runs the default action.
 $ pyke
 $ pyke -m .
 
-Looks for ./simple_test.py && loads the project phase && runs the default action.
+Looks for ./simple_test.py && loads the project phase && runs the default
+action.
 $ pyke -m ./simple_test.py
 
 Looks for ../../make.py && loads the project phase && runs the default
-action from the current directory. This will emplace build targets relative to ../../.
-$ pyke -m ../../
+action from the current directory. This will emplace build targets relative to
+../../.
+$ pyke -m ../..
 
 Looks for ../../make.py && loads the project phase && runs the default
-action from the current directory. This will emplace build targets relative to ./.
-$ pyke -m../../ -o anchor:$PWD
+action from the current directory. This will emplace build targets relative to
+./.
+$ pyke -m../.. -o gen_anchor=$PWD
 
-Looks for ./make.py && loads && runs the default action, overriding the options in the loaded
-phase and all dependent phases.
-$ pyke -o kind:debug -o verbosity:0
+Looks for ./make.py && loads && runs the default action, overriding the options
+for the build kind (release build) and verbosity of output.
+$ pyke -o kind=debug -o verbosity=2
 
-Looks for ./make.py && loads the phase named "alt_project" && runs its default action.
-$ pyke -p alt_project
+Looks for ./make.py && runs the 'build' action on the 'alt_project' phase.
+$ pyke alt_project:build
 
-Looks for ./make.py && loads the project phase && runs the action named "build"
+Looks for ./make.py && loads the project phase && runs the action named 'build'
+on all phases.
 $ pyke build
 
-Looks for ./make.py && loads && overrides the "time_run" option && runs the "clean", "build", 
-and "run" actions successively, given the success of each previous action.
-$ pyke -o time_run:true clean build run
-
-Looks for ./make.py && loads && runs the "clean" and "build" actions && then overrides the
-"time_run" option and runs the "run" action.
-$ pyke clean build -otime_run:true run
-    ''')
+Looks for ./make.py && loads && overrides the 'colors' option && runs the
+'clean', 'build", and 'run' actions successively, given the success of each
+previous action.
+$ pyke -ocolors={colors_none} clean build run
+''')
 
 def load_config():
-    ''' Loads aliases from ~/.config/pyke/pyke-config.json or <project-root>/pyke-config.json or
-        <cwd>/pyke-config.json, overriding in that order. '''
+    ''' Loads aliases from ~/.config/pyke/pyke-config.json or <project-root>/pyke-config.json,
+    overriding in that order. '''
     def process_config(config):
         if not isinstance(config, dict):
             raise MalformedConfigError(f'Config file {file}: Must be a JSON dictonary.')
@@ -159,6 +177,11 @@ def load_config():
 
         WorkingSet.argument_aliases |= read_block(config, 'argument_aliases', 'argument')
         WorkingSet.action_aliases |= read_block(config, 'action_aliases', 'action')
+        if default_action := config.get('default_action'):
+            if not isinstance(default_action, str):
+                raise MalformedConfigError(
+                    f'Config file {file}: "default_action" must be a string.')
+            WorkingSet.default_action = default_action
 
     def set_default_config():
         default_config = '''
@@ -187,10 +210,12 @@ def load_config():
     "action_aliases": {
         "opts": "report_options",
         "files": "report_files",
+        "actions": "report_actions",
         "c": "clean",
         "cbd": "clean_build_directory",
         "b": "build"
-    }
+    },
+    "default_action": "report_actions"
 } '''
         config = json.loads(default_config)
         process_config(config)
@@ -199,8 +224,7 @@ def load_config():
 
     for direc in list(dict.fromkeys([
             Path.home() / '.config' / 'pyke',
-            WorkingSet.makefile_dir,
-            Path.cwd()])):
+            WorkingSet.makefile_dir])):
         file = Path(direc) / 'pyke-config.json'
         try:
             with open(file, 'r', encoding='utf-8') as fi:
@@ -314,6 +338,7 @@ def main():
 
     run_make_file(make_path, cache_make)
     uniquify_phase_names()
+    WorkingSet.main_phase.patch_options_in_dependencies()
 
     actions = []
     file_operations_are_dirty = True
@@ -357,9 +382,9 @@ def main():
             if '=' in override:
                 k, v = override.split('=', 1)
                 if k[-1] in ['+', '*', '-', '|', '&', '\\', '^']:
-                    #op_str = f'{k[-1]}='
-                    op = {member.value: member for member in OptionOp}[k[-1]]
-                    #k = k[:-1].strip()
+                    op_str = f'{k[-1]}='
+                    op = OptionOp.get(op_str)
+                    k = k[:-1]
                 else:
                     op = OptionOp.REPLACE
                 v = parse_value(v.strip())
@@ -373,7 +398,6 @@ def main():
 
         else:
             if file_operations_are_dirty:
-                WorkingSet.main_phase.patch_options_in_dependencies()
                 WorkingSet.main_phase.compute_file_operations_in_dependencies()
                 file_operations_are_dirty = False
 
@@ -392,8 +416,15 @@ def main():
 
         idx += 1
 
-    for action in actions:
+    if len(actions) == 0:
+        WorkingSet.main_phase.compute_file_operations_in_dependencies()
+        affected_phases = get_phases('@.@')
+        action = Action(WorkingSet.default_action)
+        for active_phase in affected_phases:
+            active_phase.do(action)
+        actions = [action]
 
+    for action in actions:
         res = action.run()
         if res.failed():
             return ReturnCode.ACTION_FAILED.value

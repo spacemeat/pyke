@@ -5,6 +5,8 @@ is contained herein.
 
 from copy import deepcopy
 from functools import partial
+import inspect
+from os import walk
 from os.path import relpath
 from pathlib import Path
 import sys
@@ -14,7 +16,7 @@ from typing_extensions import Self
 from ..action import (Action, ResultCode, Step, Result,
                       FileData, FileOperation, PhaseFiles)
 from ..options import Options, OptionOp
-from ..utilities import (ensure_list, WorkingSet, do_shell_command,
+from ..utilities import (ensure_list, WorkingSet, do_shell_command, uniquify_list,
                          determine_color_support, ansi_colors, set_color,
                          CircularDependencyError)
 
@@ -291,7 +293,7 @@ class Phase:
     def color_phase(self, phase: 'Phase'):
         ''' Returns a colorized phase name and type.'''
         phase_type = type(phase).__name__
-        return (f'{self.c("phase_lt")}{phase}{self.c("phase_dk")} '
+        return (f'{self.c("phase_lt")}{phase.full_name}{self.c("phase_dk")} '
                 f'({self.c("phase_lt")}{phase_type}{self.c("phase_dk")}){self.c("off")}')
 
     def color_file_type(self, file_type: str):
@@ -320,11 +322,16 @@ class Phase:
         s = f'{self.c("action_dk")}action: {self.c("action_lt")}{action_name}{self.c("off")}'
         return s
 
+    def format_phase(self, phase: Self):
+        ''' Formats an action name for reporting.'''
+        s = (f'{self.c("phase_dk")}phase: {self.color_phase(phase)}{self.c("phase_dk")}:'
+             f'{self.c("off")}')
+        return s
+
     def report_phase(self, action: str, phase: Self):
         ''' Prints a phase summary. '''
         print (f'{self.format_action(action)}{self.c("action_dk")} - '
-               f'{self.c("phase_dk")}phase: {self.color_phase(phase)}{self.c("phase_dk")}:'
-               f'{self.c("off")}', end = '')
+               f'{self.format_phase(phase)}', end = '')
 
     def report_error(self, action: str, phase: Self, err: str):
         ''' Print an error string to the console in nice, bright red. '''
@@ -463,6 +470,17 @@ class Phase:
             for file in file_op.output_files:
                 print (self.format_file_data(file))
         print ('')
+
+    def do_action_report_actions(self, action: Action):
+        ''' Prints the available actions defined in all phases and their hierarchies.'''
+        self.report_action_phase_start(action.name, self)
+        methods = []
+        for superclass in type(self).__mro__:
+            methods.extend(inspect.getmembers(superclass, predicate=inspect.isfunction))
+        endl = '\n'
+        methods = [f"{endl}  {self.format_action(method[0][len('do_action_'):])}"
+                   for method in methods if method[0].startswith('do_action_')]
+        print (f'{self.format_phase(self)} {"".join(uniquify_list(methods))}')
 
     def do_action_clean(self, action: Action):
         ''' Cleans all object paths this phase builds. '''
