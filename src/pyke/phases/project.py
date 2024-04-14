@@ -1,7 +1,6 @@
 
 ''' Contains the ProjectPhase phase class. '''
 
-from ..action import Action
 from .phase import Phase
 
 class ProjectPhase(Phase):

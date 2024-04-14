@@ -66,7 +66,7 @@ class Options:
         ''' Returns the option keys.'''
         return self.opts.keys()
 
-    def push(self, k, v: dict[str, tuple[OptionOp, Any] | Any]):
+    def push(self, k: str, v: tuple[OptionOp, Any] | Any):
         ''' Push an option override.'''
         op = OptionOp.REPLACE
         if isinstance(v, tuple) and isinstance(v[0], OptionOp):
@@ -144,7 +144,7 @@ class Options:
 
         if isinstance(computed, bool):
             if op == OptionOp.NOT:
-                if isinstance(override):
+                if isinstance(override, bool):
                     return not override
             raise InvalidOptionOperation(
                 'Operator on bools must be !.')

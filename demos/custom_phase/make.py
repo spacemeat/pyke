@@ -33,7 +33,7 @@ gen_phase = ContrivedCodeGenPhase({
     'gen_sources': gen_src,
 })
 
-build_phase = p.CompileAndLinkPhase({
+build_phase = p.CompileAndLinkToExePhase({
     'name': 'simple',
     'sources': ['a.c', 'b.c', 'c.c', 'main.c'],
 }, gen_phase)

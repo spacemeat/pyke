@@ -11,7 +11,7 @@ so_phase = p.LinkToSharedObjectPhase({
     'name': 'simple_so',
 }, obj_phase)
 
-exe_phase = p.CompileAndLinkPhase({
+exe_phase = p.CompileAndLinkToExePhase({
     'name': 'simple_exe',
     'sources': ['main.c'],
 }, so_phase)

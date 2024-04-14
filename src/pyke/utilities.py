@@ -1,10 +1,17 @@
 ''' Utility bits for various modules.'''
 
+from __future__ import annotations
 import re
 import os
 from pathlib import Path
+import pty
 import subprocess
+import typing
+
 from . import ansi as a
+
+if typing.TYPE_CHECKING:
+    from .phases.phase import Phase
 
 class PykeException(Exception):
     ''' Parent for all Pyke errors. '''
@@ -94,6 +101,10 @@ def do_shell_command(cmd):
     res = subprocess.run(cmd, shell=True, capture_output=True, encoding='utf-8', check = False)
     return (res.returncode, res.stdout, res.stderr)
 
+def do_interactive_command(cmd):
+    ''' Run an interactive command using the CLI that launched pyke.'''
+    return os.waitstatus_to_exitcode(pty.spawn(cmd))
+
 # https://gist.github.com/kurahaupo/6ce0eaefe5e730841f03cb82b061daa2
 def determine_color_support() -> str:
     ''' Returns whether we can support 24-bit color on this terminal.'''
@@ -115,7 +126,7 @@ class WorkingSet:
     makefile_dir = ''
     argument_aliases = {}
     action_aliases = {}
-    main_phase = None
+    main_phase: Phase
 
 ansi_colors = {
     'colors_24bit': {

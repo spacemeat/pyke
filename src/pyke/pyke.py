@@ -133,32 +133,11 @@ $ pyke clean build -otime_run:true run
 def load_config():
     ''' Loads aliases from ~/.config/pyke/pyke-config.json or <project-root>/pyke-config.json or
         <cwd>/pyke-config.json, overriding in that order. '''
-    def set_default_config_old():
-        WorkingSet.argument_aliases = {
-            '-debug': '-okind=debug',
-            '-v0': '-overbosity=0',
-            '-v1': '-overbosity=1',
-            '-v2': '-overbosity=2',
-            '-rv0': '-oreport_verbosity=0',
-            '-rv1': '-oreport_verbosity=1',
-            '-rv2': '-oreport_verbosity=2',
-        }
-        WorkingSet.action_aliases = {
-            'report-options': 'report_options',
-            'opts': 'report_options',
-            'report-files': 'report_files',
-            'files': 'report_files',
-            'c': 'clean',
-            'clean-build-directory': 'clean_build_directory',
-            'cbd': 'clean_build_directory',
-            'b': 'build',
-        }
-
     def process_config(config):
         if not isinstance(config, dict):
             raise MalformedConfigError(f'Config file {file}: Must be a JSON dictonary.')
 
-        def read_block(config, subblock, keyname) -> list[str]:
+        def read_block(config, subblock, keyname) -> dict[str, list[str]]:
             rets = {}
             if aliases := config.get(subblock):
                 if not isinstance(aliases, dict):
@@ -282,7 +261,7 @@ def get_phases(labels: list[str] | str) -> list[Phase]:
                 if grouplabel in ['@', phase.group]:
                     if namelabel in ['@', phase.name]:
                         phases.append(phase)
-    return reversed(phases)
+    return list(reversed(phases))
 
 def main():
     '''Entrypoint for pyke.'''

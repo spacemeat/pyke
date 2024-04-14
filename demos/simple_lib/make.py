@@ -7,7 +7,7 @@ ar_phase = p.CompileAndArchivePhase({
     'sources': ['a.c', 'b.c', 'c.c'],
 })
 
-exe_phase = p.CompileAndLinkPhase({
+exe_phase = p.CompileAndLinkToExePhase({
     'name': 'simple_exe',
     'sources': ['main.c'],
 }, ar_phase)

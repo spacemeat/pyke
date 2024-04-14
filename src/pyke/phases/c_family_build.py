@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TypeAlias
 
 from ..action import Action, Step, Result, ResultCode
-from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError, uniquify_list,
+from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError, do_interactive_command, uniquify_list,
                          input_path_is_newer, do_shell_command)
 from .phase import Phase
 
@@ -356,7 +356,7 @@ class CFamilyBuildPhase(Phase):
         prefix = self.make_build_command_prefix()
         c_args = self.make_compile_arguments()
         if just_get_includes:
-            obj_path = '/dev/null'
+            obj_path = Path('/dev/null')
         cmd = (f'{prefix}-c {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]}'
                f'{"-fPIC " if c_args["relocatable_code"] else ""}'
                f'{"-pthread " if c_args["posix_threads"] else ""}'
@@ -407,7 +407,7 @@ class CFamilyBuildPhase(Phase):
         c_args = self.make_compile_arguments()
         l_args = self.make_link_arguments()
         if just_get_includes:
-            shared_object_path = '/dev/null'
+            shared_object_path = Path('/dev/null')
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
         soname = (f'-Wl,-soname,{self.opt_str("posix_so_soname")} '
                   if self.opt_bool('generate_versioned_sonames') else '')
@@ -430,7 +430,7 @@ class CFamilyBuildPhase(Phase):
         c_args = self.make_compile_arguments()
         l_args = self.make_link_arguments()
         if just_get_includes:
-            exe_path = '/dev/null'
+            exe_path = Path('/dev/null')
         src_paths_cmd = f'{" ".join((str(src) for src in src_paths))} '
         cmd = (f'{prefix} {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]} -o {exe_path} '
                f'{" -fPIC" if c_args["relocatable_code"] else ""}'
@@ -452,15 +452,20 @@ class CFamilyBuildPhase(Phase):
 
     def get_includes_src_to_object(self, src_path: Path, obj_path: Path) -> list[Path]:
         ''' Get all the headers used by the given src_path, including system headers.'''
+        if not src_path.exists():
+            return []
         cmd = self.make_cmd_compile_src_to_object(src_path, obj_path, True)
         ret, _, err = do_shell_command(cmd)
         if ret == 0:
             return self.parse_include_report(err)
         raise ValueError('Header discovery failed.')
 
-    def get_includes_srcs_to_so_or_exe(self, src_paths: list[Path], obj_path: Path) -> list[Path]:
+    def get_includes_srcs_to_so_or_exe(self, src_paths: list[Path],
+                                       target_path: Path) -> list[Path]:
         ''' Get all the headers used by the given src_path, including system headers.'''
-        cmd = self.make_cmd_compile_srcs_to_exe(src_paths, obj_path, True)
+        if not all(src_path.exists() for src_path in src_paths):
+            return []
+        cmd = self.make_cmd_compile_srcs_to_exe(src_paths, target_path, True)
         ret, _, err = do_shell_command(cmd)
         if ret == 0:
             return self.parse_include_report(err)
@@ -538,7 +543,7 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step_result = ResultCode.ALREADY_UP_TO_DATE
 
-            return Result(step_result, step_notes)
+            return Result(step_result, str(step_notes))
 
         cmd = self.make_cmd_compile_src_to_object(src_path, obj_path)
         step = Step('compile', depends_on, [src_path], [obj_path],
@@ -578,7 +583,7 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step_result = ResultCode.ALREADY_UP_TO_DATE
 
-            return Result(step_result, step_notes)
+            return Result(step_result, str(step_notes))
 
         cmd = self.make_cmd_archive_objects_to_library(object_paths, archive_path)
         step = Step('archive', depends_on, object_paths, [archive_path],
@@ -618,7 +623,7 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step_result = ResultCode.ALREADY_UP_TO_DATE
 
-            return Result(step_result, step_notes)
+            return Result(step_result, str(step_notes))
 
         cmd = self.make_cmd_link_objects_to_shared_object(object_paths, shared_object_path)
         step = Step('link to shared object', depends_on, object_paths, [shared_object_path],
@@ -658,7 +663,7 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step_result = ResultCode.ALREADY_UP_TO_DATE
 
-            return Result(step_result, step_notes)
+            return Result(step_result, str(step_notes))
 
         cmd = self.make_cmd_link_objects_to_exe(object_paths, exe_path)
         step = Step('link', depends_on, object_paths, [exe_path],
@@ -696,11 +701,11 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step_result = ResultCode.ALREADY_UP_TO_DATE
 
-            return Result(step_result, step_notes)
+            return Result(step_result, str(step_notes))
 
-        cmd = self.make_cmd_compile_srcs_to_exe(src_paths, inc_paths, exe_path)
+        cmd = self.make_cmd_compile_srcs_to_exe([*src_paths, *inc_paths], exe_path)
         step = Step('compile and link', depends_on, src_paths, [exe_path],
-                    partial(act, cmd, src_paths, exe_path), cmd)
+                    partial(act, cmd, src_paths, inc_paths, exe_path), cmd)
         action.set_step(step)
         return step
 
@@ -717,7 +722,7 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step_result = ResultCode.SUCCEEDED
             else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
+                step_result = ResultCode.MISSING_INPUT
 
             return Result(step_result, step_notes)
 
@@ -743,7 +748,7 @@ class CFamilyBuildPhase(Phase):
                 else:
                     step_result = ResultCode.SUCCEEDED
             else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
+                step_result = ResultCode.MISSING_INPUT
 
             return Result(step_result, step_notes)
 
@@ -756,8 +761,26 @@ class CFamilyBuildPhase(Phase):
         action.set_step(step)
         return step
 
-    def do_action_clean_build_directory(self, action: Action) -> Step:
-        '''
-        Wipes out the build directory.
-        '''
-        return self.do_step_delete_directory(action, None, Path(self.opt_str("build_anchor")))
+    def do_step_run_executable(self, action: Action, depends_on: Steps, exe_path: Path) -> Step:
+        ''' Runs the executable as an action step.'''
+        def act(cmd: str, exe_path: Path) -> Result:
+            step_notes = None
+            if exe_path.exists():
+                res = do_interactive_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.MISSING_INPUT
+
+            return Result(step_result, step_notes)
+
+        cmd = str(exe_path)
+        step = Step('run executable', depends_on, [exe_path], [], partial(act, cmd, exe_path))
+        action.set_step(step)
+        return step
+
+    def do_action_clean_build_directory(self, action: Action):
+        ''' Wipes out the build directory. '''
+        self.do_step_delete_directory(action, None, Path(self.opt_str("build_anchor")))

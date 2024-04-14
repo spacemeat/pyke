@@ -49,3 +49,8 @@ class LinkToExePhase(CFamilyBuildPhase):
 
         self.do_step_link_objects_to_exe(action, step,
             object_paths, exe_path)
+
+    def do_action_run(self, action: Action):
+        ''' Runs the executable in a new shell.'''
+        exe_path = self.get_exe_path()
+        self.do_step_run_executable(action, None, exe_path)

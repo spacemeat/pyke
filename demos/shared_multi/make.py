@@ -9,7 +9,7 @@ sas = p.CompileAndLinkToSharedObjectPhase({'sources': ['sas.c']})
 ssa = p.CompileAndLinkToSharedObjectPhase({'sources': ['ssa.c']})
 sss = p.CompileAndLinkToSharedObjectPhase({'sources': ['sss.c']})
 
-m = p.CompileAndLinkPhase({'sources': ['main.c']},
+m = p.CompileAndLinkToExePhase({'sources': ['main.c']},
                      [aaa, aas, asa, ass, saa, sas, ssa, sss])
 
 p.main_project().set_dependency(m)

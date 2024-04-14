@@ -48,4 +48,4 @@ class ArchivePhase(CFamilyBuildPhase):
         step = self.do_step_create_directory(action, None, archive_path.parent)
 
         self.do_step_archive_objects_to_library(action, step,
-            archive_path, object_paths)
+            object_paths, archive_path)

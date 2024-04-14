@@ -1,7 +1,0 @@
-
-#include abc.h
-
-int c()
-{
-	return 10000;
-}

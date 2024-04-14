@@ -3,6 +3,6 @@
 
 int main()
 {
-	printf("total: %i", a() + b() + c());
+	printf("total: %i\n", a() + b() + c());
 }
 

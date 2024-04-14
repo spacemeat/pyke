@@ -61,5 +61,6 @@ class CompilePhase(CFamilyBuildPhase):
                     src = dep
                 else:
                     inc_paths.append(dep.path)
-            self.do_step_compile_src_to_object(
-                action, dirs[obj.path.parent], src.path, inc_paths, obj.path)
+            if src:
+                self.do_step_compile_src_to_object(
+                    action, dirs[obj.path.parent], src.path, inc_paths, obj.path)

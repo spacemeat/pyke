@@ -68,7 +68,7 @@ class Phase:
         for dep in dependencies:
             self.set_dependency(dep)
 
-        self.files = None
+        self.files: PhaseFiles
 
     def __repr__(self):
         return self.name
@@ -267,6 +267,7 @@ class Phase:
         return f'rm {str(path)}'
 
     def c(self, color):
+        ''' Returns a named color.'''
         return set_color(self.opt_dict('colors'), color)
 
     def color_path(self, path: Path | str):
@@ -287,7 +288,7 @@ class Phase:
             return self.color_path(paths[0])
         return f'{self.c("path_dk")}[{self.c("path_lt")}...{self.c("path_dk")}]{self.c("off")}'
 
-    def color_phase(self, phase: Self):
+    def color_phase(self, phase: 'Phase'):
         ''' Returns a colorized phase name and type.'''
         phase_type = type(phase).__name__
         return (f'{self.c("phase_lt")}{phase}{self.c("phase_dk")} '

@@ -93,9 +93,10 @@ class CompileAndLinkToSharedObjectPhase(CFamilyBuildPhase):
                     src = dep
                 else:
                     inc_paths.append(dep.path)
-            compile_steps.append(
-                self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
-                    src.path, inc_paths, obj.path))
+            if src:
+                compile_steps.append(
+                    self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
+                        src.path, inc_paths, obj.path))
 
         object_paths = [src.path
             for file_op in self.files.get_operations('link to shared object')

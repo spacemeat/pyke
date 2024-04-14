@@ -5,7 +5,7 @@ from pathlib import Path
 from ..action import Action, FileData
 from .c_family_build import CFamilyBuildPhase
 
-class CompileAndLinkPhase(CFamilyBuildPhase):
+class CompileAndLinkToExePhase(CFamilyBuildPhase):
     '''
     Phase class for linking object files to build executable binaries.
     '''
@@ -88,9 +88,10 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
                     src = dep
                 else:
                     inc_paths.append(dep.path)
-            compile_steps.append(
-                self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
-                    src.path, inc_paths, obj.path))
+            if src:
+                compile_steps.append(
+                    self.do_step_compile_src_to_object(action, dirs[obj.path.parent],
+                        src.path, inc_paths, obj.path))
 
         object_paths = [src.path
             for file_op in self.files.get_operations('link')
@@ -98,3 +99,8 @@ class CompileAndLinkPhase(CFamilyBuildPhase):
 
         self.do_step_link_objects_to_exe(action, [*compile_steps, dirs[exe_path.parent]],
             object_paths, exe_path)
+
+    def do_action_run(self, action: Action):
+        ''' Runs the executable in a new shell.'''
+        exe_path = self.get_exe_path()
+        self.do_step_run_executable(action, None, exe_path)

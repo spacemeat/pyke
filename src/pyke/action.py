@@ -1,10 +1,15 @@
 ''' Things concerning phase actions. '''
 
+from __future__ import annotations
 from enum import Enum
 from pathlib import Path
+import typing
 from typing_extensions import Self
 
 from .utilities import ensure_list, InvalidActionError
+
+if typing.TYPE_CHECKING:
+    from .phases.phase import Phase
 
 # pylint: disable=too-few-public-methods
 
@@ -42,7 +47,7 @@ class ResultCode(Enum):
 
 
 class FileData:
-    def __init__(self, path: Path, file_type: str, generating_phase: 'Phase'):
+    def __init__(self, path: Path, file_type: str, generating_phase: Phase | None):
         self.path = path
         self.file_type = file_type
         self.generating_phase = generating_phase
@@ -81,7 +86,7 @@ class PhaseFiles:
                               file_data.file_type == file_type)]
 
 class StepFunction:
-    def __init__(self, fn: callable):
+    def __init__(self, fn: typing.Callable):
         self.fn = fn
 
 class StepCommand(StepFunction):
@@ -93,15 +98,15 @@ class StepCommand(StepFunction):
 
 class Step:
     ''' Represents a single step in a phase's action. These are dynamically added as needed.'''
-    def __init__(self, name: str, depends_on: list[Self] | Self | None, inputs: list[FileData],
-                 outputs: list[FileData], act_fn: callable, command: str = ''):
+    def __init__(self, name: str, depends_on: list[Self] | Self | None, inputs: list[Path],
+                 outputs: list[Path], act_fn: typing.Callable, command: str = ''):
         self.name = name
         self.depends_on = ensure_list(depends_on) if depends_on is not None else []
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.act_fn = act_fn
         self.command = command
-        self.result = None
+        self.result: Result
 
     def run(self):
         ''' Runs the act function if its depend_on steps all succeeded.'''
@@ -124,7 +129,7 @@ class Result:
 
 class PhaseAction:
     ''' Records an action's phases within a project phase.'''
-    def __init__(self, phase: str):
+    def __init__(self, phase: Phase):
         self.name = phase.name
         self.phase = phase
         self.current_step: str = ''
@@ -169,7 +174,7 @@ class Action:
     ''' Records an action's project phases.'''
     def __init__(self, action_name: str):
         self.name = action_name
-        self.current_phase: str = ''
+        self.current_phase: str | None = None
         self.phases = {}
 
     def __repr__(self):
@@ -196,7 +201,7 @@ class Action:
 
     def set_step(self, step: Step):
         ''' Begins recording a step.'''
-        if self.current_phase:
+        if self.current_phase is not None:
             return self.phases[self.current_phase].set_step(step)
         raise InvalidActionError('No phase set.')
 

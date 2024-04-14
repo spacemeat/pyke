@@ -11,12 +11,12 @@ d_e_lib_project = p.CompileAndArchivePhase({
     'name': 'de_lib',
 }, [d, e])
 
-abc_nolib_exe = p.CompileAndLinkPhase({
+abc_nolib_exe = p.CompileAndLinkToExePhase({
     'name': 'abc_nolib',
     'sources': ['a.c', 'b.c', 'c.c', 'main.c'],
 }, [d, e])
 
-abc_withlib_exe = p.CompileAndLinkPhase({
+abc_withlib_exe = p.CompileAndLinkToExePhase({
     'name': 'abc_withlib',
     'sources': ['a.c', 'b.c', 'c.c', 'main.c'],
 }, d_e_lib_project)

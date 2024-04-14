@@ -49,9 +49,9 @@ TokenList = list[TokenObj|list['TokenList']]
 
 class Ast:
     ''' Represents an abstract syntax tree for the string value given.'''
-    def __init__(self, value: str, toks: list = None):
+    def __init__(self, value: str, toks: list | None = None):
         self.value = value
-        self.toks = toks or []
+        self.toks: list = toks or []
 
     def __str__(self):
         def str_ast(ast: list, depth: int = 0) -> str:
@@ -218,7 +218,7 @@ class Ast:
         #   turn ?;:;? into <?:?>
         #   remove COMMAs everywhere?
 
-        def get_num_tokens(ast: TokenList) -> int:
+        def get_num_tokens(ast: list) -> int:
             num_tok = 0
             for obj in ast:
                 if isinstance(obj, list):
@@ -227,7 +227,7 @@ class Ast:
                     num_tok += 1
             return num_tok
 
-        def inc_depth(ast: TokenList) -> TokenList:
+        def inc_depth(ast: list) -> list:
             for obj in ast:
                 if isinstance(obj, list):
                     inc_depth(obj)
@@ -235,7 +235,7 @@ class Ast:
                     obj.depth += 1
             return ast
 
-        def recur_match(ast: TokenList, pattern: list[Token], then_what: Callable) -> TokenList:
+        def recur_match(ast: list, pattern: list[Token], then_what: Callable) -> list:
             tok_idx = 0
             new_ast = []
             while tok_idx < len(ast):
@@ -265,8 +265,9 @@ class Ast:
                 tok_idx += 1
             return new_ast
 
-        def replace_string_with_unit(subtree: TokenList) -> TokenList:
+        def replace_string_with_unit(subtree: list) -> list:
             subtree = subtree[0]
+            assert isinstance(subtree, TokenObj)
             v = subtree.value
             try:
                 int(v, 0)
@@ -318,7 +319,7 @@ class Ast:
         ''' Turns a conditioned value into objects. '''
         self.condition_tokens()
 
-        def recur(toks: TokenList) -> Any:
+        def recur(toks: list) -> Any:
             tok_idx = 0
 
             def get_unit_obj(tok: TokenObj) -> Any:
