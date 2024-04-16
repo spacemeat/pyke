@@ -10,14 +10,15 @@ class ArchivePhase(CFamilyBuildPhase):
     Phase class for linking object files to build executable binaries.
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
-        options = {
+        super().__init__(None, dependencies)
+        self.options |= {
             'name': 'archive',
             'build_operation': 'archive_to_library',
-        } | (options or {})
-        super().__init__(options, dependencies)
+        }
+        self.options |= (options or {})
 
     def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
+        ''' Implelent this in any phase that uses input files or generates output files.'''
 
         archive_path = Path(self.opt_str('archive_path'))
 

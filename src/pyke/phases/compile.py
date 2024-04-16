@@ -8,14 +8,15 @@ class CompilePhase(CFamilyBuildPhase):
     Phase class for building C/C++ files to objects.
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
-        options = {
+        super().__init__(None, dependencies)
+        self.options |= {
             'name': 'compile',
             'build_operation': 'compile_to_object',
-        } | (options or {})
-        super().__init__(options, dependencies)
+        }
+        self.options |= (options or {})
 
     def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
+        ''' Implelent this in any phase that uses input files or generates output files.'''
         for src_file_data in self.get_direct_dependency_output_files('source'):
             obj_path = self.make_obj_path_from_src(src_file_data.path)
             include_files = [FileData(path, 'header', None) for path in

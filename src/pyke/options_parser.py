@@ -5,7 +5,6 @@ from enum import Enum
 import re
 from typing import Any, Callable
 from .utilities import InvalidOptionValue
-from .ansi import named_fg, off
 
 class Token(Enum):
     ''' Encodes tokens found in override values parsed from a string. '''
@@ -22,8 +21,6 @@ class Token(Enum):
     STRING = 'a'
     FLOAT = '.'
     INT = '0'
-    BOOL = 'T'
-    NONE = 'N'
     SPACE = ' '
 
     def __str__(self):
@@ -283,10 +280,6 @@ class Ast:
                 raise InvalidOptionValue(f'Float overflowed in value {v}') from exc
             except ValueError:
                 pass
-            if v.lower() in ["true", "false"]:
-                return [TokenObj(Token.BOOL, v, subtree.depth)]
-            if v.lower() == "none":
-                return [TokenObj(Token.NONE, v, subtree.depth)]
             return [subtree]
 
         def replace_interpolated_string(subtree: list) -> list:
@@ -326,8 +319,6 @@ class Ast:
                 match tok.token:
                     case Token.INT: return int(tok.value, 0)
                     case Token.FLOAT: return float(tok.value)
-                    case Token.BOOL: return not tok.value.lower() == 'false'
-                    case Token.NONE: return None
                     case Token.QSTRING: return tok.value
                     case Token.DQSTRING: return tok.value
                     case Token.STRING: return tok.value

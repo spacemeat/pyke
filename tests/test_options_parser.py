@@ -342,30 +342,6 @@ class TestCondition(unittest.TestCase):
         ast.condition_tokens()
         self.assertEqual(ast, cast)
 
-    def test_parse_single_bool(self):
-        cast = Ast('True', [TO(T.BOOL, 'True', 0)])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
-    def test_parse_single_bool_case(self):
-        cast = Ast('fAlSe', [TO(T.BOOL, 'fAlSe', 0)])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
-    def test_parse_single_bool_none(self):
-        cast = Ast('None', [TO(T.NONE, 'None', 0)])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
-    def test_parse_single_bool_none_case(self):
-        cast = Ast('none', [TO(T.NONE, 'none', 0)])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
     def test_parse_single_qstring(self):
         cast = Ast("'none'", [TO(T.QSTRING, 'none', 0)])
         ast = Ast(cast.value)
@@ -413,30 +389,6 @@ class TestCondition(unittest.TestCase):
             [
                 TO(T.LBRACE, '{', 1),
                 TO(T.FLOAT, '6.28', 1),
-                TO(T.RBRACE, '}', 1)
-            ]
-        ])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
-    def test_parse_set_1_bool(self):
-        cast = Ast('{true}', [
-            [
-                TO(T.LBRACE, '{', 1),
-                TO(T.BOOL, 'true', 1),
-                TO(T.RBRACE, '}', 1)
-            ]
-        ])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
-    def test_parse_set_1_none(self):
-        cast = Ast('{none}', [
-            [
-                TO(T.LBRACE, '{', 1),
-                TO(T.NONE, 'none', 1),
                 TO(T.RBRACE, '}', 1)
             ]
         ])
@@ -497,30 +449,6 @@ class TestCondition(unittest.TestCase):
             [
                 TO(T.LPAREN, '(', 1),
                 TO(T.FLOAT, '6.28', 1),
-                TO(T.RPAREN, ')', 1)
-            ]
-        ])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
-    def test_parse_tuple_1_bool(self):
-        cast = Ast('(true)', [
-            [
-                TO(T.LPAREN, '(', 1),
-                TO(T.BOOL, 'true', 1),
-                TO(T.RPAREN, ')', 1)
-            ]
-        ])
-        ast = Ast(cast.value)
-        ast.condition_tokens()
-        self.assertEqual(ast, cast)
-
-    def test_parse_tuple_1_none(self):
-        cast = Ast('(none)', [
-            [
-                TO(T.LPAREN, '(', 1),
-                TO(T.NONE, 'none', 1),
                 TO(T.RPAREN, ')', 1)
             ]
         ])
@@ -986,34 +914,6 @@ class TestObjectify(unittest.TestCase):
         obj = ast.objectify()
         self.assertEqual(obj, cobj)
 
-    def test_objectify_single_bool(self):
-        cast = Ast('True')
-        cobj = True
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
-    def test_objectify_single_bool_case(self):
-        cast = Ast('fAlSe')
-        cobj = False
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
-    def test_objectify_single_bool_none(self):
-        cast = Ast('None')
-        cobj = None
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
-    def test_objectify_single_bool_none_case(self):
-        cast = Ast('none')
-        cobj = None
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
     def test_objectify_single_qstring(self):
         cast = Ast("'none'")
         cobj = 'none'
@@ -1063,20 +963,6 @@ class TestObjectify(unittest.TestCase):
         obj = ast.objectify()
         self.assertEqual(obj, cobj)
 
-    def test_objectify_set_1_bool(self):
-        cast = Ast('{true}')
-        cobj = frozenset([True])
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
-    def test_objectify_set_1_none(self):
-        cast = Ast('{none}')
-        cobj = frozenset([None])
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
     def test_objectify_set_1_qstring(self):
         cast = Ast('{\'test\'}')
         cobj = frozenset(['test'])
@@ -1108,20 +994,6 @@ class TestObjectify(unittest.TestCase):
     def test_objectify_tuple_1_float(self):
         cast = Ast('(6.28)')
         cobj = (6.28,)
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
-    def test_objectify_tuple_1_bool(self):
-        cast = Ast('(true)')
-        cobj = (True,)
-        ast = Ast(cast.value)
-        obj = ast.objectify()
-        self.assertEqual(obj, cobj)
-
-    def test_objectify_tuple_1_none(self):
-        cast = Ast('(none)')
-        cobj = (None,)
         ast = Ast(cast.value)
         obj = ast.objectify()
         self.assertEqual(obj, cobj)

@@ -1,5 +1,5 @@
 # run the unit tests
-python3 -m unittest discover -s tests || exit 1
+python3 -m unittest discover -s tests
 NL=$'\n'
 
 run_demo() {

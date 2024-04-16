@@ -4,7 +4,7 @@
 #pylint: disable=too-many-public-methods, too-many-lines
 
 import unittest
-from pyke.options import Options, OptionOp
+from pyke.options import Options, OptionOp, Op
 from pyke.utilities import InvalidOptionOperation
 
 class TestOperators(unittest.TestCase):
@@ -60,7 +60,7 @@ class TestOperators(unittest.TestCase):
         self.ensure_val('dict_of_string', {'a': 'b', 'c': 'd', 'e': 'f'})
 
     def ensure_override(self, option, op, value, expected):
-        self.options.push(option, (op, value))
+        self.options.push(option, Op(op, value))
         actual = self.options.get(option)
         self.assertEqual(actual, expected)
 

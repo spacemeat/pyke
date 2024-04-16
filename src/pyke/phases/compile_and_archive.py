@@ -10,15 +10,16 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
     Phase class for building and archiving object files to a static library archive.
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
-        options = {
+        super().__init__(None, dependencies)
+        self.options |= {
             'name': 'compile_and_archive',
             'target_path': '{archive_path}',
             'build_operation': 'compile_to_archive',
-        } | (options or {})
-        super().__init__(options, dependencies)
+        }
+        self.options |= (options or {})
 
     def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
+        ''' Implelent this in any phase that uses input files or generates output files.'''
         for src_file_data in self.get_direct_dependency_output_files('source'):
             obj_path = self.make_obj_path_from_src(src_file_data.path)
             include_files = [FileData(path, 'header', None) for path in

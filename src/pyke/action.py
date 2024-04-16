@@ -130,13 +130,13 @@ class Result:
 class PhaseAction:
     ''' Records an action's phases within a project phase.'''
     def __init__(self, phase: Phase):
-        self.name = phase.name
+        self.name = phase.full_name
         self.phase = phase
         self.current_step: str = ''
         self.steps = []
 
     def __repr__(self):
-        s = f'    {self.phase.name} - current_step = {self.current_step}'
+        s = f'    {self.phase.full_name} - current_step = {self.current_step}'
         s += ''.join([repr(st) for st in self.steps])
         return s
 
@@ -193,7 +193,7 @@ class Action:
 
     def set_phase(self, phase: 'Phase'):
         ''' Begins recording a non-project phase.'''
-        self.current_phase = phase.name
+        self.current_phase = phase.full_name
         if self.current_phase not in self.phases:
             self.phases[self.current_phase] = PhaseAction(phase)
             return ResultCode.NOT_YET_RUN

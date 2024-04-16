@@ -1,4 +1,4 @@
-'Bsic test with custom phase'
+'Bsic project with custom code generation phase'
 
 # pylint: disable=wrong-import-position
 

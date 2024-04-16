@@ -2,7 +2,7 @@
 Defining the pyke module.
 """
 
-from .options import OptionOp
+from .options import Options, OptionOp, Op
 from .phases import (Phase, CFamilyBuildPhase, CompilePhase, ArchivePhase, LinkToExePhase,
                      LinkToSharedObjectPhase, CompileAndArchivePhase, CompileAndLinkToExePhase,
                      CompileAndLinkToSharedObjectPhase, ProjectPhase)

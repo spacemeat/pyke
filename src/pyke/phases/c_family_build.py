@@ -20,7 +20,8 @@ class CFamilyBuildPhase(Phase):
     Intermediate class to handle making command lines for various toolkits.
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
-        options = {
+        super().__init__(None, dependencies)
+        self.options |= {
             'toolkit': 'gnu',
             'language': 'c++',
             'language_version': '23',
@@ -60,18 +61,18 @@ class CFamilyBuildPhase(Phase):
             'export_dynamic': False,
 
             'inc_dir': '.',
-            'include_anchor': '{static_anchor}/{inc_dir}',
+            'include_anchor': '{project_anchor}/{inc_dir}',
             'include_dirs': ['include'],
 
             'src_dir': 'src',
-            'src_anchor': '{static_anchor}/{src_dir}',
+            'src_anchor': '{project_anchor}/{src_dir}',
             'sources': [],
 
             'lib_dirs': [],
             'libs': {},
 
             'prebuilt_obj_dir': 'prebuilt_obj',
-            'prebuilt_obj_anchor': '{static_anchor}/{prebuilt_obj_dir}',
+            'prebuilt_obj_anchor': '{project_anchor}/{prebuilt_obj_dir}',
             'prebuilt_objs': [],
 
             'target_path': '',
@@ -126,8 +127,8 @@ class CFamilyBuildPhase(Phase):
             'exe_path': '{exe_anchor}/{exe_file}',
 
             'run_args': ''
-        } | (options or {})
-        super().__init__(options, dependencies)
+        }
+        self.options |= (options or {})
 
     def get_source(self, src_idx):
         '''

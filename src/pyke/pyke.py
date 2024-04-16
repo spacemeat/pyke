@@ -16,7 +16,7 @@ import json
 import traceback
 
 from .action import Action
-from .options import OptionOp
+from .options import OptionOp, Op
 from .options_parser import parse_value
 from .phases.phase import Phase
 from .phases.project import ProjectPhase
@@ -68,7 +68,7 @@ def print_help():
     ''' Pyke - a Python-powered build system
 
 Usage:
-pyke [invocation] [overrides / actions]
+pyke [invocations]* [overrides | actions]*
 
 invocations:
 -v, --version: Prints the version information for pyke, and exits.
@@ -182,6 +182,11 @@ def load_config():
                 raise MalformedConfigError(
                     f'Config file {file}: "default_action" must be a string.')
             WorkingSet.default_action = default_action
+        if default_arguments := config.get('default_arguments'):
+            if not isinstance(default_arguments, list):
+                raise MalformedConfigError(
+                    f' Config file {file}: "default_arguments" must be a list of strings.')
+            WorkingSet.default_arguments = default_arguments
 
     def set_default_config():
         default_config = '''
@@ -190,6 +195,9 @@ def load_config():
         "-v0": "-overbosity=0",
         "-v1": "-overbosity=1",
         "-v2": "-overbosity=2",
+        "-rv0": "-oreport_verbosity=0",
+        "-rv1": "-oreport_verbosity=1",
+        "-rv2": "-oreport_verbosity=2",
         "-release": "-okind=release",
         "-versioned_sos": ["-oposix_shared_object_file={posix_so_real_name}",
                            "-ogenerate_versioned_sonames=True"],
@@ -215,7 +223,8 @@ def load_config():
         "cbd": "clean_build_directory",
         "b": "build"
     },
-    "default_action": "report_actions"
+    "default_action": "report_actions",
+    "default_arguments": []
 } '''
         config = json.loads(default_config)
         process_config(config)
@@ -232,6 +241,10 @@ def load_config():
                 process_config(config)
         except (FileNotFoundError, MalformedConfigError):
             pass
+
+def propagate_group_names():
+    ''' Cascades project names to group names in dependency phases.'''
+    WorkingSet.main_phase.propagate_group_names('')
 
 def uniquify_phase_names():
     ''' Ensure phase names are unique within groups.'''
@@ -261,10 +274,10 @@ def uniquify_phase_names():
 def get_phases(labels: list[str] | str) -> list[Phase]:
     ''' Returns all phases that match the labels filter.
     labels is a list of strings. For each label, some phases may be returned:
-    'foo' specifies a phase with no group set, whose name is 'foo'
-    '@' specifies all phases with no group set, with any name
-    '.foo' specifies a phase with no group set, whose name is 'foo'
-    '.@' specifies all phases with no group set, with any name
+    'foo' specifies a phase with main group set, whose name is 'foo'
+    '@' specifies all phases with main group set, with any name
+    '.foo' specifies a phase with main group set, whose name is 'foo'
+    '.@' specifies all phases with main group set, with any name
     '@.foo' specifies all phases in any group (or none), whose name is 'foo'
     'bar.@' specifies all phases in group 'bar'
     'bar.foo' specifies a phase in group 'bar' named 'foo'
@@ -273,19 +286,17 @@ def get_phases(labels: list[str] | str) -> list[Phase]:
     phases = []
     labels = ensure_list(labels)
     for label in labels:
+        if '.' not in label:
+            label = f'{WorkingSet.main_phase.name}.{label}'
+        if label.startswith('.'):
+            label = f'{WorkingSet.main_phase.name}{label}'
         group_phase_label = label.split('.', 1)
-        if len(group_phase_label) == 1:
-            label = group_phase_label[0]
-            for phase in WorkingSet.main_phase.enumerate_dependencies():
-                if label in ['@', phase.full_name]:
+        grouplabel, namelabel = group_phase_label
+        for phase in WorkingSet.main_phase.enumerate_dependencies():
+            if grouplabel in ['@', phase.group]:
+                if namelabel in ['@', phase.name]:
                     phases.append(phase)
-        elif len(group_phase_label) == 2:
-            grouplabel, namelabel = group_phase_label
-            for phase in WorkingSet.main_phase.enumerate_dependencies():
-                if grouplabel in ['@', phase.group]:
-                    if namelabel in ['@', phase.name]:
-                        phases.append(phase)
-    return list(reversed(phases))
+    return phases
 
 def main():
     '''Entrypoint for pyke.'''
@@ -335,8 +346,10 @@ def main():
         else make_path.stem)
     WorkingSet.main_phase = ProjectPhase({
         'name': project_phase_name})
+    WorkingSet.all_phases.add(WorkingSet.main_phase)
 
     run_make_file(make_path, cache_make)
+    propagate_group_names()
     uniquify_phase_names()
     WorkingSet.main_phase.patch_options_in_dependencies()
 
@@ -344,7 +357,7 @@ def main():
     file_operations_are_dirty = True
 
     args = []
-    for arg in sys.argv[idx:]:
+    for arg in [*WorkingSet.default_arguments, *sys.argv[idx:]]:
         args.extend(WorkingSet.argument_aliases.get(arg, [arg]))
 
     idx = 0
@@ -373,7 +386,15 @@ def main():
                 override = args[idx]
 
             affected_phases = []
+            using_phase_addr = False
             if ':' in override:
+                if '=' in override:
+                    if override.find(':') < override.find('='):
+                        using_phase_addr = True
+                else:
+                    using_phase_addr = True
+
+            if using_phase_addr:
                 phase_labels, override = override.split(':', 1)
                 affected_phases = get_phases(phase_labels)
             else:
@@ -384,12 +405,12 @@ def main():
                 if k[-1] in ['+', '*', '-', '|', '&', '\\', '^']:
                     op_str = f'{k[-1]}='
                     op = OptionOp.get(op_str)
-                    k = k[:-1]
+                    k = k[:-1].strip()
                 else:
                     op = OptionOp.REPLACE
                 v = parse_value(v.strip())
                 for active_phase in affected_phases:
-                    active_phase.push_opts({k: (op, v)})
+                    active_phase.push_opts({k: Op(op, v)})
             else:
                 for active_phase in affected_phases:
                     active_phase.pop_opts([override])

@@ -127,7 +127,9 @@ class WorkingSet:
     argument_aliases = {}
     action_aliases = {}
     default_action = ''
+    default_arguments = []
     main_phase: Phase
+    all_phases: set[Phase] = set()
 
 ansi_colors = {
     'colors_24bit': {

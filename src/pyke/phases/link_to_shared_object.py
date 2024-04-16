@@ -10,12 +10,13 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
     Phase class for linking object files to build executable binaries.
     '''
     def __init__(self, options: dict | None = None, dependencies = None):
-        options = {
+        super().__init__(None, dependencies)
+        self.options |= {
             'name': 'link_to_shared_object',
             'target_path': '{shared_object_path}',
             'build_operation': 'link_to_shared_object',
-        } | (options or {})
-        super().__init__(options, dependencies)
+        }
+        self.options |= (options or {})
 
     def patch_options(self):
         ''' Fixups run before file operations.'''
@@ -23,7 +24,7 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
             dep.push_opts({'relocatable_code': True}, True, True)
 
     def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
+        ''' Implelent this in any phase that uses input files or generates output files.'''
 
         so_path = Path(self.opt_str('shared_object_path'))
 

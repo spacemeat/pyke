@@ -6,7 +6,6 @@ is contained herein.
 from copy import deepcopy
 from functools import partial
 import inspect
-from os import walk
 from os.path import relpath
 from pathlib import Path
 import sys
@@ -46,22 +45,24 @@ class Phase:
             'report_verbosity': 2,
             'report_relative_paths': True,
             'verbosity': 0,
-            'static_anchor': WorkingSet.makefile_dir,
+            'none': None,
+            'true': True,
+            'false': False,
+            'None': None,
+            'True': True,
+            'False': False,
+            'project_anchor': WorkingSet.makefile_dir,
             'gen_anchor': WorkingSet.makefile_dir,
             'colors_24bit': deepcopy(ansi_colors['colors_24bit']),
             'colors_8bit': deepcopy(ansi_colors['colors_8bit']),
             'colors_named': deepcopy(ansi_colors['colors_named']),
             'colors_none': deepcopy(ansi_colors['colors_none']),
-            'colors': f'{{colors_{determine_color_support()}}}',
+            'colors_dict': '{colors_{colors}}',
+            'colors': determine_color_support(),
         }
         self.options |= (options or {})
 
-        assert isinstance(options, dict)
         self.is_project_phase = False
-        self.last_action_ordinal = -1
-        self.last_action_result = None
-
-        self.override_project_dependency_options = False
 
         if dependencies is None:
             dependencies = []
@@ -109,7 +110,28 @@ class Phase:
                 raise CircularDependencyError(
                     f'Attempt to set a circular dependency {new_dep.opt_str("name")} '
                     f'to phase {self.name}. Not cool.')
+            if new_dep in WorkingSet.all_phases:
+                new_dep = new_dep.clone()
+            WorkingSet.all_phases.add(new_dep)
             self.dependencies.append(new_dep)
+
+    def clone(self, options: dict | None = None):
+        ''' Returns a clone of this instance. The clone has the same
+        options (also copied) but its own dependencies and action
+        results state. '''
+        obj = type(self)(None, self.dependencies)
+        obj.options = self.options.clone()
+        obj.options |= (options or {})
+        return obj
+
+    def propagate_group_names(self, group_name: str):
+        ''' Cascades project names to group names in dependency phases.'''
+        if self.is_project_phase:
+            group_name = self.name
+            self.name = 'project'
+        self.push_opts({'group': group_name})
+        for phase in self.dependencies:
+            phase.propagate_group_names(group_name)
 
     def patch_options_in_dependencies(self):
         ''' Opportunity for phases to fix up options before running file operations.'''
@@ -126,7 +148,7 @@ class Phase:
             dep.compute_file_operations()
 
     def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
+        ''' Implelent this in any phase that uses input files or generates output files.'''
 
     def record_file_operation(self, input_files: list[FileData] | FileData | None,
                               output_files: list[FileData] | FileData | None, step_name: str):
@@ -255,22 +277,13 @@ class Phase:
         The referenced value must be a dict. '''
         return self.opt_t(dict, key, overrides, interpolate)
 
-    def clone(self, options: dict | None = None):
-        ''' Returns a clone of this instance. The clone has the same
-        options (also copied) but its own dependencies and action
-        results state. '''
-        obj = type(self)({})
-        obj.options = self.options.clone()
-        obj.options |= (options or {})
-        return obj
-
     def make_cmd_delete_file(self, path: Path):
         ''' Returns an appropriate command for deleting a file. '''
         return f'rm {str(path)}'
 
     def c(self, color):
         ''' Returns a named color.'''
-        return set_color(self.opt_dict('colors'), color)
+        return set_color(self.opt_dict('colors_dict'), color)
 
     def color_path(self, path: Path | str):
         ''' Returns a colorized and possibly CWD-relative version of a path. '''
@@ -388,10 +401,6 @@ class Phase:
         # TODO: This is where a pre-action step should be performed, if any. Good place for 
         # project hooks like remote build launches, container setups, etc.
 
-        for dep in self.dependencies:
-            if not dep.is_project_phase:
-                dep.do(action)
-
         if action.set_phase(self) != ResultCode.NOT_YET_RUN:
             return
 
@@ -439,15 +448,15 @@ class Phase:
                 indent = 0
                 opts_str = ''.join((opts_str, f'{self.c("key")}{k}: '))
                 last_replace_idx = len(vu) - next(i for i, e in enumerate(reversed(vu))
-                    if e[1] == OptionOp.REPLACE) - 1
+                    if e.operator == OptionOp.REPLACE) - 1
                 if report_verbosity >= 2:
                     for i, vue in enumerate(vu):
                         color = (self.c("val_uninterp_dk") if i < last_replace_idx
                                  else self.c("val_uninterp_lt"))
-                        op = vue[1].value if isinstance(vue[1], OptionOp) else ' '
-                        indent = 0 if i == 0 else len(k) + 2
-                        opts_str = ''.join((opts_str,
-                                            f'{" " * indent}{color}{op} {vue[0]}{self.c("off")}\n'))
+                        op = vue.operator.value
+                        indent = 0 if i == 0 else len(k) - len(op) + 3
+                        opts_str = ''.join(
+                            (opts_str, f'{" " * indent}{color}{op} {vue.value}{self.c("off")}\n'))
                     indent = len(k) + 1
                 else:
                     indent = 0

@@ -6,27 +6,24 @@ from pyke import (CFamilyBuildPhase, Action, ResultCode, Step, Result, FileData,
                   input_path_is_newer, do_shell_command)
 
 class ContrivedCodeGenPhase(CFamilyBuildPhase):
-    '''
-    Custom phase class for implementing some new, as-yet unconcieved actions.
-    '''
+    ''' Custom phase class for implementing some new, as-yet unconcieved actions. '''
     def __init__(self, options: dict | None = None, dependencies = None):
-        options = {
+        super().__init__(options, dependencies)
+        self.options |= {
             'name': 'generate',
             'gen_src_dir': '{build_anchor}/gen',
             'gen_src_origin': '',
             'gen_sources': {},
-        } | (options or {})
-        super().__init__(options, dependencies)
+        }
+        self.options |= (options or {})
 
     def get_generated_source(self):
-        '''
-        Make the path and content of our generated source.
-        '''
+        ''' Make the path and content of our generated source. '''
         return { Path(f"{self.opt_str('gen_src_dir')}/{src_file}"): src
                  for src_file, src in self.opt_dict('gen_sources').items() }
 
     def compute_file_operations(self):
-        ''' Implelent this in any phase that uses input files or generates output fies.'''
+        ''' Implelent this in any phase that uses input files or generates output files.'''
         for src_path in self.get_generated_source().keys():
             self.record_file_operation(
                 None,
@@ -39,9 +36,7 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
 
     def do_step_generate_source(self, action: Action, depends_on: list[Step] | Step | None,
                                 source_code: str, origin_path: Path, src_path: Path) -> Step:
-        '''
-        Performs a directory creation operation as an action step.
-        '''
+        ''' Performs a directory creation operation as an action step. '''
         def act(cmd: str, origin_path: Path, src_path: Path):
             step_result = ResultCode.SUCCEEDED
             step_notes = None

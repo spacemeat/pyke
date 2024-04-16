@@ -26,30 +26,40 @@ class OptionOp(Enum):
     @staticmethod
     def get(op: str):
         ''' Return the OptionOp by string.'''
-        return {member.value: member for member in OptionOp}.get(op)
+        op_val = {member.value: member for member in OptionOp}.get(op)
+        if not op_val:
+            raise InvalidOptionOperation(f'Invalid option override "{op}"')
+        return op_val
+
+class Op:
+    ''' Represents an option override and its operator.'''
+    def __init__(self, operator: str | OptionOp, value: Any):
+        self.operator: OptionOp = (operator if isinstance(operator, OptionOp)
+                                   else OptionOp.get(operator))
+        self.value: str = value
 
 class Option:
     ''' Represents a named option. Stores all its overrides.'''
     def __init__(self, name: str, value):
         self.name = name
-        self.value = []
-        self.value.append((value, OptionOp.REPLACE))
+        self.value_stack: list[Op] = []
+        self.value_stack.append(Op(OptionOp.REPLACE, value))
 
-    def push_value_op(self, value, op: OptionOp = OptionOp.REPLACE):
+    def push(self, op: Op):
         ''' Sets a value to this Option, as an override to previous values. '''
-        self.value.append((value, op))
+        self.value_stack.append(op)
 
-    def pop_value_op(self):
+    def pop(self):
         ''' Removes the last override.'''
-        del self.value[-1]
+        del self.value_stack[-1]
 
 # TODO: Track and flag circular refs.
 class Options:
     ''' Holds the collection of options for a particular phase. '''
     def __init__(self):
-        self.opts = {}
+        self.opts: dict[str, Option] = {}
 
-    def __ior__(self, new_opts: dict[str, tuple[OptionOp, Any] | Any]):
+    def __ior__(self, new_opts: dict[str, Op | Any]):
         for k, v in new_opts.items():
             self.push(k, v)
         return self
@@ -70,31 +80,30 @@ class Options:
         ''' Returns the option keys.'''
         return self.opts.keys()
 
-    def push(self, k: str, v: tuple[OptionOp, Any] | Any):
+    def push(self, key: str, value: Op | Any):
         ''' Push an option override.'''
-        op = OptionOp.REPLACE
-        if isinstance(v, tuple) and isinstance(v[0], OptionOp):
-            op, v = v
+        if not isinstance(value, Op):
+            value = Op(OptionOp.REPLACE, value)
 
-        if k not in self.opts:
-            self.opts[k] = Option(k, v)
+        if key not in self.opts:
+            self.opts[key] = Option(key, value.value)
         else:
-            self.opts[k].push_value_op(v, op)
+            self.opts[key].push(value)
 
     def pop(self, key):
         ''' Pop the latest option override.'''
-        self.opts[key].pop_value_op()
+        self.opts[key].pop()
 
     def get(self, key, interpolate=True):
         ''' Get the ultimate value of the option.'''
         opt = self.opts.get(key)
         if opt is None:
             return f'!{key}!'
-        values = copy.deepcopy(opt.value)
+        values = copy.deepcopy(opt.value_stack)
         if not interpolate:
             return values
 
-        def interp(v):
+        def interp(v) -> Any:
             val = v
             while isinstance(val, str):
                 m = re_interp_option.search(val, 0)
@@ -132,13 +141,12 @@ class Options:
 
             return val
 
-        values = [(interp(v), op) for v, op in values]
+        values = [Op(value.operator, interp(value.value)) for value in values]
 
         # now merge them according to ops
-        computed, _ = values[0]
+        computed = values[0].value
         for val in values[1:]:
-            override, op = val
-            computed = self._apply_op(computed, override, op)
+            computed = self._apply_op(computed, val.value, val.operator)
 
         return computed
 

@@ -3,7 +3,7 @@
 import pyke as p
 
 
-proto = p.CompilePhase()
+proto = p.CompilePhase({'obj_dir': '{group}'})
 d = proto.clone({'name': 'd', 'sources': ['d.c']})
 e = proto.clone({'name': 'e', 'sources': ['e.c']})
 
@@ -24,7 +24,7 @@ abc_withlib_exe = p.CompileAndLinkToExePhase({
 abc_d_e_project = p.ProjectPhase({'name': 'abc_nolib_proj'}, abc_nolib_exe)
 abc_de_project = p.ProjectPhase({'name': 'abc_withlib_proj'}, abc_withlib_exe)
 
-main_project = p.main_project().set_dependency([
+p.main_project().set_dependency([
     abc_d_e_project,
     abc_de_project
 ])
