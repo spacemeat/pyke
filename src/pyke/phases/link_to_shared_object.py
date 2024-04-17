@@ -14,7 +14,6 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
         self.options |= {
             'name': 'link_to_shared_object',
             'target_path': '{shared_object_path}',
-            'build_operation': 'link_to_shared_object',
         }
         self.options |= (options or {})
 

@@ -186,7 +186,7 @@ def load_config():
             if not isinstance(default_arguments, list):
                 raise MalformedConfigError(
                     f' Config file {file}: "default_arguments" must be a list of strings.')
-            WorkingSet.default_arguments = default_arguments
+            WorkingSet.default_arguments.extend(default_arguments)
 
     def set_default_config():
         default_config = '''
@@ -341,7 +341,7 @@ def main():
 
     load_config()
 
-    project_phase_name = 'project_' + (make_path.parent.name if
+    project_phase_name = (make_path.parent.name if
         make_path.name == 'make.py'
         else make_path.stem)
     WorkingSet.main_phase = ProjectPhase({
@@ -353,7 +353,7 @@ def main():
     uniquify_phase_names()
     WorkingSet.main_phase.patch_options_in_dependencies()
 
-    actions = []
+    actions_done = []
     file_operations_are_dirty = True
 
     args = []
@@ -431,21 +431,24 @@ def main():
 
             arg = WorkingSet.action_aliases.get(arg, [arg])[0]
             action = Action(arg)
-            actions.append(action)
             for active_phase in affected_phases:
                 active_phase.do(action)
 
+            res = action.run()
+            if res.failed():
+                return ReturnCode.ACTION_FAILED.value
+
+            actions_done.append(action.name)
+
         idx += 1
 
-    if len(actions) == 0:
+    if len(actions_done) == 0:
         WorkingSet.main_phase.compute_file_operations_in_dependencies()
         affected_phases = get_phases('@.@')
         action = Action(WorkingSet.default_action)
         for active_phase in affected_phases:
             active_phase.do(action)
-        actions = [action]
 
-    for action in actions:
         res = action.run()
         if res.failed():
             return ReturnCode.ACTION_FAILED.value

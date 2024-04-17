@@ -11,7 +11,6 @@ class CompilePhase(CFamilyBuildPhase):
         super().__init__(None, dependencies)
         self.options |= {
             'name': 'compile',
-            'build_operation': 'compile_to_object',
         }
         self.options |= (options or {})
 

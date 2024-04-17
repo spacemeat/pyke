@@ -14,7 +14,6 @@ class CompileAndLinkToSharedObjectPhase(CFamilyBuildPhase):
         self.options |= {
             'name': 'compile_and_link_to_shared_object',
             'target_path': '{shared_object_path}',
-            'build_operation': 'compile_and_link_to_shared_object',
             'relocatable_code': True,
         }
         self.options |= (options or {})

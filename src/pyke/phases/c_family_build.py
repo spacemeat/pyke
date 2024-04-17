@@ -22,110 +22,166 @@ class CFamilyBuildPhase(Phase):
     def __init__(self, options: dict | None = None, dependencies = None):
         super().__init__(None, dependencies)
         self.options |= {
+            # Select the system build tools. gnu|clang
             'toolkit': 'gnu',
+            # Sets the source language. c|c++
             'language': 'c++',
+            # Sets the source language version.
             'language_version': '23',
+            # Sets debug or release build. You can add your own; see the README.
             'kind': 'debug',
             'target_os_gnu': 'posix',
             'target_os_clang': 'posix',
-            'target_os_visualstudio': 'windows',
+            ##'target_os_visualstudio': 'windows',
             'tool_args_gnu': 'gnuclang',
             'tool_args_clang': 'gnuclang',
             'tool_args_visualstudio': 'visualstudio',
+            # Sets the warning flags for gnu and clang tools.
             'gnuclang_warnings': ['all', 'extra', 'error'],
+            # Sets the debug level (-gn flga) for gnu and clang tools when in debug mode.
             'gnuclang_debug_debug_level': '2',
+            # Sets the optimization level (-On flag) for gnu and clang tools when in debug mode.
             'gnuclang_debug_optimization': 'g',
+            # Sets debug mode-specific flags for gnu and clang tools.
             'gnuclang_debug_flags': ['-fno-inline', '-fno-lto', '-DDEBUG'],
+            # Sets the debug level (-gn flga) for gnu and clang tools when in release mode.
             'gnuclang_release_debug_level': '0',
+            # Sets the optimization level (-On flag) for gnu and clang tools when in release mode.
             'gnuclang_release_optimization': '2',
+            # Sets release mode-specific flags for gnu and clang tools.
             'gnuclang_release_flags': ['-DNDEBUG'],
-            'visualstudio_warnings': [],
-            'visualstudio_debug_debug_level': '',
-            'visualstudio_debug_optimization': '',
-            'visualstudio_debug_flags': [],
-            'visualstudio_release_debug_level': '',
-            'visualstudio_release_optimization': '',
-            'visualstudio_release_flags': [],
+            # Any additional compiler flags for gnu and clang tools.
+            'gnuclang_additional_flags': [],
+            ##'visualstudio_warnings': [],
+            ##'visualstudio_debug_debug_level': '',
+            ##'visualstudio_debug_optimization': '',
+            ##'visualstudio_debug_flags': [],
+            ##'visualstudio_release_debug_level': '',
+            ##'visualstudio_release_optimization': '',
+            ##'visualstudio_release_flags': [],
+            ##'visualstudio_additional_flags': [],
+            'warnings': '{{tool_args_{toolkit}}_warnings}',
             'debug_level': '{{tool_args_{toolkit}}_{kind}_debug_level}',
             'optimization': '{{tool_args_{toolkit}}_{kind}_optimization}',
             'kind_flags': '{{tool_args_{toolkit}}_{kind}_flags}',
-            'warnings': '{{tool_args_{toolkit}}_warnings}',
-            'pkg_config': [],
-            'posix_threads': False,
+            'additional_flags': '{{tool_args_{toolkit}}_additional_flags}',
+            # Macro definitions passed to the preprocessor.
             'definitions': [],
-            'additional_flags': [],
+            # Enables multithreaded builds for gnu and clang tools.
+            'posix_threads': False,
+            # Whether to make the code position-independent (-fPIC for gnu and clang tools).
             'relocatable_code': False,
 
+            # Whether to reference dependency shared objects with -rpath.
             'rpath_deps': True,
+            # Whether to condition the build for dependencies which can be relatively placed.
+            # (-rpath=$ORIGIN)
             'moveable_binaries': True,
-            'export_dynamic': False,
+            ##'export_dynamic': False,
+            ##'symbol_visibility': 'hidden', # see https://gcc.gnu.org/wiki/Visibility
 
             'inc_dir': '.',
             'include_anchor': '{project_anchor}/{inc_dir}',
+            # List of directories to search for project headers, relative to {include_anchor}.
             'include_dirs': ['include'],
 
             'src_dir': 'src',
             'src_anchor': '{project_anchor}/{src_dir}',
+            # List of source files relative to {src_anchor}.
             'sources': [],
 
+            # List of directories to search for library archives or shared objects.
             'lib_dirs': [],
+            # Collection of library archives or shared objects or pkg-configs to link. Format is:
+            # { 'foo', type } where type is 'archive' | 'shared_object' | 'package'
             'libs': {},
 
+            # Specifies the directory where prebuilt objects (say from a binary distribution) are
+            # found.
             'prebuilt_obj_dir': 'prebuilt_obj',
             'prebuilt_obj_anchor': '{project_anchor}/{prebuilt_obj_dir}',
+            # List of prebuilt objects to link against.
             'prebuilt_objs': [],
 
             'target_path': '',
 
+            # Top-level build directory.
             'build_dir': 'build',
-            'build_detail': '{kind}.{toolkit}',
+            # Target-specific build directory.
+            'build_detail': '{group}.{kind}.{toolkit}',
             'build_anchor': '{gen_anchor}/{build_dir}',
             'build_detail_anchor': '{build_anchor}/{build_detail}',
 
+            # Directory where intermediate artifacts like objects are placed.
             'obj_dir': 'int',
+            # The base filename of a taret object file.
             'obj_basename': '',
+            # How object files are named on a POSIX system.
             'posix_obj_file': '{obj_basename}.o',
-            'windows_obj_file': '{obj_basename}.obj',
+            ##'windows_obj_file': '{obj_basename}.obj',
             'obj_file': '{{target_os_{toolkit}}_obj_file}',
             'obj_anchor': '{build_detail_anchor}/{obj_dir}',
             'obj_path': '{obj_anchor}/{obj_file}',
 
+            # Whether to build a 'thin' archive. (See ar(1).)
             'thin_archive': False,
 
+            # Where to emplace archive library artifacts.
             'archive_dir':'lib',
+            # The base filename of a target archive file.
             'archive_basename': '{name}',
+            # How archives are named on a POSIX system.
             'posix_archive_file': 'lib{archive_basename}.a',
-            'windows_archive_file': '{archive_basename}.lib',
+            ##'windows_archive_file': '{archive_basename}.lib',
             'archive_file': '{{target_os_{toolkit}}_archive_file}',
             'archive_anchor': '{build_detail_anchor}/{archive_dir}',
             'archive_path': '{archive_anchor}/{archive_file}',
 
-            'rpath': {},   # {dir: str, uses_ORIGIN: bool}
-            # TODO: 'symbol_visibility': 'hidden', # see https://gcc.gnu.org/wiki/Visibility
+            # Collection of library search paths built into the target binary. Formatted like:
+            # { 'directory': True }
+            # Where the boolean value specifies whether to use $ORIGIN. See the -rpath option
+            # in the gnu and clang tools. Note that this is automatically managed for dependency
+            # library builds.
+            'rpath': {},
 
+            # Where to emplace shared object artifacts.
             'shared_object_dir': 'bin',
+            # The base filename of a shared object file.
             'shared_object_basename': '{name}',
+            # Whether to place the version number into the artifact, and create the standard soft
+            # links.
             'generate_versioned_sonames': False,
+            # Shared object major version number.
             'so_major': 1,
+            # Shared object minor version number.
             'so_minor': 0,
+            # Shared object patch version number.
             'so_patch': 0,
+            # How shared objects are unversioned-naemd on POSIX systems.
             'posix_so_linker_name': 'lib{shared_object_basename}.so',
+            # How shared objects are major-version-only named on POSIX systems.
             'posix_so_soname': '{posix_so_linker_name}.{so_major}',
+            # How shared objects are full-version named on POSIX systems.
             'posix_so_real_name': '{posix_so_soname}.{so_minor}.{so_patch}',
+            # The actual target name for a shared object. May be redefined for some project types.
             'posix_shared_object_file': '{posix_so_linker_name}',
-            'windows_shared_object_file': '{shared_object_basename}.dll',
+            ##'windows_shared_object_file': '{shared_object_basename}.dll',
             'shared_object_file': '{{target_os_{toolkit}}_shared_object_file}',
             'shared_object_anchor': '{build_detail_anchor}/{shared_object_dir}',
             'shared_object_path': '{shared_object_anchor}/{shared_object_file}',
 
+            # Where to emplace executable artifacts.
             'exe_dir':'bin',
+            # The base filename of a target executable file.
             'exe_basename': '{name}',
+            # How executable files are named on POSIX systems.
             'posix_exe_file': '{exe_basename}',
-            'windows_exe_file': '{exe_basename}.exe',
+            ##'windows_exe_file': '{exe_basename}.exe',
             'exe_file': '{{target_os_{toolkit}}_exe_file}',
             'exe_anchor': '{build_detail_anchor}/{exe_dir}',
             'exe_path': '{exe_anchor}/{exe_file}',
 
+            # Arguments to pass when running a built executable.
             'run_args': ''
         }
         self.options |= (options or {})
@@ -230,9 +286,6 @@ class CFamilyBuildPhase(Phase):
         return self._make_build_command_prefix_gnu_clang(prefix)
 
     def _make_build_command_prefix_gnu_clang(self, prefix):
-        compile_only = self.opt_str('build_operation') == 'build_obj'
-        c = '-c ' if compile_only else ''
-
         warn = ''.join((f'-W{w} ' for w in self.opt_list('gnuclang_warnings')))
 
         g = f'-g{self.opt_str("debug_level")} '
@@ -243,7 +296,7 @@ class CFamilyBuildPhase(Phase):
 
         additional_flags = ''.join((str(flag) for flag in self.opt_list('additional_flags')))
 
-        build_string = f'{prefix}{warn}{c}{g}{o} {kf}{defs}{additional_flags} '
+        build_string = f'{prefix}{warn}{g}{o} {kf}{defs}{additional_flags} '
         return build_string
 
     def _make_build_command_prefix_vs(self):
@@ -281,7 +334,10 @@ class CFamilyBuildPhase(Phase):
         ''' Constructs the inc_dirs portion of a gcc command.'''
         inc_dirs = self.opt_list('include_dirs')
         inc_anchor = self.opt_str('include_anchor')
-        pkg_configs = self.opt_list('pkg_config')
+        pkg_configs = []
+        for lib, method in self.opt_dict('libs').items():
+            if method in ['archive', 'package']:
+                pkg_configs = self.opt_list(lib)
 
         inc_dirs = ''.join((f'-I{inc_anchor}/{inc} ' for inc in inc_dirs))
         pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' +
@@ -330,7 +386,7 @@ class CFamilyBuildPhase(Phase):
         lib_bits_cmd = ''
         lib_dirs_cmd = ''.join((f'-L{lib_dir} ' for lib_dir in lib_dirs))
         libs_cmd = ''
-        for lib, method in libs.items():
+        for lib, method in {**libs, **self.opt_dict('libs')}.items():
             if method in ['archive', 'shared_object']:
                 libs_cmd += f'-l{lib} '
             elif method == 'package':

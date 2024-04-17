@@ -14,7 +14,6 @@ class CompileAndLinkToExePhase(CFamilyBuildPhase):
         self.options |= {
             'name': 'compile_and_link',
             'target_path': '{exe_path}',
-            'build_operation': 'compile_to_executable',
         }
         self.options |= (options or {})
 

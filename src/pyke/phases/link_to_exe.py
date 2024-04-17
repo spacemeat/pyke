@@ -14,7 +14,6 @@ class LinkToExePhase(CFamilyBuildPhase):
         self.options |= {
             'name': 'link_to_exe',
             'target_path': '{exe_path}',
-            'build_operation': 'link_to_executable',
         }
         self.options |= (options or {})
 

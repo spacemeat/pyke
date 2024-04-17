@@ -414,7 +414,7 @@ When constructing phase objects, the options you declare are technically overrid
 You can also explicitly override after phase creation:
 
 ```python
-from pyke import CompileAndLinkToExePhase, OptionOp, main_project
+from pyke import CompileAndLinkToExePhase, Op, main_project
 
 phase = CompileAndLinkToExePhase('simple_experiemtal', {
     'sources': ['a.cpp', 'b.cpp', 'c.cpp', 'main.cpp'],
@@ -422,7 +422,7 @@ phase = CompileAndLinkToExePhase('simple_experiemtal', {
 })
 
 phase.push_opts({                                           # appending to sources
-    'sources': (OptionOp.APPEND, [f'exp/{src}' for src in [
+    'sources': Op('*=', [f'exp/{src}' for src in [
              'try_this.cpp', 'maybe.cpp', 'what_if.cpp']])
 })
 
@@ -463,12 +463,22 @@ There are a few options that are uiversal to pyke, regardless of the type of pro
 
 |option|default|usage
 |---|---|---
-|name|phase|The name of the phase. You should likely override this.
-|report_verbosity|2|The verbosity of reporting. 0 just reports the phase by name; 1 reports the phase's interpolated options; 2 reports the raw and interpolated options.
-|verbosity|0|The verbosity of non-reporting actions. 0 is silent, unless there are errors; 1 is an abbreviated report; 2 is a full report with all commands run.
-|project_anchor|\<project root\>|This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
-|gen_anchor|\<project root\>|This is an anchor directory for other directories to relate to when referencing generated build artifacts like object files or executables.
-|colors|{colors_24bit}|Specifies the name of a color palette to use in reports and other output. Colors are discussed below; you can set this value to `{colors_none}` to disable color output.
+|name   |''   |The name of the phase. You should likely override this.
+|group   |''   |The group name of the phase. Informed by its nearest dependent project phase.
+|report_verbosity   |2   |The verbosity of reporting. 0 just reports the phase by name; 1 reports the phase's interpolated options; 2 reports the raw and interpolated options.
+|report_relative_paths   |True   |Whether to print full paths, or relative to $CWD when reporting.
+|verbosity   |0   |The verbosity of non-reporting actions. 0 is silent, unless there are errors; 1 is an abbreviated report; 2 is a full report with all commands run.
+|none   |None   |Interpolated value for None.
+|true   |True   |Interpolated value for True.
+|false   |False   |Interpolated value for False.
+|project_anchor   |WorkingSet.makefile_dir   |This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
+|gen_anchor   |WorkingSet.makefile_dir   |This is an anchor directory for other directories to relate to when referencing generated build artifacts like object files or executables.
+|colors_24bit   |deepcopy(ansi_colors['colors_24bit'])   |24-bit ANSI color table.
+|colors_8bit   |deepcopy(ansi_colors['colors_8bit'])   |8-bit ANSI color table.
+|colors_named   |deepcopy(ansi_colors['colors_named'])   |Named ANSI color table.
+|colors_none   |deepcopy(ansi_colors['colors_none'])   |Color table for no ANSI color codes.
+|colors_dict   |'{colors_{colors}}'   |Color table accessor based on {colors}.
+|colors   |determine_color_support()   |Color table selector. 24bit|8bit|named|none
 
 When running pyke from a directory that is different from your makefile's directory, you can specify the makefile path with `-m`. This is discussed below, but by default both the project root directory (`project_anchor`) and generated output root directory (`gen_anchor`) are relative to the makefile's directory, regardless of where you invoke from. However, this behavior can be modified. By overriding `gen_anchor` to a different directory in your file system, you can cause all the generated outputs to be placed anywhere. The generated directory structure remains the same, just at a different root location. Note that intermediate files which are inputs of later phases, like compiled object files, are still resolved correctly, as *any* generated file is rooted by `gen_anchor`. Likewise, any file that is expected as part of the project inputs created by developers (anything you might check in to your project repository, say) is anchored by `project_anchor`.
 
@@ -480,66 +490,53 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 
 |option|default|usage
 |---|---|---
-|toolkit|gnu|Sets which system build tools to use. `gnu` uses gcc; `clang` uses clang; `visualstudio` uses Visual Studio's compiler.
-|language|C++|Sets the language.
-|language_version|23|Sets the language version.
-|kind|release|Release or debug build. See below for adding new kinds.
-|taregt_os_gnu|posix|Specifies UNIX or GNU/Linux as the target OS for the build. Determined by the toolkit.
-|target_os_clang|posix|Specifies UNIX or GNU/Linux as the target OS for the build. Determined by the toolkit.
-|target_os_visualstudio|windows|Specifies MS Windows as the target OS for the build. Determined by the toolkit.
-|tool_args_gnu|gnuclang|Specifies either gcc or clang as the primary build tool. Determined by the toolkit.
-|tool_args_clang|gnuclang|Specifies either gcc or clang as the primary build tool. Determined by the toolkit.
-|tool_args_visualstudio|visualstudio|Specifies Visual Studio as the primary build tool. Determined by the toolkit.
-|gnuclang_warnings|['all', 'extra', 'error']|Sets warning flags. These are toolkit-specific.
-|gnuclang_debug_debug_level|2|Debug level during debug builds. Sets n as passed by -g\<n\> to gnu/clang.
-|gnuclang_debug_optimization|g|Optimization level during debug builds. Sets n as passed by -O\<n\> to gnu/clang.
-|gnuclang_debug_flags|[-fno-inline, -fno-lto, -DDEBUG]|Additional flags passed to gnu/clang during debug builds.
-|gnuclang_release_debug_level|0|Debug level during release builds. Sets n as passed by -g\<n\> to gnu/clang.
-|gnuclang_release_optimization|2|Optimization level during release builds. Sets n as passed by -O\<n\> to gnu/clang.
-|gnuclang_release_flags|[-DNDEBUG]|Additional flags passed to gnu/clang during release builds.
-|visualstudio_warnings|[]|Sets warning flags. These are toolkit-specific.
-|visualstudio_debug_debug_level||Debug level during debug builds. Sets n as passed by [?] to Visual Studio.
-|visualstudio_debug_optimization||Optimization level during debug builds. Sets n as passed by [?] to Visual Studio.
-|visualstudio_debug_flags|[]|Additional flags passed to Visual Studio during debug builds.
-|visualstudio_release_debug_level||Debug level during release builds. Sets n as passed by [?] to Visual Studio.
-|visualstudio_release_optimization||Optimization level during release builds. Sets n as passed by [?] to Visual Studio.
-|visualstudio_release_flags|[]|Additional flags passed to Visual Studio during relase builds.
-|debug_level|{{tool_args_{toolkit}}_{kind}_debug_level}|Maps the tool-specific debug level.
-|optimization|{{tool_args_{toolkit}}_{kind}_optimization}|Maps the tool-specific optimization flags.
-|kind_flags|{{tool_args_{toolkit}}_{kind}_flags}|Maps any tool-specific debug or release flags.
-|warnings|{{tool_args_{toolkit}}_{kind}_warnings}|Maps any tool-specific wargning flags.
-|pkg_config|[]|Specifies a list of packages which are passed into `pkg-config` for automatically specifying include directories and libraries.
-|posix_threads|False|Specifies a posix multithreaded program.
-|definitions|[]|Specifies a set of macro definitions.
-|additional_flags|[]|Specifies a set of additional flags passed to the compiler.
-|incremental_build|True|If set, and using the `CompileAndLink` phase, forces the build to create individual object for each source, and link them in a separate step. Otherwise, the build will pass all the sources to the build tool at once, to create a binary target in one step.
-|include_anchor|{project_anchor}|The base directory for include search directories.
-|include_dirs|[include]|The default directories where project headers are searched.
-|src_dir|src|The default directory where source files can be found.
-|src_anchor|{project_anchor}/{src_dir}|The full directory layout where source files can be found.
-|sources|[]|A list of source files to compile in this phase.
-|build_dir|build|The default subdirectory to place all build results into.
-|build_detail|{kind}.{toolkit}|A default subdirectoy of {build} where more specific build results are placed.
-|build_anchor|{gen_anchor}/{build_dir}|
-|build_detail_anchor|{build_anchor}/{build_detail}|
-|obj_dir|int|A default subdirectory where intermediate files are placed.
-|obj_basename||The base file name of the generated object file. An empty string means to use the basename of the first source in {sources}.
-|posix_obj_file|{obj_basename}.o|Constructs the object file name for UNIX or GNU/Linux environments.
-|windows_obj_file|{obj_basename.obj|Constructs the object file name for MS Windows environments.
-|obj_file|{{target_os_{toolkit}}_obj_file}|How to name the generated object file.
-|obj_anchor|{build_detail_anchor}/{obj_dir}|The full directory layout of intermediate files.
-|obj_path|{obj_anchor}/{obj_file}|The final full path of the generated object file.
-|exe_dir|bin|A default subdirectory where final executable files are plced.
-|exe_basename|{name}|The file name of the generated executable file.
-|posix_exe_file|{exe_basename}|Constructs the executable file name for UNIX or GNU/Linux environments.
-|windows_exe_file|{exe_basename}.exe|Constructs the executable file name for MS Windows environments.
-|exe_file|{{target_os_{toolkit}}_exe_file|Maps the executable file name.
-|exe_anchor|{build_detail_anchor}/{exe_dir}|The full directory layout of executable files.
-|exe_path|{exe_anchor}/{exe_file}|The full path of the executable file to build.
-|lib_dirs|[]|A list of library directories.
-|libs|[]|A list of libraries to link with.
-|shared_libs|[]|A list of shared objects to link with.
-|exe_path|{exe_anchor}/{exe_basename}|The final full path of the generated executable file.
+|toolkit   |'gnu'   |Select the system build tools. gnu|clang
+|language   |'c++'   |Sets the source language. c|c++
+|language_version   |'23'   |Sets the source language version.
+|kind   |'debug'   |Sets debug or release build. You can add your own; see the README.
+|gnuclang_warnings   |['all', 'extra', 'error']   |Sets the warning flags for gnu and clang tools.
+|gnuclang_debug_debug_level   |'2'   |Sets the debug level (-gn flga) for gnu and clang tools when in debug mode.
+|gnuclang_debug_optimization   |'g'   |Sets the optimization level (-On flag) for gnu and clang tools when in debug mode.
+|gnuclang_debug_flags   |['-fno-inline', '-fno-lto', '-DDEBUG']   |Sets debug mode-specific flags for gnu and clang tools.
+|gnuclang_release_debug_level   |'0'   |Sets the debug level (-gn flga) for gnu and clang tools when in release mode.
+|gnuclang_release_optimization   |'2'   |Sets the optimization level (-On flag) for gnu and clang tools when in release mode.
+|gnuclang_release_flags   |['-DNDEBUG']   |Sets release mode-specific flags for gnu and clang tools.
+|gnuclang_additional_flags   |[]   |Any additional compiler flags for gnu and clang tools.
+|definitions   |[]   |Macro definitions passed to the preprocessor.
+|posix_threads   |False   |Enables multithreaded builds for gnu and clang tools.
+|relocatable_code   |False   |Whether to make the code position-independent (-fPIC for gnu and clang tools).
+|rpath_deps   |True   |Whether to reference dependency shared objects with -rpath.
+|moveable_binaries   |True   |Whether to condition the build for dependencies which can be relatively placed. (-rpath=$ORIGIN)
+|include_dirs   |['include']   |List of directories to search for project headers, relative to {include_anchor}.
+|sources   |[]   |List of source files relative to {src_anchor}.
+|lib_dirs   |[]   |List of directories to search for library archives or shared objects.
+|libs   |{}   |Collection of library archives or shared objects or pkg-configs to link. Format is: { 'foo', type } where type is 'archive' | 'shared_object' | 'package'
+|prebuilt_obj_dir   |'prebuilt_obj'   |Specifies the directory where prebuilt objects (say from a binary distribution) are found.
+|prebuilt_objs   |[]   |List of prebuilt objects to link against.
+|build_dir   |'build'   |Top-level build directory.
+|build_detail   |'{group}.{kind}.{toolkit}'   |Target-specific build directory.
+|obj_dir   |'int'   |Directory where intermediate artifacts like objects are placed.
+|obj_basename   |''   |The base filename of a taret object file.
+|posix_obj_file   |'{obj_basename}.o'   |How object files are named on a POSIX system.
+|thin_archive   |False   |Whether to build a 'thin' archive. (See ar(1).)
+|archive_dir   |'lib'   |Where to emplace archive library artifacts.
+|archive_basename   |'{name}'   |The base filename of a target archive file.
+|posix_archive_file   |'lib{archive_basename}.a'   |How archives are named on a POSIX system.
+|rpath   |{}   |Collection of library search paths built into the target binary. Formatted like: { 'directory': True } Where the boolean value specifies whether to use $ORIGIN. See the -rpath option in the gnu and clang tools. Note that this is automatically managed for dependency library builds.
+|shared_object_dir   |'bin'   |Where to emplace shared object artifacts.
+|shared_object_basename   |'{name}'   |The base filename of a shared object file.
+|generate_versioned_sonames   |False   |Whether to place the version number into the artifact, and create the standard soft links.
+|so_major   |1   |Shared object major version number.
+|so_minor   |0   |Shared object minor version number.
+|so_patch   |0   |Shared object patch version number.
+|posix_so_linker_name   |'lib{shared_object_basename}.so'   |How shared objects are unversioned-naemd on POSIX systems.
+|posix_so_soname   |'{posix_so_linker_name}.{so_major}'   |How shared objects are major-version-only named on POSIX systems.
+|posix_so_real_name   |'{posix_so_soname}.{so_minor}.{so_patch}'   |How shared objects are full-version named on POSIX systems.
+|posix_shared_object_file   |'{posix_so_linker_name}'   |The actual target name for a shared object. May be redefined for some project types.
+|exe_dir   |'bin'   |Where to emplace executable artifacts.
+|exe_basename   |'{name}'   |The base filename of a target executable file.
+|posix_exe_file   |'{exe_basename}'   |How executable files are named on POSIX systems.
+|run_args   |''   |Arguments to pass when running a built executable.
 
 ### Making sense of the directory optinos
 
@@ -612,9 +609,13 @@ The command line arguments are:
 ### Referencing phases
 
 Phases actually have two names: The name you set, and a full name formatted as "group.name". Each phase which is a project phase or a dependency of one has a `group` option set to the short name of that project phase, and a short name of "project". The main project phase is grouped according to 1) the name of the makefile, unless it is specifically called `make.py`, in which it is grouped 2) the name of the directory in which it resides. So, if your project's root contins the makefile, and is named like this:
-``` ~/src/asset_converter/make.py ```
+```
+~/src/asset_converter/make.py
+```
 The project will be called "asset_converter.project". If, however, it is named like:
-``` ~/src/asset_converter/images_make.py ```
+```
+~/src/asset_converter/images_make.py
+```
 The project will be called "images_make.project".
 
 Dependency phases of any project phase which are not themselves project phases are specified by the dotted name. Maybe your `asset_converter` project has dependencies like this:
@@ -649,19 +650,23 @@ Here, each phase will be named by its owning project phase and its non-project p
 When referencing phases on the command line, you reference by full name, with the main project phase name being added by default if you omit it. An @ symbol references all the phases in either the group, short name, or both. So, for simple_app, you can reference just the compile phase like:
 
 ```
--o compile:verbosity=2
--o .compile:verbosity=2
--o simple_app.compile:verbosity=2
--o @.compile:verbosity=2
+pyke -o compile:verbosity=2
+pyke -o .compile:verbosity=2
+pyke -o simple_app.compile:verbosity=2
+pyke -o @.compile:verbosity=2
 ```
 
 By default, if the phase names are not specified at all, then all phases are affected. Effectively, it uses phase name "@.@". However, for complicated projects, with multiple ProjectPhases in them, each of these can be separately referenced precisely.
 
 ```
--o image_converter.@:kind=debug
+pyke -okind=release -o image_converter.@:kind=debug build
 ```
 
-The above performs a debug build for only the image_converter subproject.
+The above performs a release build for most of the project, but a debug build for only the image_converter subproject. If you want to just build image_converter:
+
+```
+pyke image_converter.@:build
+```
 
 Note that the naming is *not* strictly hierarchical, but rather, specifically `group.non-project`. Non-project phases must always be uniquely named within a project, and will be automatically disambiguated if they're not, and projects must always be uniquely named.
 
@@ -824,7 +829,7 @@ p.main_project().set_dependency(build_phase)
 
 And that's it. Now the `build` action will first generate the files in the right place if needed, and then build them if needed. The `clean` action will delete the generated files, and the `clean_build_directory` action will not only remove the build, but also the generated source directory.
 
-> A few notes: The above will only generate the source files if they don't exist, or are older than the makefile (which has the source text in it). Also, the gen diretory is based on `gen_anchor`, which is necessary for any generated files to be built in the right place if you change `gen_anchor`'s value.
+> A few notes: The above will only generate the source files if they don't exist, or are older than the makefile (which has the source text in it). Also, the gen diretory is based on `gen_anchor` (by way of `build_anchor`), which is necessary for any generated files to be built in the right place if you change `gen_anchor`'s value.
 
 #### Adding new actions
 

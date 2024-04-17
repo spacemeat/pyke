@@ -39,26 +39,51 @@ class Phase:
     def __init__(self, options: dict | None = None,
                  dependencies: Self | list[Self] | None = None):
         self.options = Options()
+
+        project_root = WorkingSet.makefile_dir
+        color_table_ansi_24bit = deepcopy(ansi_colors['colors_24bit'])
+        color_table_ansi_8bit = deepcopy(ansi_colors['colors_8bit'])
+        color_table_ansi_named = deepcopy(ansi_colors['colors_named'])
+        color_table_none = deepcopy(ansi_colors['colors_none'])
+        supported_terminal_colors = determine_color_support()
+
         self.options |= {
+            # The name of the phase. You should likely override this.
             'name': '',
+            # The group name of the phase. Informed by its nearest dependent project phase.
             'group': '',
+            # The verbosity of reporting. 0 just reports the phase by name; 1 reports the phase's
+            # interpolated options; 2 reports the raw and interpolated options.
             'report_verbosity': 2,
+            # Whether to print full paths, or relative to $CWD when reporting.
             'report_relative_paths': True,
+            # The verbosity of non-reporting actions. 0 is silent, unless there are errors; 1 is an
+            # abbreviated report; 2 is a full report with all commands run.
             'verbosity': 0,
+            # Interpolated value for None.
             'none': None,
+            # Interpolated value for True.
             'true': True,
+            # Interpolated value for False.
             'false': False,
-            'None': None,
-            'True': True,
-            'False': False,
-            'project_anchor': WorkingSet.makefile_dir,
-            'gen_anchor': WorkingSet.makefile_dir,
-            'colors_24bit': deepcopy(ansi_colors['colors_24bit']),
-            'colors_8bit': deepcopy(ansi_colors['colors_8bit']),
-            'colors_named': deepcopy(ansi_colors['colors_named']),
-            'colors_none': deepcopy(ansi_colors['colors_none']),
+            # This is an anchor directory for other directories to relate to when referencing
+            # required project inputs like source files.
+            'project_anchor': project_root,
+            # This is an anchor directory for other directories to relate to when referencing
+            # generated build artifacts like object files or executables.
+            'gen_anchor': project_root,
+            # 24-bit ANSI color table.
+            'colors_24bit': color_table_ansi_24bit,
+            # 8-bit ANSI color table.
+            'colors_8bit': color_table_ansi_8bit,
+            # Named ANSI color table.
+            'colors_named': color_table_ansi_named,
+            # Color table for no ANSI color codes.
+            'colors_none': color_table_none,
+            # Color table accessor based on {colors}.
             'colors_dict': '{colors_{colors}}',
-            'colors': determine_color_support(),
+            # Color table selector. 24bit|8bit|named|none
+            'colors': supported_terminal_colors,
         }
         self.options |= (options or {})
 

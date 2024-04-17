@@ -13,7 +13,6 @@ class ArchivePhase(CFamilyBuildPhase):
         super().__init__(None, dependencies)
         self.options |= {
             'name': 'archive',
-            'build_operation': 'archive_to_library',
         }
         self.options |= (options or {})
 

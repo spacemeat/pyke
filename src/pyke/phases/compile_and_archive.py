@@ -14,7 +14,6 @@ class CompileAndArchivePhase(CFamilyBuildPhase):
         self.options |= {
             'name': 'compile_and_archive',
             'target_path': '{archive_path}',
-            'build_operation': 'compile_to_archive',
         }
         self.options |= (options or {})
 
