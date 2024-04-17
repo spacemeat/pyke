@@ -16,4 +16,4 @@ exe_phase = p.CompileAndLinkToExePhase({
     'sources': ['main.c'],
 }, so_phase)
 
-p.main_project().set_dependency(exe_phase)
+p.get_main_phase().depend_on(exe_phase)

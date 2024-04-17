@@ -24,7 +24,7 @@ abc_withlib_exe = p.CompileAndLinkToExePhase({
 abc_d_e_project = p.ProjectPhase({'name': 'abc_nolib_proj'}, abc_nolib_exe)
 abc_de_project = p.ProjectPhase({'name': 'abc_withlib_proj'}, abc_withlib_exe)
 
-p.main_project().set_dependency([
+p.get_main_phase().depend_on([
     abc_d_e_project,
     abc_de_project
 ])

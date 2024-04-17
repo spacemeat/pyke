@@ -22,7 +22,7 @@ from .phases.phase import Phase
 from .phases.project import ProjectPhase
 from .utilities import WorkingSet, MalformedConfigError, ensure_list
 
-def main_project():
+def get_main_phase():
     ''' Returns the main project created for the makefile.'''
     return WorkingSet.main_phase
 

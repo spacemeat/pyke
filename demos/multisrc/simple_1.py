@@ -22,4 +22,4 @@ o_to_exe_phase = p.LinkToExePhase({
     'exe_basename': 'simple_1',
 }, c_to_o_phases)
 
-p.main_project().set_dependency(o_to_exe_phase)
+p.get_main_phase().depend_on(o_to_exe_phase)

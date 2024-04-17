@@ -38,4 +38,4 @@ build_phase = p.CompileAndLinkToExePhase({
     'sources': ['a.c', 'b.c', 'c.c', 'main.c'],
 }, gen_phase)
 
-p.main_project().set_dependency(build_phase)
+p.get_main_phase().depend_on(build_phase)

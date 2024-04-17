@@ -105,11 +105,8 @@ class CFamilyBuildPhase(Phase):
 
             'target_path': '',
 
-            # Top-level build directory.
-            'build_dir': 'build',
             # Target-specific build directory.
-            'build_detail': '{group}.{kind}.{toolkit}',
-            'build_anchor': '{gen_anchor}/{build_dir}',
+            'build_detail': '{group}.{toolkit}.{kind}',
             'build_detail_anchor': '{build_anchor}/{build_detail}',
 
             # Directory where intermediate artifacts like objects are placed.
@@ -479,29 +476,6 @@ class CFamilyBuildPhase(Phase):
             return self.parse_include_report(err)
         raise ValueError('Header discovery failed.')
 
-    def do_step_delete_directory(self, action: Action, depends_on: Steps, direc: Path) -> Step:
-        ''' Perfoems a file deletion operation as an action step. '''
-        def act(cmd: str, direc: Path) -> Result:
-            step_result = ResultCode.SUCCEEDED
-            step_notes = None
-            if direc.exists():
-                res, _, err = do_shell_command(cmd)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                    step_notes = err
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.ALREADY_UP_TO_DATE
-
-            return Result(step_result, step_notes)
-
-        cmd = f'rm -r {direc}'
-        step = Step('delete directory', depends_on, [direc], [],
-                             partial(act, cmd=cmd, direc=direc), cmd)
-        action.set_step(step)
-        return step
-
     def do_step_create_directory(self, action: Action, depends_on: Steps, new_dir: Path) -> Step:
         '''
         Performs a directory creation operation as an action step.
@@ -751,7 +725,3 @@ class CFamilyBuildPhase(Phase):
         step = Step('run executable', depends_on, [exe_path], [], partial(act, cmd, exe_path))
         action.set_step(step)
         return step
-
-    def do_action_clean_build_directory(self, action: Action):
-        ''' Wipes out the build directory. '''
-        self.do_step_delete_directory(action, None, Path(self.opt_str("build_anchor")))

@@ -72,6 +72,9 @@ class Phase:
             # This is an anchor directory for other directories to relate to when referencing
             # generated build artifacts like object files or executables.
             'gen_anchor': project_root,
+            # Top-level build directory.
+            'build_dir': 'build',
+            'build_anchor': '{gen_anchor}/{build_dir}',
             # 24-bit ANSI color table.
             'colors_24bit': color_table_ansi_24bit,
             # 8-bit ANSI color table.
@@ -94,7 +97,7 @@ class Phase:
         dependencies = ensure_list(dependencies)
         self.dependencies = []
         for dep in dependencies:
-            self.set_dependency(dep)
+            self.depend_on(dep)
 
         self.files: PhaseFiles
 
@@ -126,8 +129,8 @@ class Phase:
                     return phase
             return None
 
-    def set_dependency(self, new_deps: Self | list[Self]):
-        ''' Marks a dependency phase for this phase. Must not be a phase which does not
+    def depend_on(self, new_deps: Self | list[Self]):
+        ''' Sets a dependency phase for this phase. Must not be a phase which does not
         depend on this phase already (no circular references allowed). '''
         new_deps = ensure_list(new_deps)
         for new_dep in new_deps:
@@ -456,6 +459,29 @@ class Phase:
         action.set_step(step)
         return step
 
+    def do_step_delete_directory(self, action: Action, depends_on: Steps, direc: Path) -> Step:
+        ''' Perfoems a file deletion operation as an action step. '''
+        def act(cmd: str, direc: Path) -> Result:
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if direc.exists():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        cmd = f'rm -r {direc}'
+        step = Step('delete directory', depends_on, [direc], [],
+                             partial(act, cmd=cmd, direc=direc), cmd)
+        action.set_step(step)
+        return step
+
     def do_action_report_options(self, action: Action):
         ''' This gives a small description of the phase. '''
         report = ''
@@ -521,3 +547,7 @@ class Phase:
         for file in self.files.get_output_files():
             if file.file_type != 'dir':
                 self.do_step_delete_file(action, None, file.path)
+
+    def do_action_clean_build_directory(self, action: Action):
+        ''' Wipes out the build directory. '''
+        self.do_step_delete_directory(action, None, Path(self.opt_str("build_anchor")))

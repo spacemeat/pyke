@@ -59,17 +59,6 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
         action.set_step(step)
         return step
 
-    def do_action_clean(self, action: Action):
-        ''' Cleans all object paths this phase builds. '''
-        for file_op in self.files.get_operations('generate'):
-            for out in file_op.output_files:
-                self.do_step_delete_file(action, None, out.path)
-
-    def do_action_clean_build_directory(self, action: Action):
-        ''' Wipes out the generated source directory. '''
-        self.do_step_delete_directory(action, None, Path(self.opt_str('gen_src_dir')))
-        super().do_action_clean_build_directory(action)
-
     def do_action_build(self, action: Action):
         ''' Generate the source files for the build. '''
         def get_source_code(desired_src_path):

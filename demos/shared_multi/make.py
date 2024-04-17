@@ -12,4 +12,4 @@ sss = p.CompileAndLinkToSharedObjectPhase({'sources': ['sss.c']})
 m = p.CompileAndLinkToExePhase({'sources': ['main.c']},
                      [aaa, aas, asa, ass, saa, sas, ssa, sss])
 
-p.main_project().set_dependency(m)
+p.get_main_phase().depend_on(m)
