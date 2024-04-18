@@ -26,10 +26,10 @@ run_demo() {
 }
 
 run_demo "custom_phase/make.py" "total: 11111"
-run_demo "multiproject/make.py" "total: 11111${NL}total: 11111"
-run_demo "multisrc/simple_0.py" "total: 11111"
-run_demo "multisrc/simple_1.py" "total: 11111"
-run_demo "shared_multi/make.py" "255"
+run_demo "diamond_deps/make.py" "total: 11111${NL}total: 11111"
+run_demo "multi_make/simple_0.py" "total: 11111"
+run_demo "multi_make/simple_1.py" "total: 11111"
+run_demo "multi_shared_objects/make.py" "255"
 run_demo "simple_app/make.py" "total: 111"
 run_demo "simple_lib/make.py" "total: 111"
 run_demo "simple_so/make.py" "total: 111"
