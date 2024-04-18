@@ -289,11 +289,9 @@ class CFamilyBuildPhase(Phase):
         o = f'-O{self.opt_str("optimization")} '
         kf = ' '.join(self.opt_list('kind_flags'))
 
-        defs = ''.join((f'-D{d} ' for d in self.opt_list('definitions')))
-
         additional_flags = ''.join((str(flag) for flag in self.opt_list('additional_flags')))
 
-        build_string = f'{prefix}{warn}{g}{o} {kf}{defs}{additional_flags} '
+        build_string = f'{prefix}{warn}{g}{o}{kf} {additional_flags} '
         return build_string
 
     def _make_build_command_prefix_vs(self):
@@ -336,6 +334,8 @@ class CFamilyBuildPhase(Phase):
             if method in ['archive', 'package']:
                 pkg_configs = self.opt_list(lib)
 
+        defs = ''.join((f'-D{d} ' for d in self.opt_list('definitions')))
+
         inc_dirs = ''.join((f'-I{inc_anchor}/{inc} ' for inc in inc_dirs))
         pkg_inc_cmd = ('$(pkg-config --cflags-only-I ' +
                    ' '.join(pkg for pkg in pkg_configs) +
@@ -346,6 +346,7 @@ class CFamilyBuildPhase(Phase):
                    ') ') if len(pkg_configs) > 0 else ''
 
         return {
+            'defs': defs,
             'inc_dirs': inc_dirs + pkg_inc_cmd,
             'pkg_inc_bits': pkg_inc_bits_cmd,
             'relocatable_code': self.opt_bool('relocatable_code'),
@@ -415,7 +416,7 @@ class CFamilyBuildPhase(Phase):
         c_args = self.make_compile_arguments()
         if just_get_includes:
             obj_path = Path('/dev/null')
-        cmd = (f'{prefix}-c {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]}'
+        cmd = (f'{prefix}-c {c_args["defs"]} {c_args["inc_dirs"]} {c_args["pkg_inc_bits"]}'
                f'{"-fPIC " if c_args["relocatable_code"] else ""}'
                f'{"-pthread " if c_args["posix_threads"] else ""}'
                f'-o {obj_path} {src_path}'

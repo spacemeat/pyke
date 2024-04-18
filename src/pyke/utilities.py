@@ -236,18 +236,18 @@ def set_color(color_set: dict[str, dict[str, str]], color: str):
         if form == 'off':
             return a.off
         if form == 'b24':
-            assert isinstance(fg, tuple)
-            assert isinstance(bg, tuple)
+            assert fg is None or isinstance(fg, tuple)
+            assert bg is None or isinstance(bg, tuple)
             return (f'{a.b24_fg(fg) if fg else ""}'
                     f'{a.b24_bg(bg) if bg else ""}')
         if form == 'b8':
-            assert isinstance(fg, int)
-            assert isinstance(bg, int)
+            assert fg is None or isinstance(fg, int)
+            assert bg is None or isinstance(bg, int)
             return (f'{a.b8_fg(fg) if fg else ""}'
                     f'{a.b8_bg(bg) if bg else ""}')
         if form == 'named':
-            assert isinstance(fg, str)
-            assert isinstance(bg, str)
+            assert fg is None or isinstance(fg, str)
+            assert fg is None or isinstance(bg, str)
             return (f'{a.named_fg[fg] if fg else ""}'
                     f'{a.named_bg[bg] if bg else ""}')
     return ''
