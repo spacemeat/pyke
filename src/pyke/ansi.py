@@ -7,12 +7,14 @@ Convenience objects and functions for creating ANSI color codes.
 
 off = '\033[0m'
 
-def b24_fg(r, g, b):
+def b24_fg(c: tuple[int, int, int]):
     ''' Creates a foreground color code from r, g, b.'''
+    r, g, b = c
     return f'\033[38;2;{r};{g};{b}m'
 
-def b24_bg(r, g, b):
+def b24_bg(c: tuple[int, int, int]):
     ''' Creates a background color code from r, g, b.'''
+    r, g, b = c
     return f'\033[48;2;{r};{g};{b}m'
 
 def b8_fg(c):

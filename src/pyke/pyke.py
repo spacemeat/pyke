@@ -408,6 +408,7 @@ def main():
                     k = k[:-1].strip()
                 else:
                     op = OptionOp.REPLACE
+                    k = k.strip()
                 v = parse_value(v.strip())
                 for active_phase in affected_phases:
                     active_phase.push_opts({k: Op(op, v)})

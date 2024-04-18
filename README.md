@@ -531,7 +531,7 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |archive_dir   |'lib'   |Where to emplace archive library artifacts.
 |archive_basename   |'{name}'   |The base filename of a target archive file.
 |posix_archive_file   |'lib{archive_basename}.a'   |How archives are named on a POSIX system.
-|rpath   |{}   |Collection of library search paths built into the target binary. Formatted like: { 'directory': True } Where the boolean value specifies whether to use $ORIGIN. See the -rpath option in the gnu and clang tools. Note that this is automatically managed for dependency library builds.
+|rpath   |{}   |Collection of library search paths built into the target binary. Formatted like: { 'directory': True } where the boolean value specifies whether to use $ORIGIN. See the -rpath option in the gnu and clang tools. Note that this is automatically managed for dependency library builds.
 |shared_object_dir   |'bin'   |Where to emplace shared object artifacts.
 |shared_object_basename   |'{name}'   |The base filename of a shared object file.
 |generate_versioned_sonames   |False   |Whether to place the version number into the artifact, and create the standard soft links.
@@ -713,7 +713,7 @@ Each can contain the following sections:
 
 ### Argument aliases
 
-These are convenient shorthands for complex overrides, override-action pairs, or whatever you like. Their values cannot contain other argument alias names, but *can* contain action aliases, and are otherwise exactly as you'd type them on the CLI. Multiple values must be housed in a list. Each config file adds to the list of argument aliases.
+These are convenient shorthands for complex overrides, override-action pairs, or whatever you like. Their values cannot contain other argument alias names, but *can* contain action aliases, and are otherwise exactly as you'd type them on the CLI (except you don't need to enquote things that the shell might interpret). Multiple values must be housed in a list. Each config file adds to the list of argument aliases.
 
 ### Action aliases
 
@@ -920,4 +920,43 @@ That gets cumbersome. You can change an individual color much more easily:
 pyke -o "colors_24bit|={shell_cmd: {form:b24, fg:[255, 255, 255]}}"
 ```
 
-These are likely best set as default arguments in `~/.config/pyke/pyke-config.json`. (See [configuring pyke](#configuring-pyke.)
+These are likely best set as default arguments in `~/.config/pyke/pyke-config.json`. (See [configuring pyke](#configuring-pyke).):
+
+```json
+{
+    "default_arguments": [
+        "-o colors_super =  { off:              { form: off }}",
+        "-o colors_super |= { success:          { form: b24, fg: (0x33, 0xaf, 0x55) }}",
+        "-o colors_super |= { fail:             { form: b24, fg: (0xff, 0x33, 0x33) }}",
+        "-o colors_super |= { phase_lt:         { form: b24, fg: (0x33, 0x33, 0xff) }}",
+        "-o colors_super |= { phase_dk:         { form: b24, fg: (0x23, 0x23, 0x7f) }}",
+        "-o colors_super |= { step_lt:          { form: b24, fg: (0xb3, 0x8f, 0x4f) }}",
+        "-o colors_super |= { step_dk:          { form: b24, fg: (0x93, 0x5f, 0x2f) }}",
+        "-o colors_super |= { shell_cmd:        { form: b24, fg: (0x31, 0x31, 0x32) }}",
+        "-o colors_super |= { key:              { form: b24, fg: (0x9f, 0x9f, 0x9f) }}",
+        "-o colors_super |= { val_uninterp_lt:  { form: b24, fg: (0xaf, 0x23, 0xaf) }}",
+        "-o colors_super |= { val_uninterp_dk:  { form: b24, fg: (0x5f, 0x13, 0x5f) }}",
+        "-o colors_super |= { val_interp:       { form: b24, fg: (0x33, 0x33, 0xff) }}",
+        "-o colors_super |= { token_type:       { form: b24, fg: (0x33, 0xff, 0xff) }}",
+        "-o colors_super |= { token_value:      { form: b24, fg: (0xff, 0x33, 0xff) }}",
+        "-o colors_super |= { token_depth:      { form: b24, fg: (0x33, 0xff, 0x33) }}",
+        "-o colors_super |= { path_lt:          { form: b24, fg: (0x33, 0xaf, 0xaf) }}",
+        "-o colors_super |= { path_dk:          { form: b24, fg: (0x13, 0x5f, 0x8f) }}",
+        "-o colors_super |= { file_type_lt:     { form: b24, fg: (0x63, 0x8f, 0xcf) }}",
+        "-o colors_super |= { file_type_dk:     { form: b24, fg: (0x43, 0x5f, 0x9f) }}",
+        "-o colors_super |= { action_lt:        { form: b24, fg: (0xf3, 0x7f, 0x0f) }}",
+        "-o colors_super |= { action_dk:        { form: b24, fg: (0xa3, 0x4f, 0x00) }}",
+        "-o colors=super"
+    ]
+}
+```
+
+The above colors are the default for 24-bit RGB colors. Change them however you like.
+
+An individual color has the format:
+
+```
+{form: <format>, fg: <foreground-color>, bg: <background-color>}
+```
+
+For b24 formats, each of fg and bg should specify a tuple of red, green, blue, from 0 through 255. For b8 formats, each of fg and bg should specify a single integer [0, 255] which matches the ANSI 8-bit color palette. For the named formats, the ANSI named colors are used, like 'red' and 'bright blue'. If you want to specify no color, leave the color dict empty. The 'off' color dict is special, and must be kept as '{form: off}'.

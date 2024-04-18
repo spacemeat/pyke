@@ -134,26 +134,26 @@ class WorkingSet:
 ansi_colors = {
     'colors_24bit': {
         'off':              {'form': 'off' },
-        'success':          {'form': 'b24', 'fg': [0x33, 0xaf, 0x55] },
-        'fail':             {'form': 'b24', 'fg': [0xff, 0x33, 0x33] },
-        'phase_lt':         {'form': 'b24', 'fg': [0x33, 0x33, 0xff] },
-        'phase_dk':         {'form': 'b24', 'fg': [0x23, 0x23, 0x7f] },
-        'step_lt':          {'form': 'b24', 'fg': [0xb3, 0x8f, 0x4f] },
-        'step_dk':          {'form': 'b24', 'fg': [0x93, 0x5f, 0x2f] },
-        'shell_cmd':        {'form': 'b24', 'fg': [0x31, 0x31, 0x32] },
-        'key':              {'form': 'b24', 'fg': [0x9f, 0x9f, 0x9f] },
-        'val_uninterp_lt':  {'form': 'b24', 'fg': [0xaf, 0x23, 0xaf] },
-        'val_uninterp_dk':  {'form': 'b24', 'fg': [0x5f, 0x13, 0x5f] },
-        'val_interp':       {'form': 'b24', 'fg': [0x33, 0x33, 0xff] },
-        'token_type':       {'form': 'b24', 'fg': [0x33, 0xff, 0xff] },
-        'token_value':      {'form': 'b24', 'fg': [0xff, 0x33, 0xff] },
-        'token_depth':      {'form': 'b24', 'fg': [0x33, 0xff, 0x33] },
-        'path_lt':          {'form': 'b24', 'fg': [0x33, 0xaf, 0xaf] },
-        'path_dk':          {'form': 'b24', 'fg': [0x13, 0x5f, 0x8f] },
-        'file_type_lt':     {'form': 'b24', 'fg': [0x63, 0x8f, 0xcf] },
-        'file_type_dk':     {'form': 'b24', 'fg': [0x43, 0x5f, 0x9f] },
-        'action_lt':        {'form': 'b24', 'fg': [0xf3, 0x7f, 0x0f] },
-        'action_dk':        {'form': 'b24', 'fg': [0xa3, 0x4f, 0x00] },
+        'success':          {'form': 'b24', 'fg': (0x33, 0xaf, 0x55) },
+        'fail':             {'form': 'b24', 'fg': (0xff, 0x33, 0x33) },
+        'phase_lt':         {'form': 'b24', 'fg': (0x33, 0x33, 0xff) },
+        'phase_dk':         {'form': 'b24', 'fg': (0x23, 0x23, 0x7f) },
+        'step_lt':          {'form': 'b24', 'fg': (0xb3, 0x8f, 0x4f) },
+        'step_dk':          {'form': 'b24', 'fg': (0x93, 0x5f, 0x2f) },
+        'shell_cmd':        {'form': 'b24', 'fg': (0x31, 0x31, 0x32) },
+        'key':              {'form': 'b24', 'fg': (0x9f, 0x9f, 0x9f) },
+        'val_uninterp_lt':  {'form': 'b24', 'fg': (0xaf, 0x23, 0xaf) },
+        'val_uninterp_dk':  {'form': 'b24', 'fg': (0x5f, 0x13, 0x5f) },
+        'val_interp':       {'form': 'b24', 'fg': (0x33, 0x33, 0xff) },
+        'token_type':       {'form': 'b24', 'fg': (0x33, 0xff, 0xff) },
+        'token_value':      {'form': 'b24', 'fg': (0xff, 0x33, 0xff) },
+        'token_depth':      {'form': 'b24', 'fg': (0x33, 0xff, 0x33) },
+        'path_lt':          {'form': 'b24', 'fg': (0x33, 0xaf, 0xaf) },
+        'path_dk':          {'form': 'b24', 'fg': (0x13, 0x5f, 0x8f) },
+        'file_type_lt':     {'form': 'b24', 'fg': (0x63, 0x8f, 0xcf) },
+        'file_type_dk':     {'form': 'b24', 'fg': (0x43, 0x5f, 0x9f) },
+        'action_lt':        {'form': 'b24', 'fg': (0xf3, 0x7f, 0x0f) },
+        'action_dk':        {'form': 'b24', 'fg': (0xa3, 0x4f, 0x00) },
     },
     'colors_8bit': {
         'off':              {'form': 'off' },
@@ -236,12 +236,18 @@ def set_color(color_set: dict[str, dict[str, str]], color: str):
         if form == 'off':
             return a.off
         if form == 'b24':
-            return (f'{a.b24_fg(*fg) if fg else ""}'
-                    f'{a.b24_bg(*bg) if bg else ""}')
+            assert isinstance(fg, tuple)
+            assert isinstance(bg, tuple)
+            return (f'{a.b24_fg(fg) if fg else ""}'
+                    f'{a.b24_bg(bg) if bg else ""}')
         if form == 'b8':
+            assert isinstance(fg, int)
+            assert isinstance(bg, int)
             return (f'{a.b8_fg(fg) if fg else ""}'
                     f'{a.b8_bg(bg) if bg else ""}')
         if form == 'named':
+            assert isinstance(fg, str)
+            assert isinstance(bg, str)
             return (f'{a.named_fg[fg] if fg else ""}'
                     f'{a.named_bg[bg] if bg else ""}')
     return ''
