@@ -33,7 +33,7 @@ class ArchivePhase(CFamilyBuildPhase):
         objs.extend(prebuilt_objs)
         self.record_file_operation(
             objs,
-            FileData(archive_path, 'static_library', self),
+            FileData(archive_path, 'archive', self),
             'archive')
 
     def do_action_build(self, action: Action):

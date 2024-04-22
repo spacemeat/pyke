@@ -4,6 +4,7 @@
 import copy
 from enum import Enum
 from typing import Any
+from .options_parser import parse_value
 from .utilities import (re_interp_option, InvalidOptionOperation)
 
 

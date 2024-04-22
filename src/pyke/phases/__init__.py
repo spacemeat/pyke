@@ -1,6 +1,7 @@
 ''' The phases directory imports. '''
 
 from .phase import Phase
+from .command_phase import CommandPhase
 from .c_family_build import CFamilyBuildPhase
 from .compile import CompilePhase
 from .archive import ArchivePhase

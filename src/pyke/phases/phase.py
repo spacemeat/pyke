@@ -9,7 +9,7 @@ import inspect
 from os.path import relpath
 from pathlib import Path
 import sys
-from typing import Type, TypeVar, TypeAlias, Iterable
+from typing import Type, TypeVar, TypeAlias, Iterable, Any
 from typing_extensions import Self
 
 from ..action import (Action, ResultCode, Step, Result,
@@ -87,6 +87,29 @@ class Phase:
             'colors_dict': '{colors_{colors}}',
             # Color table selector. 24bit|8bit|named|none
             'colors': supported_terminal_colors,
+            # Routes action invocations to action calls.
+            'action_map': {},
+            # Select the system build tools. gnu|clang
+            'toolkit': 'gnu',
+            'target_os_gnu': 'posix',
+            'target_os_clang': 'posix',
+            ##'target_os_visualstudio': 'windows',
+            'target_os': '{target_os_{toolkit}}',
+            # Sets debug or release build. You can add your own; see the README.
+            'kind': 'debug',
+            # Project version major value
+            'version_major': '0',
+            # Project version minor value
+            'version_minor': '0',
+            # Project version patch value
+            'version_patch': '0',
+            # Project version build value
+            'version_build': '0',
+            'version_mm': 'v{version_major}.{version_minor}',
+            'version_mmp': 'v{version_major}.{version_minor}.{version_patch}',
+            'version_mmpb': 'v{version_major}.{version_minor}.{version_patch}.{version_build}',
+            # Dotted-values version string.
+            'version': '{version_mmp}',
         }
         self.options |= (options or {})
 
@@ -138,28 +161,27 @@ class Phase:
                 raise CircularDependencyError(
                     f'Attempt to set a circular dependency {new_dep.opt_str("name")} '
                     f'to phase {self.name}. Not cool.')
-            if new_dep in WorkingSet.all_phases:
-                new_dep = new_dep.clone()
-            WorkingSet.all_phases.add(new_dep)
             self.dependencies.append(new_dep)
 
-    def clone(self, options: dict | None = None):
+    def clone(self, options: dict | None = None,
+              dependencies = None):
         ''' Returns a clone of this instance. The clone has the same
         options (also copied) but its own dependencies and action
         results state. '''
-        obj = type(self)(None, self.dependencies)
+        obj = type(self)(None, dependencies)
         obj.options = self.options.clone()
         obj.options |= (options or {})
         return obj
 
     def propagate_group_names(self, group_name: str):
-        ''' Cascades project names to group names in dependency phases.'''
+        ''' Cascades project names to unset group names in dependency phases.'''
         if self.is_project_phase:
             group_name = self.name
             self.name = 'project'
-        self.push_opts({'group': group_name})
-        for phase in self.dependencies:
-            phase.propagate_group_names(group_name)
+        if not self.opt_str('group'):
+            self.push_opts({'group': group_name})
+            for phase in self.dependencies:
+                phase.propagate_group_names(group_name)
 
     def patch_options_in_dependencies(self):
         ''' Opportunity for phases to fix up options before running file operations.'''
@@ -242,64 +264,67 @@ class Phase:
         return val
 
     def opt_t(self, obj_type: Type[T], key: str, overrides: dict | None = None,
-              interpolate: bool = True) -> T:
+              interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a T. '''
         val = self.opt(key, overrides, interpolate)
-        assert isinstance(val, obj_type)
+        if interpolate:
+            if not isinstance(val, obj_type):
+                raise TypeError(f'{self.full_name}:{key} does not match exptected type {obj_type}.'
+                                f' Seems to be a {type(val)} instead.')
         return val
 
     def opt_iter(self, key: str, overrides: dict | None = None,
-                 interpolate: bool = True) -> Iterable:
+                 interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a tuple. '''
         return self.opt_t(Iterable, key, overrides, interpolate)
 
-    def opt_bool(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> bool:
+    def opt_bool(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a bool. '''
         return self.opt_t(bool, key, overrides, interpolate)
 
-    def opt_int(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> int:
+    def opt_int(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be an int. '''
         return self.opt_t(int, key, overrides, interpolate)
 
-    def opt_float(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> float:
+    def opt_float(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a float. '''
         return self.opt_t(float, key, overrides, interpolate)
 
-    def opt_str(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> str:
+    def opt_str(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a string. '''
         return self.opt_t(str, key, overrides, interpolate)
 
-    def opt_tuple(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> tuple:
+    def opt_tuple(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a tuple. '''
         return self.opt_t(tuple, key, overrides, interpolate)
 
-    def opt_list(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> list:
+    def opt_list(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a list. '''
         return self.opt_t(list, key, overrides, interpolate)
 
-    def opt_set(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> set:
+    def opt_set(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a set. '''
         return self.opt_t(set, key, overrides, interpolate)
 
-    def opt_dict(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> dict:
+    def opt_dict(self, key: str, overrides: dict | None = None, interpolate: bool = True) -> Any:
         ''' Returns an option's value, given its key. The option is optionally
         interpolated (by default) with self.options as its local namespace.
         The referenced value must be a dict. '''
@@ -432,9 +457,19 @@ class Phase:
         if action.set_phase(self) != ResultCode.NOT_YET_RUN:
             return
 
-        action_method = getattr(self, 'do_action_' + action.name, None)
-        if action_method:
-            action_method(action)
+        action_methods = []
+        if routes := self.opt_dict('action_map').get(action.name):
+            routes = ensure_list(routes)
+            for route in routes:
+                method = getattr(self, 'do_action_' + route, None)
+                action_methods.append(method)
+        else:
+            method = getattr(self, 'do_action_' + action.name, None)
+            action_methods.append(method)
+
+        for method in action_methods:
+            if method:
+                method(action)
 
     def do_step_delete_file(self, action: Action, depends_on: Steps, path: Path) -> Step:
         ''' Perfoems a file deletion operation as an action step. '''

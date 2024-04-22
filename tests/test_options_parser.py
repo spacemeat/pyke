@@ -851,6 +851,13 @@ class TestObjectify(unittest.TestCase):
         obj = ast.objectify()
         self.assertEqual(obj, cobj)
 
+    def test_objectify_single_quoted_int(self):
+        cast = Ast('"1"')
+        cobj = '1'
+        ast = Ast(cast.value)
+        obj = ast.objectify()
+        self.assertEqual(obj, cobj)
+
     def test_objectify_single_int(self):
         cast = Ast('1')
         cobj = 1

@@ -1,6 +1,7 @@
 ''' Utility bits for various modules.'''
 
 from __future__ import annotations
+import functools
 import re
 import os
 from pathlib import Path
@@ -93,6 +94,20 @@ def input_path_is_newer(in_path: Path, out_path: Path):
 
     outm = out_path.stat().st_mtime if out_path.exists() else 0
     inm = in_path.stat().st_mtime
+    return inm > outm
+
+def any_input_paths_are_newer(in_paths: list[Path], out_paths: list[Path]):
+    if any(not in_path.exists() for in_path in in_paths):
+        raise ValueError('Input files do not exist; cannot compare m-times.')
+
+    if len(in_paths) == 0 or len(out_paths) == 0:
+        return True
+
+    outm = functools.reduce(min,
+               [out_path.stat().st_mtime if out_path.exists() else 0 for out_path in out_paths],
+               32536799999)
+    inm = functools.reduce(max,
+                 [in_path.stat().st_mtime for in_path in in_paths], 0)
     return inm > outm
 
 def do_shell_command(cmd):

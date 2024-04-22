@@ -68,7 +68,7 @@ def print_help():
     ''' Pyke - a Python-powered build system
 
 Usage:
-pyke [invocations]* [overrides | actions]*
+pyke [invocations]* [phases | overrides | actions]*
 
 invocations:
 -v, --version: Prints the version information for pyke, and exits.
@@ -82,12 +82,30 @@ invocations:
     relative to the given anchor directory. If no -m argument is given, pyke
     will look for and run ./make.py.
 
+phases:
+-p, --phases: Specifies one or more phases to set as active phases for the
+    subsequent overrides and actions, providing they do not specify their own.
+    The format is:
+    -p phases
+    'phases' is a comma-separated list of names of phase objects defined in
+    the makefile. Defaults to '@.@', which specifies all phases in the project.
+    All phases are given a group name and shrot name. 'phases' specifies a list
+    of the phases by dotted notation: <group>.<name>. An '@' is a wildcard that
+    signifies all groups or names: 'test.@' names every phase in the 'test'
+    group. For phases whose group is the same as the main project, you can omit
+    the group name. i.e. for a project named 'flexon', the phase 'flexon.link'
+    can be specified by '-p link'.
+    The phase group specified by -p remains in effect until the next -p is
+    encountered. Overrides and actions that specify their own phases overrule
+    the -p for that argument, but do not reset it.
+
 overrides:
 -o, --override: Specifies an option override for subsequenet actions. The
     format for an override is:
     -o [phases:]option[op-value]
     'phases' is a comma-separated list of names of phase objects defined in
     the makefile. Defaults to '@.@', which specifies all phases in the project.
+    This overrules any -p settings for this override.
     'option' specifies the name of an option to modify. 
     'op-value' specifies an operator and value to apply to the option. The
     override is pushed onto a stack for that option. If 'op-value' is not
@@ -98,6 +116,7 @@ actions:
     [phases:]action
     'phases' is a comma-separated list of names of phase objects defined in
     the makefile. Defaults to '@.@', which specifies all phases in the project.
+    This overrules any -p settings for this action.
     Actions such as clean, build, run can be taken on any or all phases. They
     are performed, along with any overrides, in command order. Typical usage
     involves cleaning and building the entire project.
@@ -360,6 +379,8 @@ def main():
     for arg in [*WorkingSet.default_arguments, *sys.argv[idx:]]:
         args.extend(WorkingSet.argument_aliases.get(arg, [arg]))
 
+    affected_phases = get_phases('@.@')
+
     idx = 0
     while idx < len(args):
         arg = args[idx]
@@ -377,7 +398,17 @@ def main():
                    'or any action arguments.')
             return ReturnCode.INVALID_ARGS.value
 
+        if arg.startswith('-p') or arg == '--phases':
+            if len(arg) > 2:
+                phases = arg[2:]
+            else:
+                idx += 1
+                phases = args[idx]
+            affected_phases = get_phases(phases)
+
         if arg.startswith('-o') or arg == '--override':
+            arg_affected_phases = []
+
             override = ''
             if len(arg) > 2:
                 override = arg[2:]
@@ -385,7 +416,6 @@ def main():
                 idx += 1
                 override = args[idx]
 
-            affected_phases = []
             using_phase_addr = False
             if ':' in override:
                 if '=' in override:
@@ -396,9 +426,9 @@ def main():
 
             if using_phase_addr:
                 phase_labels, override = override.split(':', 1)
-                affected_phases = get_phases(phase_labels)
+                arg_affected_phases = get_phases(phase_labels)
             else:
-                affected_phases = get_phases('@.@')
+                arg_affected_phases = affected_phases
 
             if '=' in override:
                 k, v = override.split('=', 1)
@@ -410,29 +440,30 @@ def main():
                     op = OptionOp.REPLACE
                     k = k.strip()
                 v = parse_value(v.strip())
-                for active_phase in affected_phases:
+                for active_phase in arg_affected_phases:
                     active_phase.push_opts({k: Op(op, v)})
             else:
-                for active_phase in affected_phases:
+                for active_phase in arg_affected_phases:
                     active_phase.pop_opts([override])
 
             file_operations_are_dirty = True
 
         else:
+            arg_affected_phases = []
+
             if file_operations_are_dirty:
                 WorkingSet.main_phase.compute_file_operations_in_dependencies()
                 file_operations_are_dirty = False
 
-            affected_phases = []
             if ':' in arg:
                 phase_labels, arg = arg.split(':', 1)
-                affected_phases = get_phases(phase_labels)
+                arg_affected_phases = get_phases(phase_labels)
             else:
-                affected_phases = get_phases('@.@')
+                arg_affected_phases = affected_phases
 
             arg = WorkingSet.action_aliases.get(arg, [arg])[0]
             action = Action(arg)
-            for active_phase in affected_phases:
+            for active_phase in arg_affected_phases:
                 active_phase.do(action)
 
             res = action.run()
@@ -445,7 +476,6 @@ def main():
 
     if len(actions_done) == 0:
         WorkingSet.main_phase.compute_file_operations_in_dependencies()
-        affected_phases = get_phases('@.@')
         action = Action(WorkingSet.default_action)
         for active_phase in affected_phases:
             active_phase.do(action)

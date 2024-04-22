@@ -31,6 +31,8 @@ class LinkToExePhase(CFamilyBuildPhase):
                          for prebuilt_obj_path in self.get_all_prebuilt_obj_paths()]
 
         objs = self.get_direct_dependency_output_files('object')
+        objs.extend(self.get_direct_dependency_output_files('archive'))
+        objs.extend(self.get_direct_dependency_output_files('shared_object'))
         objs.extend(prebuilt_objs)
         self.record_file_operation(
             objs,

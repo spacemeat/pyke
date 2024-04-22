@@ -126,7 +126,7 @@ In a nutshell, a string value in an option can have all or part of it enclosed i
 
 ## Phases
 
-Most phases generally represent the transformation of files--inputs to outputs. Any useful build phase will have input files and output files. Some of these may be source, authored by developers. Some may be created by compiling source to objects, linking objects to executables or libraries, cloning repos, or running code generation tools. When the outputs of one phase are the inputs of another, the one is a `dependency` of the other. Dependencies are set in the makefile explicitly, and their output->input mechanistry is automatic once set.
+Most phases generally represent the transformation of files--inputs to outputs. Any useful build phase will have input files and output files. Some of these may be source, authored by developers. Some may be created by compiling source to objects, linking objects to executables or libraries, cloning repositories, or running code generation tools. When the outputs of one phase are the inputs of another, the one is a `dependency` of the other. Dependencies are set in the makefile explicitly, and their output->input mechanistry is automatic once set.
 
 Each operation of a build, such as the compilation of a single source file, may have a dedicated phase. C/C++ builds that are more complex than "simple" above may have a `CompilePhase` instance dedicated to each single source file->object file transformation, and one for each link operation, etc. Phases can be `cloned`, and their options as set at the time of cloning are copied with them. So, a template `CompilePhase` can be preset, and each clone made have its requisite source file set to `src`. Each `CompilePhase` object would then be set as a dependency of a `LinkToExePhase` object, which will automatically gather the generated object files from each `CompilePhase` for linking. Such an example makefile might look like this (with an additional few source files in a differnt directory, for spice):
 
@@ -164,6 +164,7 @@ Here, we're creating a prototype `CompilePhase` object, and storing clones of it
 
 Pyke comes with some built-in `Phase` classes--not many yet, but it's early still:
 * `class Phase`: Common base class for all other phases.
+* `class CommandPhase(Phase)`: A generic shell command phase. Often serves as a base class for a custom build step.
 * `class CFamilyBuildPhase(Phase)`: Common base class for building C and C++ projects. You won't decleare objecs of this type, but rather subclasses of it, as it does not actually implement many `action`s.
 * `class CompilePhase(CFamilyBuildPhase)`: Phase for compiling a single source file to a single object file.
 * `class ArchivePhase(CFamilyBuildPhase)`: Phase for building static libraries out of object files.
@@ -177,6 +178,7 @@ Pyke comes with some built-in `Phase` classes--not many yet, but it's early stil
 An easier view of the class heierarchy:
 ```
 Phase
+├── CommandPhase
 ├── CFamilyBuildPhase
 │   ├── CompilePhase
 │   ├── ArchivePhase
@@ -192,10 +194,10 @@ Phase
 
 As mentioned, dependencies among phases are set in the makefile. There are several things to know about dependency relationships:
 * Mostly what dependencies do is generate the files other dependent phases need.
-* They cannot be cyclical. The dependency graph must not contain loops, though diamond relationships are fine. (Phases referenced from more than one dependent are cloned, so there is technically never a diamond graph once actions start.)
+* They cannot be cyclical. The dependency graph must not contain loops, though diamond relationships are fine.
 * Option overrides and actions that are specified to multiple phases in a dependency tree happen in reverse depth-first order. The deepest dependency phases act first; this way, dependencies that build objects will happen before those that depend on them to build libraries, etc. When setting actions and overrides from the command line, the default is to set them to all phases, so whole dependency graphs can be levered at once.
 
-If your project has multiple steps to build static libraries or shared objects (dynamic libraries) which are then used by other binaries in the build, you can make them dependencies of the built binary phases that use them. The appropriate directories and file references will automatically be resolved. Further, depnding on the properties of the project, appropriate dynamic lookup options will be inserted as well (like `-rpath` options for POSIX systems).
+If your project has multiple steps to build static libraries or shared objects (dynamic libraries) which are then used by other binaries in the build, you can make them dependencies of the built binary phases that use them. The appropriate directories and file references will automatically be resolved. Further, depnding on the properties of the project, appropriate dynamic lookup options will be inserted as well (like `-rpath` options for UNIX-like systems).
 
 ## Actions
 
@@ -210,6 +212,7 @@ Currently, the supported actions in each built-in phase are:
 |phase class|actions
 |---|---
 |Phase|clean; clean_build_directory; report_actions; report_files; report_options
+|CommandPhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options) 
 |CFamilyBuildPhase|(inherited: clean; clean_build_directory; report_actions; report_files; report_options)
 |CompilePhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
 |ArchivePhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
@@ -228,7 +231,7 @@ These can be spcified on the command line. Multiple actions can be taken in succ
 * `clean` specifies that a phase will delete the files it is responsible for making.
 * `clean_build_directory` specifies that the entire build directory tree will be deleted.
 * `build` is the build action. This generates the build artifacts.
-* `run` runs built executables in place.
+* `run` runs built executables in place. Note that CommandPhase commands happen on the `build` action.
 
 ### Action aliases
 
@@ -287,7 +290,7 @@ So how does one specify that an override *modifies* an option, instead of *repla
 |dict|-=  |any|the entry is removed from the dict by key
 |dict|\|=  |dict|the result is the union with the dict
 
-<!--TODO: some examples here-->
+We'll see some examples below.
 
 ### Viewing options
 
@@ -439,7 +442,7 @@ Note the use of the `Op` class, which signals that the override is an operationa
 
 > Note the difference between *appending* one item to a list with `+=`, as in the phase constructor above, and *extending* multiple items to the list with `*=`, as in the push_opts() call.
 
-You can pop the override with `Phase.pop_opts(key)`. (Without the arguemts or operators.) This is obviously a contrived example, but it showcases the `push_opts` method.
+You can pop the override with `Phase.pop_opts(key)`.
 
 > `Phase.push_opts` is defined on `Phase` as:
 > ```python def push_opts(self, overrides: dict, include_deps: bool = False, include_project_deps: bool = False) ```
@@ -488,6 +491,14 @@ There are a few options that are uiversal to pyke, regardless of the type of pro
 |colors_none   |color_table_none   |Color table for no ANSI color codes.
 |colors_dict   |'{colors_{colors}}'   |Color table accessor based on {colors}.
 |colors   |supported_terminal_colors   |Color table selector. 24bit|8bit|named|none
+|action_map   |{}   |Routes action invocations to action calls.
+|toolkit   |'gnu'   |Select the system build tools. gnu|clang
+|kind   |'debug'   |Sets debug or release build. You can add your own; see the README.
+|version_major   |'0'   |Project version major value
+|version_minor   |'0'   |Project version minor value
+|version_patch   |'0'   |Project version patch value
+|version_build   |'0'   |Project version build value
+|version   |'{version_mmp}'   |Dotted-values version string.
 
 When running pyke from a directory that is different from your makefile's directory, you can specify the makefile path with `-m`. This is discussed below, but by default both the project root directory (`project_anchor`) and generated output root directory (`gen_anchor`) are relative to the makefile's directory, regardless of where you invoke from. However, this behavior can be modified. By overriding `gen_anchor` to a different directory in your file system, you can cause all the generated outputs to be placed anywhere. The generated directory structure remains the same, just at a different root location. Note that intermediate files which are inputs of later phases, like compiled object files, are still resolved correctly, as *any* generated file is rooted by `gen_anchor`. Likewise, any file that is expected as part of the project inputs created by developers (anything you might check in to your project repository, say) is anchored by `project_anchor`.
 
@@ -499,10 +510,8 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 
 |option|default|usage
 |---|---|---
-|toolkit   |'gnu'   |Select the system build tools. gnu|clang
 |language   |'c++'   |Sets the source language. c|c++
 |language_version   |'23'   |Sets the source language version.
-|kind   |'debug'   |Sets debug or release build. You can add your own; see the README.
 |gnuclang_warnings   |['all', 'extra', 'error']   |Sets the warning flags for gnu and clang tools.
 |gnuclang_debug_debug_level   |'2'   |Sets the debug level (-gn flga) for gnu and clang tools when in debug mode.
 |gnuclang_debug_optimization   |'g'   |Sets the optimization level (-On flag) for gnu and clang tools when in debug mode.
@@ -522,7 +531,6 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |libs   |{}   |Collection of library archives or shared objects or pkg-configs to link. Format is: { 'foo', type } where type is 'archive' | 'shared_object' | 'package'
 |prebuilt_obj_dir   |'prebuilt_obj'   |Specifies the directory where prebuilt objects (say from a binary distribution) are found.
 |prebuilt_objs   |[]   |List of prebuilt objects to link against.
-|build_dir   |'build'   |Top-level build directory.
 |build_detail   |'{group}.{toolkit}.{kind}'   |Target-specific build directory.
 |obj_dir   |'int'   |Directory where intermediate artifacts like objects are placed.
 |obj_basename   |''   |The base filename of a taret object file.
@@ -531,13 +539,13 @@ Pyke began as a build tool for C and C++ style projects. The requisite classes a
 |archive_dir   |'lib'   |Where to emplace archive library artifacts.
 |archive_basename   |'{name}'   |The base filename of a target archive file.
 |posix_archive_file   |'lib{archive_basename}.a'   |How archives are named on a POSIX system.
-|rpath   |{}   |Collection of library search paths built into the target binary. Formatted like: { 'directory': True } where the boolean value specifies whether to use $ORIGIN. See the -rpath option in the gnu and clang tools. Note that this is automatically managed for dependency library builds.
-|shared_object_dir   |'bin'   |Where to emplace shared object artifacts.
+|rpath   |{}   |Collection of library search paths built into the target binary. Formatted like: { 'directory': True } Where the boolean value specifies whether to use $ORIGIN. See the -rpath option in the gnu and clang tools. Note that this is automatically managed for dependency library builds.
+|shared_object_dir   |'lib'   |Where to emplace shared object artifacts.
 |shared_object_basename   |'{name}'   |The base filename of a shared object file.
 |generate_versioned_sonames   |False   |Whether to place the version number into the artifact, and create the standard soft links.
-|so_major   |1   |Shared object major version number.
-|so_minor   |0   |Shared object minor version number.
-|so_patch   |0   |Shared object patch version number.
+|so_major   |'{version_major}'   |Shared object major version number.
+|so_minor   |'{version_minor}'   |Shared object minor version number.
+|so_patch   |'{version_patch}'   |Shared object patch version number.
 |posix_so_linker_name   |'lib{shared_object_basename}.so'   |How shared objects are unversioned-naemd on POSIX systems.
 |posix_so_soname   |'{posix_so_linker_name}.{so_major}'   |How shared objects are major-version-only named on POSIX systems.
 |posix_so_real_name   |'{posix_so_soname}.{so_minor}.{so_patch}'   |How shared objects are full-version named on POSIX systems.
@@ -602,7 +610,7 @@ Similar options are defined for static archives and shared objects. Of course, y
 The general form of a pyke command is:
 
 ```
-pyke [-v | -h | [-c]? [-m makefile]? ]? [[-o [phase[,phase]*:]key[op_value]]* | [phase[,phase]*:][action]* ]*
+pyke [-v | -h | [-c]? [-m makefile]? ]? [[-p [phase[,phase]*]]* | [-o [phase[,phase]*:]key[op_value]]* | [phase[,phase]*:][action]* ]*
 ```
 
 Notably, -o and action arguments are processed in command-line order. You can set the phases to use with each, setting some option overrides, performing actions, setting different options, perform more actions, etc. If no phases are specified, the overrides and actions apply to all phases, in reverse depth-first dependency order.
@@ -612,12 +620,13 @@ The command line arguments are:
 * `-h`, `--help`: Prints a help document.
 * `-c`, `--cache_makefile`: Allows the makefile's __cache__ to be generated. This might speed up complex builds, but they'd hvae to be really complex. Must precede any arguments that are not -v, -h, or -m.
 * `-m`, `--module`: Specifies the module (pyke file), or its directory if the pyke file is called 'make.py', to be run. Must precede any arguments that are not -v, -h, or -c. If no -m argument is given, pyke will look for and run ./make.py.
+* `-p`, `--phases`: Specifies a subset of phases on which to apply subsequent overrides or actions, if such arguments do not provide their own. Each `-p` encountered resets the subgroup. Option and action arguments that provide their own phases overrule `-p` for that argument, but do not reset it.
 * `-o`, `--override`: Specifies an option override to apply to some or all phases for subsequenet actions. If the option is given as a key-op-value, the override is pushed; if it is only a key (with no operator-value pair) the override is popped.
 * `action`: Arguments given without switches specify actions to be taken on the indicated phases. Any action on any phase which doesn't support it is quietly ignored.
 
 ### Referencing phases
 
-Phases have names (`short name`), as seen, but also have `full name`s, given as "group.name". The group name of a phase is overridden *after the makefile is run* to be the short name of the closest dependency *project phase*. Project phases are thereafter given the short name `project`. This naming scheme allows for subprojects to be referenced by the group name on the CLI. We'll see some examples.
+Phases have names (`short name`s), as seen, but also have `full name`s, given as "group.name". For each phase, if the group name is not explicitly set, it is overridden *after the makefile is run* to be the short name of the closest dependency *project phase*. Project phases are thereafter given the short name `project`. This naming scheme allows for subprojects to be referenced by the group name on the CLI. We'll see some examples.
 
 The main project group is named according to the name of the makefile, unless it is specifically called `make.py`, in which it is name of the directory in which it resides. So, if your project's root contins the makefile, and is named like this:
 ```
@@ -645,7 +654,7 @@ asset_converter (ProjectPhase)
         └── compile_dxf (CompilePhase)
 ```
 
-Here, each phase will be named by its owning project phase and its non-project phase names:
+Here, each phase will be fully named by its owning project phase and its non-project phase names:
 * `asset_converter.project`
 * `image_converter.project`
 * `image_converter.link`
@@ -895,8 +904,6 @@ Adding new build kinds is straightforward if you're just trying to customize the
 
 When selecting the build kind with `-o kind=smallest`, these overrides should be selected for the build.
 
-<!-- TODO: Actually test this. -->
-
 ### Setting colors
 
 The colorful output can be helpful, but not if you're on an incapable terminal, or just don't like them or want them at all. You can select a color palette:
@@ -920,7 +927,7 @@ That gets cumbersome. You can change an individual color much more easily:
 pyke -o "colors_24bit|={shell_cmd: {form:b24, fg:[255, 255, 255]}}"
 ```
 
-These are likely best set as default arguments in `~/.config/pyke/pyke-config.json`. (See [configuring pyke](#configuring-pyke).):
+These are likely best set as default arguments in `$HOME/.config/pyke/pyke-config.json`. (See [configuring pyke](#configuring-pyke).):
 
 ```json
 {

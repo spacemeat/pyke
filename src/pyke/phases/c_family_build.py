@@ -22,17 +22,10 @@ class CFamilyBuildPhase(Phase):
     def __init__(self, options: dict | None = None, dependencies = None):
         super().__init__(None, dependencies)
         self.options |= {
-            # Select the system build tools. gnu|clang
-            'toolkit': 'gnu',
             # Sets the source language. c|c++
             'language': 'c++',
             # Sets the source language version.
             'language_version': '23',
-            # Sets debug or release build. You can add your own; see the README.
-            'kind': 'debug',
-            'target_os_gnu': 'posix',
-            'target_os_clang': 'posix',
-            ##'target_os_visualstudio': 'windows',
             'tool_args_gnu': 'gnuclang',
             'tool_args_clang': 'gnuclang',
             'tool_args_visualstudio': 'visualstudio',
@@ -116,7 +109,7 @@ class CFamilyBuildPhase(Phase):
             # How object files are named on a POSIX system.
             'posix_obj_file': '{obj_basename}.o',
             ##'windows_obj_file': '{obj_basename}.obj',
-            'obj_file': '{{target_os_{toolkit}}_obj_file}',
+            'obj_file': '{{target_os}_obj_file}',
             'obj_anchor': '{build_detail_anchor}/{obj_dir}',
             'obj_path': '{obj_anchor}/{obj_file}',
 
@@ -130,7 +123,7 @@ class CFamilyBuildPhase(Phase):
             # How archives are named on a POSIX system.
             'posix_archive_file': 'lib{archive_basename}.a',
             ##'windows_archive_file': '{archive_basename}.lib',
-            'archive_file': '{{target_os_{toolkit}}_archive_file}',
+            'archive_file': '{{target_os}_archive_file}',
             'archive_anchor': '{build_detail_anchor}/{archive_dir}',
             'archive_path': '{archive_anchor}/{archive_file}',
 
@@ -142,18 +135,18 @@ class CFamilyBuildPhase(Phase):
             'rpath': {},
 
             # Where to emplace shared object artifacts.
-            'shared_object_dir': 'bin',
+            'shared_object_dir': 'lib',
             # The base filename of a shared object file.
             'shared_object_basename': '{name}',
             # Whether to place the version number into the artifact, and create the standard soft
             # links.
             'generate_versioned_sonames': False,
             # Shared object major version number.
-            'so_major': 1,
+            'so_major': '{version_major}',
             # Shared object minor version number.
-            'so_minor': 0,
+            'so_minor': '{version_minor}',
             # Shared object patch version number.
-            'so_patch': 0,
+            'so_patch': '{version_patch}',
             # How shared objects are unversioned-naemd on POSIX systems.
             'posix_so_linker_name': 'lib{shared_object_basename}.so',
             # How shared objects are major-version-only named on POSIX systems.
@@ -163,7 +156,7 @@ class CFamilyBuildPhase(Phase):
             # The actual target name for a shared object. May be redefined for some project types.
             'posix_shared_object_file': '{posix_so_linker_name}',
             ##'windows_shared_object_file': '{shared_object_basename}.dll',
-            'shared_object_file': '{{target_os_{toolkit}}_shared_object_file}',
+            'shared_object_file': '{{target_os}_shared_object_file}',
             'shared_object_anchor': '{build_detail_anchor}/{shared_object_dir}',
             'shared_object_path': '{shared_object_anchor}/{shared_object_file}',
 
@@ -174,7 +167,7 @@ class CFamilyBuildPhase(Phase):
             # How executable files are named on POSIX systems.
             'posix_exe_file': '{exe_basename}',
             ##'windows_exe_file': '{exe_basename}.exe',
-            'exe_file': '{{target_os_{toolkit}}_exe_file}',
+            'exe_file': '{{target_os}_exe_file}',
             'exe_anchor': '{build_detail_anchor}/{exe_dir}',
             'exe_path': '{exe_anchor}/{exe_file}',
 
