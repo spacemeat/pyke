@@ -20,25 +20,27 @@ Pyke comes with some basic classes (called `Phase`s) which can manage basic task
 
 ## Installing pyke
 
-Pyke is very nearly ready for its first submission to PyPI. Until then, clone this repo and install locally:
+Couldn't be easier. You need to be running python3.10 at least, and have pip installed. To install it globally:
+
+```
+$ python3 -m pip install pyke-build
+```
+
+or,
+
+```
+$ python3 -m pip install --user pyke-build
+```
+
+You can optionally put it in a virtual environment, which may be the better idea.
+
+Alternatively, you can clone this repo and install locally:
 
 ```
 $ git clone git@github.com:spacemeat/pyke
 $ cd pyke
-$ pip install .
+$ python3 -m pip install .
 ```
-<!--
-Couldn't be easier. You need to be running python3.10 at least, and have pip installed. To install it globally:
-
-```
-$ pip install pyke
-```
-or,
-```
-$ pip install --user pyke
-```
--->
-You can optionally put it in a virtual environment, which may be the better idea.
 
 ## Using pyke
 
