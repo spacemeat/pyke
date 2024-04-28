@@ -15,6 +15,7 @@ import sys
 import json
 import traceback
 
+from . import __version__
 from .action import Action
 from .options import OptionOp, Op
 from .options_parser import parse_value
@@ -58,8 +59,7 @@ def run_make_file(pyke_path, cache_make):
 
 def print_version():
     ''' Print the version.'''
-    # TODO: autoomate this against git tag
-    print ('pyke version 0.0.1')
+    print (f'pyke version {__version__}')
 
 
 def print_help():
