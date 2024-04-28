@@ -246,6 +246,20 @@ There are built-in aliases for the defined actions, to save some effort:
 |cbd|clean_build_directory
 |b|build
 
+### Action mapping
+
+You may wish to associate one action to another. For example, an executable that `build` creates may itself be part of a later `build` action, but it can run only on the `run` action. You can wire up an action to be performed on another action by setting a particular `action map` as an option:
+
+```python
+doc_builder = p.CompileAndLinkToExePhase({
+    ...
+    'action_map': { 'build_docs': [ 'build', 'run' ]},
+    ...
+})
+```
+
+This specifies that, on the `build_docs` action, this phase should run its `do_action_build` method, followed by its `do_action_run` method. This allows for some flexibility in the action set for your makefile, especially if you're using a built-in or 3rd-party phase class.
+
 ## Options
 
 Options do not have to be strings. They can be any Python type, really, with the following criteria:

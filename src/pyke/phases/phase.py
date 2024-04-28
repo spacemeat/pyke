@@ -180,8 +180,10 @@ class Phase:
             self.name = 'project'
         if not self.opt_str('group'):
             self.push_opts({'group': group_name})
-            for phase in self.dependencies:
-                phase.propagate_group_names(group_name)
+        else:
+            group_name = self.opt_str('group')
+        for phase in self.dependencies:
+            phase.propagate_group_names(group_name)
 
     def patch_options_in_dependencies(self):
         ''' Opportunity for phases to fix up options before running file operations.'''
