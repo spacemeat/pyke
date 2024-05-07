@@ -482,6 +482,8 @@ $ pyke -o "my_set_of_one={'foo'}" ...
 
 Python's built-in literals True, False, and None are defined as options, and can be interpolated as {true}, {false}, and {none}.
 
+Much like older-style subshell invocation, you can enquote a shell command in `\``s, and the command will be executed, with its output inserted in place. This is most useful in config files, since you're already in a shell on the command line.
+
 There is more to say about how value overrides are parsed. Smartly using quotes, commas, or spaces to differentiate strings from interpolators will usually get you where you want. Generally, though, setting options in the makefile will probably be preferred.
 
 ### Base pyke options

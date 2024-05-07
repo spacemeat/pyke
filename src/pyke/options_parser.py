@@ -4,12 +4,13 @@ from dataclasses import dataclass
 from enum import Enum
 import re
 from typing import Any, Callable
-from .utilities import InvalidOptionValue
+from .utilities import InvalidOptionValue, do_shell_command
 
 class Token(Enum):
     ''' Encodes tokens found in override values parsed from a string. '''
     QSTRING = '\''
     DQSTRING = '"'
+    BQSTRING = '`'
     LPAREN = '('
     RPAREN = ')'
     LBRACKET = '['
@@ -82,11 +83,13 @@ class Ast:
             while idx < len(self.value):
                 cur = self.value[idx]
                 match cur:
-                    case '\'' | '"':
+                    case '\'' | '"' | '`':
                         if cur == '\'':
                             self.toks.append(TokenObj(Token.QSTRING, '', depth))
-                        else:
+                        elif cur == '"':
                             self.toks.append(TokenObj(Token.DQSTRING, '', depth))
+                        else:
+                            self.toks.append(TokenObj(Token.BQSTRING, '', depth))
                         sidx = idx + 1
                         while sidx < len(self.value):
                             scur = self.value[sidx]
@@ -319,9 +322,15 @@ class Ast:
                 match tok.token:
                     case Token.INT: return int(tok.value, 0)
                     case Token.FLOAT: return float(tok.value)
+                    case Token.STRING: return tok.value
                     case Token.QSTRING: return tok.value
                     case Token.DQSTRING: return tok.value
-                    case Token.STRING: return tok.value
+                    case Token.BQSTRING:
+                        ret, out, err = do_shell_command(tok.value)
+                        if ret != 0:
+                            raise InvalidOptionValue(f'Shell-command option {tok.value} '
+                                                     f'returned "{err}" ({ret}).')
+                        return out.strip()
                 return tok
 
             while tok_idx < len(toks):
