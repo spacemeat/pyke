@@ -717,6 +717,7 @@ An example config might look like this:
 
 ```json
 {
+    "include": ["../pyke-config.json"],
     "argument_aliases": {
         "-noc": "-ocolors=none",
         "-bdb": "dbadmin:build",
@@ -737,6 +738,10 @@ An example config might look like this:
 ```
 
 Each can contain the following sections:
+
+### Include files
+
+These are paths to other JSON files which contribute to the configuration. They are loaded before the rest of this file's contents, which can add to or override as described below. Useful if you have similar configuration for work projects vs. personal projects, or lots of pyke projects which all use the same options. Paths that start with '/' are absolute; otherwise, they are relative to this file's path.
 
 ### Argument aliases
 

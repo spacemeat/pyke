@@ -167,49 +167,84 @@ previous action.
 $ pyke -ocolors={colors_none} clean build run
 ''')
 
-def load_config():
-    ''' Loads aliases from ~/.config/pyke/pyke-config.json or <project-root>/pyke-config.json,
-    overriding in that order. '''
-    def process_config(config):
+class Configurator:
+    ''' Loads configuration jsons.'''
+    def __init__(self):
+        self.set_default_config()
+
+    def load_from_files(self):
+        ''' Loads config from standard files.'''
+        for direc in list(dict.fromkeys([
+                Path.home() / '.config' / 'pyke',
+                WorkingSet.makefile_dir])):
+            file = Path(direc) / 'pyke-config.json'
+            if file.exists():
+                self.load_config_file(file)
+
+    def load_config_file(self, file: Path):
+        ''' Open a file for processing.'''
+        try:
+            with open(file, 'r', encoding='utf-8') as fi:
+                config = json.load(fi)
+                self.process_config(file, config)
+        except (FileNotFoundError, MalformedConfigError) as e:
+            if e is FileNotFoundError:
+                print (f'Could not find config file "{file}".')
+            elif e is MalformedConfigError:
+                print (f'Malformed config file "{file}".')
+            else:
+                print (f'{e}')
+
+    def process_config(self, path: Path | None, config: str):
+        ''' Processes a json config string.'''
         if not isinstance(config, dict):
-            raise MalformedConfigError(f'Config file {file}: Must be a JSON dictonary.')
+            raise MalformedConfigError(f'Config file {path}: Must be a JSON dictonary.')
 
         def read_block(config, subblock, keyname) -> dict[str, list[str]]:
             rets = {}
             if aliases := config.get(subblock):
                 if not isinstance(aliases, dict):
                     raise MalformedConfigError(
-                        f'Config file {file}: "{subblock}" must be a dictionary.')
+                        f'Config file {path}: "{subblock}" must be a dictionary.')
                 for alias, values in aliases.items():
                     if not isinstance(alias, str):
                         raise MalformedConfigError(
-                            f'Config file {file}: "{config}/{keyname}" key must be a string.')
+                            f'Config file {path}: "{config}/{keyname}" key must be a string.')
                     if isinstance(values, str):
                         values = [values]
                     if (not isinstance(values, list) or
                         any(not isinstance(value, str) for value in values)):
                         raise MalformedConfigError(
-                            f'Config file {file}: "{config}/{keyname}" value must be a string '
+                            f'Config file {path}: "{config}/{keyname}" value must be a string '
                             'or a list of strings.')
                     rets[alias] = values
             return rets
+
+        if includes := config.get('include', []):
+            includes = ensure_list(includes)
+            for inc in includes:
+                if path and not str(path).startswith('/'):
+                    inc = path.parent / inc
+                self.load_config_file(inc)
 
         WorkingSet.argument_aliases |= read_block(config, 'argument_aliases', 'argument')
         WorkingSet.action_aliases |= read_block(config, 'action_aliases', 'action')
         if default_action := config.get('default_action'):
             if not isinstance(default_action, str):
                 raise MalformedConfigError(
-                    f'Config file {file}: "default_action" must be a string.')
+                    f'Config file {path}: "default_action" must be a string.')
             WorkingSet.default_action = default_action
         if default_arguments := config.get('default_arguments'):
             if not isinstance(default_arguments, list):
                 raise MalformedConfigError(
-                    f' Config file {file}: "default_arguments" must be a list of strings.')
+                    f' Config file {path}: "default_arguments" must be a list of strings.')
             WorkingSet.default_arguments.extend(default_arguments)
 
-    def set_default_config():
+    def set_default_config(self):
+        ''' Sets the default config options.'''
         default_config = '''
 {
+    "include": [],
     "argument_aliases": {
         "-v0": "-overbosity=0",
         "-v1": "-overbosity=1",
@@ -246,20 +281,8 @@ def load_config():
     "default_arguments": []
 } '''
         config = json.loads(default_config)
-        process_config(config)
+        self.process_config(None, config)
 
-    set_default_config()
-
-    for direc in list(dict.fromkeys([
-            Path.home() / '.config' / 'pyke',
-            WorkingSet.makefile_dir])):
-        file = Path(direc) / 'pyke-config.json'
-        try:
-            with open(file, 'r', encoding='utf-8') as fi:
-                config = json.load(fi)
-                process_config(config)
-        except (FileNotFoundError, MalformedConfigError):
-            pass
 
 def propagate_group_names():
     ''' Cascades project names to group names in dependency phases.'''
@@ -358,7 +381,8 @@ def main():
 
     WorkingSet.makefile_dir = str(make_path.parent)
 
-    load_config()
+    cfg = Configurator()
+    cfg.load_from_files()
 
     project_phase_name = (make_path.parent.name if
         make_path.name == 'make.py'
