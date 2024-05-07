@@ -468,7 +468,7 @@ class CFamilyBuildPhase(Phase):
         ret, _, err = do_shell_command(cmd)
         if ret == 0:
             return self.parse_include_report(err)
-        raise ValueError('Header discovery failed.')
+        return []
 
     def do_step_create_directory(self, action: Action, depends_on: Steps, new_dir: Path) -> Step:
         '''
