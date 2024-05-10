@@ -127,37 +127,32 @@ class Phase:
     def __repr__(self):
         return self.name
 
-    def enumerate_dependencies(self):
+    def iterate_dep_tree(self):
         ''' Enumerates all the dependencies in depth-first order.'''
         for dep in self.dependencies:
-            yield from dep.enumerate_dependencies()
+            yield from dep.iterate_dep_tree()
         yield self
 
-    def find_dependency_by_name(self, name: str):
+    def find_dep(self, name: str):
         ''' Finds the dependency (including self) by name.'''
-        for dep in self.enumerate_dependencies():
-            if dep.opt_str('name') == name:
+        for dep in self.iterate_dep_tree():
+            if name in (dep.name, dep.full_name):
                 return dep
         return None
 
-    def find_in_dependency_tree(self, dep_to_find: Self):
-        ''' Returns whether dep_to_find is in the dependency tree for this phase. '''
-        try:
-            idx = self.dependencies.index(dep_to_find)
-            return self.dependencies[idx]
-        except ValueError:
-            for dep in self.dependencies:
-                phase = dep.find_in_dependency_tree(dep_to_find)
-                if phase is not None:
-                    return phase
-            return None
+    def find_dep_object(self, dep_to_match: Self):
+        ''' Finds the dependency (including self) by name.'''
+        for dep in self.iterate_dep_tree():
+            if dep == dep_to_match:
+                return dep
+        return None
 
     def depend_on(self, new_deps: Self | list[Self]):
         ''' Sets a dependency phase for this phase. Must not be a phase which does not
         depend on this phase already (no circular references allowed). '''
         new_deps = ensure_list(new_deps)
         for new_dep in new_deps:
-            if new_dep.find_in_dependency_tree(self) is not None:
+            if new_dep.find_dep_object(self) is not None:
                 raise CircularDependencyError(
                     f'Attempt to set a circular dependency {new_dep.opt_str("name")} '
                     f'to phase {self.name}. Not cool.')
@@ -187,7 +182,7 @@ class Phase:
 
     def patch_options_in_dependencies(self):
         ''' Opportunity for phases to fix up options before running file operations.'''
-        for dep in list(self.enumerate_dependencies()):
+        for dep in list(self.iterate_dep_tree()):
             dep.patch_options()
 
     def patch_options(self):
@@ -195,7 +190,7 @@ class Phase:
 
     def compute_file_operations_in_dependencies(self):
         ''' Compute file operations dwon the dependency hierarchy.'''
-        for dep in list(self.enumerate_dependencies()):
+        for dep in list(self.iterate_dep_tree()):
             dep.files = PhaseFiles()
             dep.compute_file_operations()
 

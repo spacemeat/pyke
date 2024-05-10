@@ -19,7 +19,7 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
 
     def patch_options(self):
         ''' Fixups run before file operations.'''
-        for dep in self.enumerate_dependencies():
+        for dep in self.iterate_dep_tree():
             dep.push_opts({'relocatable_code': True}, True, True)
 
     def compute_file_operations(self):

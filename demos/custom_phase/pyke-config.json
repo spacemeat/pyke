@@ -1,0 +1,9 @@
+{
+	"include": [
+		"./pyke-subconfig.json"
+	],
+	"action_aliases": {
+		"zot": "clean",
+		"zorch": "clean_build_directory"
+	}
+}

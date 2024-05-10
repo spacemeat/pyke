@@ -1,0 +1,39 @@
+{
+    "include": [],
+    "argument_aliases": {
+        "-v0": "-overbosity=0",
+        "-v1": "-overbosity=1",
+        "-v2": "-overbosity=2",
+        "-rv0": "-oreport_verbosity=0",
+        "-rv1": "-oreport_verbosity=1",
+        "-rv2": "-oreport_verbosity=2",
+        "-release": "-okind=release",
+        "-versioned_sos": ["-oposix_shared_object_file={posix_so_real_name}",
+                           "-ogenerate_versioned_sonames=True"],
+        "vsos": ["-oposix_shared_object_file={posix_so_real_name}",
+                 "-ogenerate_versioned_sonames=True"],
+
+        "-deploy_install": ["-orpath_deps=False",
+                            "-omoveable_binaries=False",
+                            "-oposix_shared_object_file={posix_so_real_name}",
+                            "-ogenerate_versioned_sonames=true",
+                            "-okind=release"],
+        "-deploy_moveable": ["-orpath_deps=True",
+                             "-omoveable_binaries=True",
+                             "-oposix_shared_object_file={posix_so_linker_name}",
+                             "-ogenerate_versioned_sonames=false",
+                             "-okind=release"]
+    },
+    "action_aliases": {
+        "opts": "report_options",
+        "files": "report_files",
+        "actions": "report_actions",
+		"config": "report_configuration",
+        "c": "clean",
+        "cbd": "clean_build_directory",
+        "b": "build"
+    },
+    "default_action": "report_actions",
+    "default_arguments": [],
+    "cache_makefile_module": false
+}

@@ -97,15 +97,19 @@ def input_path_is_newer(in_path: Path, out_path: Path):
     return inm > outm
 
 def any_input_paths_are_newer(in_paths: list[Path], out_paths: list[Path]):
+    ''' Compares the modified times of each file in in_paths to each in out_paths. If any in
+    in_paths are newer than any in out_paths, or any in out_paths don't actually exist, then
+    return True.'''
     if any(not in_path.exists() for in_path in in_paths):
         raise ValueError('Input files do not exist; cannot compare m-times.')
 
     if len(in_paths) == 0 or len(out_paths) == 0:
         return True
 
+    max_mtime = 32536799999
     outm = functools.reduce(min,
                [out_path.stat().st_mtime if out_path.exists() else 0 for out_path in out_paths],
-               32536799999)
+               max_mtime)
     inm = functools.reduce(max,
                  [in_path.stat().st_mtime for in_path in in_paths], 0)
     return inm > outm
@@ -138,12 +142,9 @@ def determine_color_support() -> str:
 
 class WorkingSet:
     ''' Keeps track of globally-available values.'''
-    makefile_dir = ''
-    argument_aliases = {}
-    action_aliases = {}
-    default_action = ''
-    default_arguments = []
-    main_phase: Phase
+    makefile_dir = Path()
+    loaded_makefiles: dict[Path, Phase] = {}
+    main_phase: Phase | None = None
     all_phases: set[Phase] = set()
 
 ansi_colors = {

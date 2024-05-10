@@ -12,19 +12,21 @@ import importlib.machinery
 import os
 from pathlib import Path
 import sys
-import json
 import traceback
 
 from . import __version__
 from .action import Action
+from .config import Configurator
 from .options import OptionOp, Op
 from .options_parser import parse_value
 from .phases.phase import Phase
 from .phases.project import ProjectPhase
-from .utilities import WorkingSet, MalformedConfigError, ensure_list
+from .utilities import PhaseNotFoundError, WorkingSet, ensure_list
 
-def get_main_phase():
+def get_main_phase() -> Phase:
     ''' Returns the main project created for the makefile.'''
+    if not WorkingSet.main_phase:
+        raise PhaseNotFoundError('No main phase found. Seems unlikely, but there it is.')
     return WorkingSet.main_phase
 
 class ReturnCode(Enum):
@@ -35,28 +37,6 @@ class ReturnCode(Enum):
     INVALID_ARGS = 3
     ACTION_FAILED = 4
 
-def run_make_file(pyke_path, cache_make):
-    ''' Loads and runs the user-created make file.'''
-    if pyke_path.exists():
-        try:
-            sys.dont_write_bytecode = not cache_make
-            spec = importlib.util.spec_from_file_location('pyke', pyke_path)
-            if spec:
-                module = importlib.util.module_from_spec(spec)
-                loader = spec.loader
-                if loader:
-                    loader.exec_module(module)
-                    sys.dont_write_bytecode = cache_make
-                    return
-        except Exception:
-            print (f'"{pyke_path}" could not be loaded.')
-            traceback.print_exc()
-            sys.exit(ReturnCode.MAKEFILE_DID_NOT_LOAD.value)
-    else:
-        print (f'"{pyke_path}" was not found.')
-        sys.exit(ReturnCode.MAKEFILE_NOT_FOUND.value)
-
-
 def print_version():
     ''' Print the version.'''
     print (f'pyke version {__version__}')
@@ -65,7 +45,7 @@ def print_version():
 def print_help():
     ''' Send help.'''
     print (
-    ''' Pyke - a Python-powered build system
+''' Pyke - a Python-powered build system
 
 Usage:
 pyke [invocations]* [phases | overrides | actions]*
@@ -73,14 +53,15 @@ pyke [invocations]* [phases | overrides | actions]*
 invocations:
 -v, --version: Prints the version information for pyke, and exits.
 -h, --help: Prints a help document.
--c, --cache_makefile: Allows the makefile's __cache__ to be generated. This
-    might speed up complex builds, but they'd hvae to be really complex to
-    make a noticeable difference.
 -m, --makefile: Specifies the makefile (pyke file) to be run. Actions are
     performed relative to the makefile's directory, unless an option override
     (-o gen_anchor=dir/to/gen) is given, in which case they are performed
     relative to the given anchor directory. If no -m argument is given, pyke
     will look for and run ./make.py.
+-n, --noconfig: Specifies that the pyke-config.json file adjacent to the
+    makefile should not be loaded.
+-c, --report-config: Prints the full configuration combined from all loaded
+    config files, and exits.
 
 phases:
 -p, --phases: Specifies one or more phases to set as active phases for the
@@ -167,131 +148,78 @@ previous action.
 $ pyke -ocolors={colors_none} clean build run
 ''')
 
-class Configurator:
-    ''' Loads configuration jsons.'''
-    def __init__(self):
-        self.set_default_config()
-
-    def load_from_files(self):
-        ''' Loads config from standard files.'''
-        for direc in list(dict.fromkeys([
-                Path.home() / '.config' / 'pyke',
-                WorkingSet.makefile_dir])):
-            file = Path(direc) / 'pyke-config.json'
-            if file.exists():
-                self.load_config_file(file)
-
-    def load_config_file(self, file: Path):
-        ''' Open a file for processing.'''
+def _run_makefile(pyke_path):
+    ''' Loads and runs the user-created make file.'''
+    cache_make = Configurator.cache_makefile_module
+    if pyke_path.exists():
         try:
-            with open(file, 'r', encoding='utf-8') as fi:
-                config = json.load(fi)
-                self.process_config(file, config)
-        except (FileNotFoundError, MalformedConfigError) as e:
-            if e is FileNotFoundError:
-                print (f'Could not find config file "{file}".')
-            elif e is MalformedConfigError:
-                print (f'Malformed config file "{file}".')
-            else:
-                print (f'{e}')
+            old_dont_write_bytecode = sys.dont_write_bytecode
+            sys.dont_write_bytecode = not cache_make
+            spec = importlib.util.spec_from_file_location('pyke', pyke_path)
+            if spec:
+                module = importlib.util.module_from_spec(spec)
+                loader = spec.loader
+                if loader:
+                    loader.exec_module(module)
+                    sys.dont_write_bytecode = old_dont_write_bytecode
+                    return
+        except Exception:
+            print (f'"{pyke_path}" could not be loaded.')
+            traceback.print_exc()
+            sys.exit(ReturnCode.MAKEFILE_DID_NOT_LOAD.value)
+    else:
+        print (f'"{pyke_path}" was not found.')
+        sys.exit(ReturnCode.MAKEFILE_NOT_FOUND.value)
 
-    def process_config(self, path: Path | None, config: str):
-        ''' Processes a json config string.'''
-        if not isinstance(config, dict):
-            raise MalformedConfigError(f'Config file {path}: Must be a JSON dictonary.')
+def run_makefile(make_file: str, load_makefile_config: bool = True):
+    ''' Load and run a makefile by relative path to the makefile directory.'''
+    old_makefile_dir = WorkingSet.makefile_dir
+    old_main_phase = WorkingSet.main_phase
 
-        def read_block(config, subblock, keyname) -> dict[str, list[str]]:
-            rets = {}
-            if aliases := config.get(subblock):
-                if not isinstance(aliases, dict):
-                    raise MalformedConfigError(
-                        f'Config file {path}: "{subblock}" must be a dictionary.')
-                for alias, values in aliases.items():
-                    if not isinstance(alias, str):
-                        raise MalformedConfigError(
-                            f'Config file {path}: "{config}/{keyname}" key must be a string.')
-                    if isinstance(values, str):
-                        values = [values]
-                    if (not isinstance(values, list) or
-                        any(not isinstance(value, str) for value in values)):
-                        raise MalformedConfigError(
-                            f'Config file {path}: "{config}/{keyname}" value must be a string '
-                            'or a list of strings.')
-                    rets[alias] = values
-            return rets
+    if make_file.startswith('/'):
+        make_path = Path(make_file)
+    else:
+        make_path = old_makefile_dir / make_file
+    if not make_file.endswith('.py'):
+        make_path = make_path / 'make.py'
 
-        if includes := config.get('include', []):
-            includes = ensure_list(includes)
-            for inc in includes:
-                if path and not str(path).startswith('/'):
-                    inc = path.parent / inc
-                self.load_config_file(inc)
+    makefile_dir = make_path.parent
+    if proj := WorkingSet.loaded_makefiles.get(make_path):
+        return proj
 
-        WorkingSet.argument_aliases |= read_block(config, 'argument_aliases', 'argument')
-        WorkingSet.action_aliases |= read_block(config, 'action_aliases', 'action')
-        if default_action := config.get('default_action'):
-            if not isinstance(default_action, str):
-                raise MalformedConfigError(
-                    f'Config file {path}: "default_action" must be a string.')
-            WorkingSet.default_action = default_action
-        if default_arguments := config.get('default_arguments'):
-            if not isinstance(default_arguments, list):
-                raise MalformedConfigError(
-                    f' Config file {path}: "default_arguments" must be a list of strings.')
-            WorkingSet.default_arguments.extend(default_arguments)
+    if load_makefile_config:
+        Configurator.load_from_makefile_dir(makefile_dir)
 
-    def set_default_config(self):
-        ''' Sets the default config options.'''
-        default_config = '''
-{
-    "include": [],
-    "argument_aliases": {
-        "-v0": "-overbosity=0",
-        "-v1": "-overbosity=1",
-        "-v2": "-overbosity=2",
-        "-rv0": "-oreport_verbosity=0",
-        "-rv1": "-oreport_verbosity=1",
-        "-rv2": "-oreport_verbosity=2",
-        "-release": "-okind=release",
-        "-versioned_sos": ["-oposix_shared_object_file={posix_so_real_name}",
-                           "-ogenerate_versioned_sonames=True"],
-        "vsos": ["-oposix_shared_object_file={posix_so_real_name}",
-                 "-ogenerate_versioned_sonames=True"],
+    WorkingSet.makefile_dir = makefile_dir
 
-        "-deploy_install": ["-orpath_deps=False",
-                            "-omoveable_binaries=False",
-                            "-oposix_shared_object_file={posix_so_real_name}",
-                            "-ogenerate_versioned_sonames=true",
-                            "-okind=release"],
-        "-deploy_moveable": ["-orpath_deps=True",
-                             "-omoveable_binaries=True",
-                             "-oposix_shared_object_file={posix_so_linker_name}",
-                             "-ogenerate_versioned_sonames=false",
-                             "-okind=release"]
-    },
-    "action_aliases": {
-        "opts": "report_options",
-        "files": "report_files",
-        "actions": "report_actions",
-        "c": "clean",
-        "cbd": "clean_build_directory",
-        "b": "build"
-    },
-    "default_action": "report_actions",
-    "default_arguments": []
-} '''
-        config = json.loads(default_config)
-        self.process_config(None, config)
+    project_phase_name = (make_path.parent.name if
+        make_path.name == 'make.py'
+        else make_path.stem)
+    main_phase = ProjectPhase({
+        'name': project_phase_name})
 
+    WorkingSet.loaded_makefiles[make_path] = main_phase
+    WorkingSet.all_phases.add(main_phase)
+    WorkingSet.main_phase = main_phase
+
+    _run_makefile(make_path)
+
+    WorkingSet.makefile_dir = old_makefile_dir
+    WorkingSet.main_phase = old_main_phase
+    return main_phase
 
 def propagate_group_names():
     ''' Cascades project names to group names in dependency phases.'''
-    WorkingSet.main_phase.propagate_group_names('')
+    if WorkingSet.main_phase:
+        WorkingSet.main_phase.propagate_group_names('')
 
 def uniquify_phase_names():
     ''' Ensure phase names are unique within groups.'''
+    if not WorkingSet.main_phase:
+        return
+
     names = {}
-    for phase in WorkingSet.main_phase.enumerate_dependencies():
+    for phase in WorkingSet.main_phase.iterate_dep_tree():
         fullname = phase.full_name
         if fullname in names:
             c, lp = names[fullname]
@@ -325,6 +253,9 @@ def get_phases(labels: list[str] | str) -> list[Phase]:
     'bar.foo' specifies a phase in group 'bar' named 'foo'
     '@.@' specifies all phases
     '''
+    if not WorkingSet.main_phase:
+        return []
+
     phases = []
     labels = ensure_list(labels)
     for label in labels:
@@ -334,7 +265,7 @@ def get_phases(labels: list[str] | str) -> list[Phase]:
             label = f'{WorkingSet.main_phase.name}{label}'
         group_phase_label = label.split('.', 1)
         grouplabel, namelabel = group_phase_label
-        for phase in WorkingSet.main_phase.enumerate_dependencies():
+        for phase in WorkingSet.main_phase.iterate_dep_tree():
             if grouplabel in ['@', phase.group]:
                 if namelabel in ['@', phase.name]:
                     phases.append(phase)
@@ -344,7 +275,7 @@ def main():
     '''Entrypoint for pyke.'''
     current_dir = os.getcwd()
     make_file = 'make.py'
-    cache_make = False
+    load_makefile_config = True
 
     idx = 1
     while idx < len(sys.argv):
@@ -358,12 +289,7 @@ def main():
             print_help()
             return ReturnCode.SUCCEEDED.value
 
-        if arg in ['-c', '--cache_makefile']:
-            cache_make = True
-            idx += 1
-            continue
-
-        if arg.startswith('-m') or arg == '--module':
+        if arg.startswith('-m') or arg == '--makefile':
             make_file = ''
             if len(arg) > 2:
                 make_file = sys.argv[idx][2:]
@@ -373,41 +299,42 @@ def main():
             idx += 1
             continue
 
+        if arg in ['-n', '--noconfig']:
+            load_makefile_config = False
+            idx += 1
+            continue
+
         break
 
-    make_path = Path(current_dir) / make_file
-    if not make_file.endswith('.py'):
-        make_path = make_path / 'make.py'
+    WorkingSet.makefile_dir = Path(current_dir)
 
-    WorkingSet.makefile_dir = str(make_path.parent)
+    Configurator.load_from_default_config()
+    Configurator.load_from_home_config()
 
-    cfg = Configurator()
-    cfg.load_from_files()
+    main_phase = run_makefile(make_file, load_makefile_config)
+    WorkingSet.main_phase = main_phase
 
-    project_phase_name = (make_path.parent.name if
-        make_path.name == 'make.py'
-        else make_path.stem)
-    WorkingSet.main_phase = ProjectPhase({
-        'name': project_phase_name})
-    WorkingSet.all_phases.add(WorkingSet.main_phase)
-
-    run_make_file(make_path, cache_make)
     propagate_group_names()
     uniquify_phase_names()
-    WorkingSet.main_phase.patch_options_in_dependencies()
+    main_phase.patch_options_in_dependencies()
 
     actions_done = []
     file_operations_are_dirty = True
 
     args = []
-    for arg in [*WorkingSet.default_arguments, *sys.argv[idx:]]:
-        args.extend(WorkingSet.argument_aliases.get(arg, [arg]))
+    for arg in [*Configurator.default_arguments, *sys.argv[idx:]]:
+        args.extend(Configurator.argument_aliases.get(arg, [arg]))
 
     affected_phases = get_phases('@.@')
 
     idx = 0
     while idx < len(args):
         arg = args[idx]
+
+        if arg in ['--makefile', '-n', '--noconfig'] or arg.startswith('-m'):
+            print (f'{arg} must precede any of -p (--phase), -o (--override), '
+                   '-c (--report_config), or any action arguments.')
+            return ReturnCode.INVALID_ARGS.value
 
         if arg in ['-v', '--version']:
             print_version()
@@ -417,10 +344,9 @@ def main():
             print_help()
             return ReturnCode.SUCCEEDED.value
 
-        if arg in ['-c', '--cache_makefile', '--module'] or arg.startswith('-m'):
-            print (f'{arg} must precede any of -p (--phase), -o (--override), '
-                   'or any action arguments.')
-            return ReturnCode.INVALID_ARGS.value
+        if arg in ['-c', '--report_config']:
+            print(Configurator.report())
+            return ReturnCode.SUCCEEDED.value
 
         if arg.startswith('-p') or arg == '--phases':
             if len(arg) > 2:
@@ -476,7 +402,7 @@ def main():
             arg_affected_phases = []
 
             if file_operations_are_dirty:
-                WorkingSet.main_phase.compute_file_operations_in_dependencies()
+                main_phase.compute_file_operations_in_dependencies()
                 file_operations_are_dirty = False
 
             if ':' in arg:
@@ -485,7 +411,7 @@ def main():
             else:
                 arg_affected_phases = affected_phases
 
-            arg = WorkingSet.action_aliases.get(arg, [arg])[0]
+            arg = Configurator.action_aliases.get(arg, [arg])[0]
             action = Action(arg)
             for active_phase in arg_affected_phases:
                 active_phase.do(action)
@@ -499,8 +425,8 @@ def main():
         idx += 1
 
     if len(actions_done) == 0:
-        WorkingSet.main_phase.compute_file_operations_in_dependencies()
-        action = Action(WorkingSet.default_action)
+        main_phase.compute_file_operations_in_dependencies()
+        action = Action(Configurator.default_action)
         for active_phase in affected_phases:
             active_phase.do(action)
 
