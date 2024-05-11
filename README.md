@@ -203,7 +203,7 @@ If your project has multiple steps to build static libraries or shared objects (
 
 ## Actions
 
-Pyke is not just good for building. There are other standard actions it can perform, with more forthcoming. Actually, it's more correct to say that `Phase` objects perform actions. Any string passed as an action on the command line will be applied as an action to the appropriate phases which implement the action. If no phase supports the action, it is quietly ignored.
+Pyke is not just good for building. There are other standard actions it can perform, with more forthcoming. Actually, it's more correct to say that `Phase` objects perform actions. Any string passed as an action on the command line will be applied to the appropriate phases which implement the action. If no phase supports the action, it is quietly ignored.
 
 There is a default action (`report_actions`) which displays the available actions in each phase of a project. This default can be overridden in a config file, either in a project or under $HOME (see [configuring pyke](#configuring-pyke)), to make the default action something different.
 
@@ -443,11 +443,11 @@ from pyke import CompileAndLinkToExePhase, Op, get_main_phase
 
 phase = CompileAndLinkToExePhase('simple_experiemtal', {
     'sources': ['a.cpp', 'b.cpp', 'c.cpp', 'main.cpp'],
-    'include_dirs': Op('+=', 'include/exp')        # appending to include_dirs
+    'include_dirs': Op('+=', 'include/exp')                 # appending to include_dirs
 })
 
-phase.push_opts({                                           # appending to sources
-    'sources': Op('*=', [f'exp/{src}' for src in [
+phase.push_opts({
+    'sources': Op('*=', [f'exp/{src}' for src in [          # extending sources
              'try_this.cpp', 'maybe.cpp', 'what_if.cpp']])
 })
 
@@ -473,7 +473,7 @@ $ pyke -ocolors=none build
 $ pyke -o "compile:sources *= [exp/try_this.c, exp/maybe.c, exp/what_if.c]" opts
 ```
 
-String values can be in quotes if they need to be disambiguated from punctuation. The usual escapements work with '\'. Overrides you specify with `[]` are treated as lists, `()` as tuples, `{}` as sets, and `{:}` as dicts. Since option keys must only contain letters, numbers, and underscores, you can differentiate a single-valued set from an interpolation by inserting a comma, or specifically enquoting the string:
+String values can be in quotes if they need to be disambiguated from punctuation or shell interpolation. The usual escapements work with '\\'. Overrides you specify with `[]` are treated as lists, `()` as tuples, `{}` as sets, and `{:}` as dicts. Since option keys must only contain letters, numbers, and underscores, you can differentiate a single-valued set from an interpolation by inserting a comma, or specifically enquoting the string:
 
 ```
 $ pyke -o "my_set_of_one={foo,}" ...
@@ -482,7 +482,7 @@ $ pyke -o "my_set_of_one={'foo'}" ...
 
 Python's built-in literals True, False, and None are defined as options, and can be interpolated as {true}, {false}, and {none}.
 
-Much like older-style subshell invocation, you can enquote a shell command in `\``s, and the command will be executed, with its output inserted in place. This is most useful in config files, since you're already in a shell on the command line.
+Much like older-style subshell invocation, you can enquote a shell command in \`backtick\`s, and the command will be executed, with its output inserted in place. This is most useful in config files, since they're not executed in a shell context.
 
 There is more to say about how value overrides are parsed. Smartly using quotes, commas, or spaces to differentiate strings from interpolators will usually get you where you want. Generally, though, setting options in the makefile will probably be preferred.
 
@@ -631,8 +631,8 @@ You can run another makefile within a makefile:
 # shaper/libs/make.py:
 import pyke as p
 shape_lib = p.CompileAndLinkToArchive()
-s = shape_lib.clone({'name': 'sphere', 'sources': ['shapes/sphere.cpp']})
-c = shape_lib.clone({'name': 'cube', 'sources': ['shapes/cube.cpp']})
+s = shape_lib.clone({'name': 'sphere',      'sources': ['shapes/sphere.cpp']})
+c = shape_lib.clone({'name': 'cube',        'sources': ['shapes/cube.cpp']})
 i = shape_lib.clone({'name': 'icosohedron', 'sources': ['shapes/icosohedron.cpp']})
 p.get_main_phase().depend_on([s, c, i])
 ```
@@ -774,7 +774,7 @@ Each can contain the following sections:
 
 ### Include files
 
-These are paths to other JSON files which contribute to the configuration. They are loaded before the rest of this file's contents, which can add to or override as described below. Useful if you have similar configuration for work projects vs. personal projects, or lots of pyke projects which all use the same options. Paths that start with '/' are absolute; otherwise, they are relative to this file's path.
+These are paths to other JSON files which contribute to the configuration. They are loaded before the rest of this file's contents, which can add to or override as described below. Useful if you have distinct configuration for work projects vs. personal projects, or lots of pyke projects which all use the same options. Paths that start with '/' are absolute; otherwise, they are relative to this file's path.
 
 ### Argument aliases
 
@@ -890,7 +890,7 @@ class ContrivedCodeGenPhase(CFamilyBuildPhase):
                                              source_code, origin_path, out.path)
 ```
 
-There's a bit going on, but it's not terrible. This uses some facilities available in `CFamilyBuildPhase` to clean generated source and the generation directory, as well as making directories for the build. The main work is in generating the source files in an appropriate generation directory.
+There's a bit going on, but it's not terrible. Actions already implemented in `CFamilyBuildPhase` can clean generated source and the generation directory, as well as make directories for the build. The main work here is in generating the source files in an appropriate generation directory.
 
 Integrating this custom phase into your makefile is as simple as making a new instance of the new phase, and setting it as a dependency of the build phase:
 
@@ -944,9 +944,10 @@ And that's it. Now the `build` action will first generate the files in the right
 
 #### Adding new actions
 
-To add a new action to a custom phase, simply add a method to the phase class. For example, to add an action called "deploy", write a method like so:
+To add a new action to a custom phase, simply add a method to the phase class. For example, to add an action called "deploy", write a phase method like so:
 
 ```python
+    ...
     def do_action_deploy(self, action: Action) -> ResultCode:
         ...
 ```
@@ -954,7 +955,7 @@ To add a new action to a custom phase, simply add a method to the phase class. F
 
 ### Adding new build kinds
 
-Adding new build kinds is straightforward if you're just trying to customize the system build commands. There are currently three that depend on the build kind: `debug_level`; `optimization`; and `flags`. For POSIX tools, these correspond to the `-g{debug_level}`, `-O{optimization}`, and `{flags}` of any definition. If you wanted a custom kind called "smallest", imply provide the following overrides, with perhaps these values:
+Adding new build kinds is straightforward if you're just trying to customize the system build commands. There are currently three that depend on the build kind: `debug_level`; `optimization`; and `flags`. For POSIX tools, these correspond to the `-g{debug_level}`, `-O{optimization}`, and `{flags}` of any definition. If you wanted a custom kind called "smallest", simply provide the following overrides, with perhaps these values:
 
 ```
 'gnuclang_smallest_debug_level': '0',
@@ -962,7 +963,7 @@ Adding new build kinds is straightforward if you're just trying to customize the
 'gnuclang_smallest_flags': ['-DNDEBUG'],
 ```
 
-When selecting the build kind with `-o kind=smallest`, these overrides should be selected for the build.
+When selecting the build kind with `-o kind=smallest`, these overrides will be selected for the build.
 
 ### Setting colors
 
