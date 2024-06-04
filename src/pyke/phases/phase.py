@@ -40,7 +40,7 @@ class Phase:
                  dependencies: Self | list[Self] | None = None):
         self.options = Options()
 
-        project_root = WorkingSet.makefile_dir
+        project_root = str(WorkingSet.makefile_dir)
         color_table_ansi_24bit = deepcopy(ansi_colors['colors_24bit'])
         color_table_ansi_8bit = deepcopy(ansi_colors['colors_8bit'])
         color_table_ansi_named = deepcopy(ansi_colors['colors_named'])
