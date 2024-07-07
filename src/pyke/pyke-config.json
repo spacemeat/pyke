@@ -31,7 +31,9 @@
 		"config": "report_configuration",
         "c": "clean",
         "cbd": "clean_build_directory",
-        "b": "build"
+        "ced": "clean_external_directory",
+        "b": "build",
+		"r": "run"
     },
     "default_action": "report_actions",
     "default_arguments": [],

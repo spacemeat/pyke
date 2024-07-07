@@ -13,6 +13,7 @@ from .action import Action, ResultCode, Step, Result, FileData
 from .options import Options, OptionOp, Op
 from .phases import (Phase, CommandPhase, CFamilyBuildPhase, CompilePhase, ArchivePhase,
                      LinkToExePhase, LinkToSharedObjectPhase, CompileAndArchivePhase,
-                     CompileAndLinkToExePhase, CompileAndLinkToSharedObjectPhase, ProjectPhase)
+                     CompileAndLinkToExePhase, CompileAndLinkToSharedObjectPhase, ProjectPhase,
+                     ExternalPackagePhase)
 from .pyke import get_main_phase, run_makefile
 from .utilities import input_path_is_newer, do_shell_command

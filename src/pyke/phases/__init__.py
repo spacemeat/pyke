@@ -5,6 +5,7 @@ from .command_phase import CommandPhase
 from .c_family_build import CFamilyBuildPhase
 from .compile import CompilePhase
 from .archive import ArchivePhase
+from .external_package import ExternalPackagePhase
 from .link_to_shared_object import LinkToSharedObjectPhase
 from .link_to_exe import LinkToExePhase
 from .compile_and_archive import CompileAndArchivePhase

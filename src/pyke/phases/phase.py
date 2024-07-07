@@ -72,6 +72,12 @@ class Phase:
             # This is an anchor directory for other directories to relate to when referencing
             # generated build artifacts like object files or executables.
             'gen_anchor': project_root,
+            # This is an anchor directory for external dependencies such as tarballs or 3rd party
+            # repos.
+            'ext_anchor': project_root,
+            # Top-level external dependency packages directory.
+            'ext_dir': 'external',
+            'external_dependencies_anchor': '{ext_anchor}/{ext_dir}',
             # Top-level build directory.
             'build_dir': 'build',
             'build_anchor': '{gen_anchor}/{build_dir}',
@@ -468,6 +474,31 @@ class Phase:
             if method:
                 method(action)
 
+    def do_step_create_directory(self, action: Action, depends_on: Steps, new_dir: Path) -> Step:
+        '''
+        Performs a directory creation operation as an action step.
+        '''
+        def act(cmd: str, new_dir: Path):
+            step_result = ResultCode.SUCCEEDED
+            step_notes = None
+            if not new_dir.is_dir():
+                res, _, err = do_shell_command(cmd)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                    step_notes = err
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.ALREADY_UP_TO_DATE
+
+            return Result(step_result, step_notes)
+
+        cmd = f'mkdir -p {new_dir}'
+        step = Step('create directory', depends_on, [], [new_dir],
+                             partial(act, cmd=cmd, new_dir=new_dir), cmd)
+        action.set_step(step)
+        return step
+
     def do_step_delete_file(self, action: Action, depends_on: Steps, path: Path) -> Step:
         ''' Perfoems a file deletion operation as an action step. '''
         def act(cmd: str, path: Path) -> Result:
@@ -583,3 +614,8 @@ class Phase:
     def do_action_clean_build_directory(self, action: Action):
         ''' Wipes out the build directory. '''
         self.do_step_delete_directory(action, None, Path(self.opt_str("build_anchor")))
+
+    def do_action_clean_external_directory(self, action: Action):
+        ''' Wipes out the external package dependencies directory. '''
+        self.do_step_delete_directory(action, None,
+                                      Path(self.opt_str("external_dependencies_anchor")))

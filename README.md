@@ -175,6 +175,7 @@ Pyke comes with some built-in `Phase` classes--not many yet, but it's early stil
 * `class CompileAndArchive(CFamilyBuildPhase)`: Phase for combining compile and archive operations into one phase.
 * `class CompileAndLinkToSharedObjectPhase(CFamilyBuildPhase)`: Phase for combining compile and link operations into one phase for building a shared object.
 * `class CompileAndLinkToExePhase(CFamilyBuildPhase)`: Phase for combining compile and link operations into one phase for building an executable.
+* `class ExternalPackagePhase(Phase)`: Phase for downloading and uncompressing external packagae dependencies.
 * `class ProjectPhase(Phase)`: Project phase, which represents a full project. You can create multiple projects as dependencies of `get_main_phase()`, each their own subproject with compile and link phases, etc. The top-level phase of a makefile is always a project phase.
 
 An easier view of the class heierarchy:
@@ -189,6 +190,7 @@ Phase
 │   ├── CompileAndArchive
 │   ├── CompileAndLinkeToSharedObjectPhase
 │   └── CompileAndLinkToExePhase
+├── ExternalPackagePhase
 ├── ProjectPhase
 ```
 
@@ -213,17 +215,18 @@ Currently, the supported actions in each built-in phase are:
 
 |phase class|actions
 |---|---
-|Phase|clean; clean_build_directory; report_actions; report_files; report_options
-|CommandPhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options) 
-|CFamilyBuildPhase|(inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|CompilePhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|ArchivePhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|LinkToSharedObjectPhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|LinkToExePhase|build; run; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|CompileAndArchivePhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|CompileAndLinkToSharedObjectPhase|build; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|CompileAndLinkToExePhase|build; run; (inherited: clean; clean_build_directory; report_actions; report_files; report_options)
-|ProjectPhase|(inherited: clean; clean_build_directory) (all other actions are the responsiblity of dependencies)
+|Phase|clean; clean_build_directory; , clean_external_directory; report_actions; report_files; report_options
+|CommandPhase|build; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options) 
+|CFamilyBuildPhase|(inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|CompilePhase|build; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|ArchivePhase|build; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|LinkToSharedObjectPhase|build; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|LinkToExePhase|build; run; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|CompileAndArchivePhase|build; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|CompileAndLinkToSharedObjectPhase|build; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|CompileAndLinkToExePhase|build; run; (inherited: clean; clean_build_directory; clean_external_directoryreport_actions; report_files; report_options)
+|ExternalPackagePhase|sync; (inherited: clean; clean_build_directory; clean_external_directory)
+|ProjectPhase|(inherited: clean; clean_build_directory; clean_external_directory) (all other actions are the responsiblity of dependencies)
 
 These can be spcified on the command line. Multiple actions can be taken in succession; see below for CLI operation.
 
@@ -232,6 +235,7 @@ These can be spcified on the command line. Multiple actions can be taken in succ
 * `report_actions` prints a report of all the actions each phase will respond to.
 * `clean` specifies that a phase will delete the files it is responsible for making.
 * `clean_build_directory` specifies that the entire build directory tree will be deleted.
+* `clean_external_directory` specifies that the entire externals directory tree will be deleted.
 * `build` is the build action. This generates the build artifacts.
 * `run` runs built executables in place. Note that CommandPhase commands happen on the `build` action.
 
@@ -246,7 +250,9 @@ There are built-in aliases for the defined actions, to save some effort:
 |actions|report_actions
 |c|clean
 |cbd|clean_build_directory
+|ced|clean_external_directory
 |b|build
+|r|run
 
 ### Action mapping
 
@@ -502,6 +508,8 @@ There are a few options that are uiversal to pyke, regardless of the type of pro
 |false   |False   |Interpolated value for False.
 |project_anchor   |project_root   |This is an anchor directory for other directories to relate to when referencing required project inputs like source files.
 |gen_anchor   |project_root   |This is an anchor directory for other directories to relate to when referencing generated build artifacts like object files or executables.
+|ext_anchor   |project_root   |This is an anchor directory for external dependencies such as tarballs or 3rd party repos.
+|ext_dir   |'external'   |Top-level external dependency packages directory.
 |build_dir   |'build'   |Top-level build directory.
 |colors_24bit   |color_table_ansi_24bit   |24-bit ANSI color table.
 |colors_8bit   |color_table_ansi_8bit   |8-bit ANSI color table.
@@ -621,7 +629,7 @@ exe_path = {exe_anchor}/{exe_file}
 ```
 You are encouraged to change `exe_dir` to set a base directory for executable files, and `exe_basename` to set the name of the executable. Pyke will only reference `exe_path` directly.
 
-Similar options are defined for static archives and shared objects. Of course, you can change any of these, or make your own constructed paths.
+Similar options are defined for static archives, shared objects, and external dependencies. Of course, you can change any of these, or make your own constructed paths.
 
 ### Recursive makefiles
 
