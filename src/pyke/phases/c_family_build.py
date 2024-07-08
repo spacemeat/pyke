@@ -3,12 +3,11 @@
 from functools import partial
 import os
 from pathlib import Path
-import shlex
 from typing import TypeAlias
 
 from ..action import Action, Step, Result, ResultCode
 from ..utilities import (UnsupportedToolkitError, UnsupportedLanguageError,
-                         do_interactive_command, uniquify_list,
+                         uniquify_list,
                          input_path_is_newer, do_shell_command)
 from .phase import Phase
 
@@ -696,26 +695,5 @@ class CFamilyBuildPhase(Phase):
         cmd = f'ln -s {soname} {linkername}'
         step = Step('create softlink', depends_on, [soname], [linkername],
                              partial(act, cmd, soname), cmd)
-        action.set_step(step)
-        return step
-
-    def do_step_run_executable(self, action: Action, depends_on: Steps, exe_path: Path) -> Step:
-        ''' Runs the executable as an action step.'''
-        def act(cmd: str, exe_path: Path) -> Result:
-            cmd_list = shlex.split(cmd)
-            step_notes = None
-            if exe_path.exists():
-                res = do_interactive_command(cmd_list)
-                if res != 0:
-                    step_result = ResultCode.COMMAND_FAILED
-                else:
-                    step_result = ResultCode.SUCCEEDED
-            else:
-                step_result = ResultCode.MISSING_INPUT
-
-            return Result(step_result, step_notes)
-
-        cmd = f'{exe_path} {self.opt_str("run_args")}'
-        step = Step('run executable', depends_on, [exe_path], [], partial(act, cmd, exe_path))
         action.set_step(step)
         return step

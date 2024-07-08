@@ -8,6 +8,7 @@ from functools import partial
 import inspect
 from os.path import relpath
 from pathlib import Path
+import shlex
 import sys
 from typing import Type, TypeVar, TypeAlias, Iterable, Any
 from typing_extensions import Self
@@ -17,7 +18,7 @@ from ..action import (Action, ResultCode, Step, Result,
 from ..options import Options, OptionOp
 from ..utilities import (ensure_list, WorkingSet, do_shell_command, uniquify_list,
                          determine_color_support, ansi_colors, set_color,
-                         CircularDependencyError)
+                         do_interactive_command, CircularDependencyError)
 
 T = TypeVar('T')
 Steps: TypeAlias = list[Step] | Step | None
@@ -542,6 +543,47 @@ class Phase:
         cmd = f'rm -r {direc}'
         step = Step('delete directory', depends_on, [direc], [],
                              partial(act, cmd=cmd, direc=direc), cmd)
+        action.set_step(step)
+        return step
+
+    def do_step_run_executable(self, action: Action, depends_on: Steps, exe_path: Path) -> Step:
+        ''' Runs the executable as an action step.'''
+        def act(cmd: str) -> Result:
+            step_notes = None
+            res, out, err = do_shell_command(cmd)
+            print (f'{out}', end='')
+            if res != 0:
+                step_result = ResultCode.COMMAND_FAILED
+                step_notes = err
+            else:
+                step_result = ResultCode.SUCCEEDED
+
+            return Result(step_result, step_notes)
+
+        run_dir = self.opt_str('project_anchor')
+        cmd = f'cd {run_dir} && {exe_path} {self.opt_str("run_args")}'
+        step = Step('run executable', depends_on, [exe_path], [], partial(act, cmd), cmd)
+        action.set_step(step)
+        return step
+
+    def do_step_run_executable_pty(self, action: Action, depends_on: Steps, exe_path: Path) -> Step:
+        ''' Runs the executable as an action step.'''
+        def act(cmd: str, exe_path: Path) -> Result:
+            cmd_list = shlex.split(cmd)
+            step_notes = None
+            if exe_path.exists():
+                res = do_interactive_command(cmd_list)
+                if res != 0:
+                    step_result = ResultCode.COMMAND_FAILED
+                else:
+                    step_result = ResultCode.SUCCEEDED
+            else:
+                step_result = ResultCode.MISSING_INPUT
+
+            return Result(step_result, step_notes)
+
+        cmd = f'{exe_path} {self.opt_str("run_args")}'
+        step = Step('run executable', depends_on, [exe_path], [], partial(act, cmd, exe_path), cmd)
         action.set_step(step)
         return step
 

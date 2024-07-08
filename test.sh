@@ -27,6 +27,7 @@ run_demo() {
 
 run_demo "custom_phase/make.py" "total: 11111"
 run_demo "diamond_deps/make.py" "total: 11111${NL}total: 11111"
+run_demo "ext_deps/make.py" "bar"
 run_demo "multi_make/simple_0.py" "total: 11111"
 run_demo "multi_make/simple_1.py" "total: 11111"
 run_demo "multi_shared_objects/make.py" "255"

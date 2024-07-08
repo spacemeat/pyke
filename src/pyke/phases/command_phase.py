@@ -15,7 +15,8 @@ class CommandPhase(Phase):
             'name': 'command',
             'posix_command': '',
             ##'windows_command': '',
-            'commands': '{{target_os}_command}'
+            'run_dir': '{project_anchor}',
+            'command': 'cd {run_dir} && {{target_os}_command}'
         }
         self.options |= (options or {})
 
