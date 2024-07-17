@@ -11,9 +11,11 @@ except ImportError:
 
 from .action import Action, ResultCode, Step, Result, FileData
 from .options import Options, OptionOp, Op
+from .options_owner import OptionsOwner
 from .phases import (Phase, CommandPhase, CFamilyBuildPhase, CompilePhase, ArchivePhase,
                      LinkToExePhase, LinkToSharedObjectPhase, CompileAndArchivePhase,
                      CompileAndLinkToExePhase, CompileAndLinkToSharedObjectPhase, ProjectPhase,
-                     ExternalPackagePhase)
-from .pyke import get_main_phase, run_makefile
+                     ExternalRepoPhase, PykeRepoPhase, CMakeRepoPhase)
+from .pyke import get_main_phase, PykeExecutor, run_makefile
+#from .sync_external_repo import sync_external_repo
 from .utilities import input_path_is_newer, do_shell_command

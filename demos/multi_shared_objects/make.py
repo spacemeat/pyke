@@ -1,19 +1,17 @@
 import pyke as p
 
-pa = p.run_makefile('a-star')
-ps = p.run_makefile('s-star')
+pa = p.PykeRepoPhase({
+    'makefile': 'a-star',
+    'use_deps': ['aaa', 'aas', 'asa', 'ass'],
+})
 
-aaa = pa.find_dep('aaa')
-aas = pa.find_dep('aas')
-asa = pa.find_dep('asa')
-ass = pa.find_dep('ass')
+ps = p.PykeRepoPhase({
+    'makefile': 's-star',
+    'use_deps': ['saa', 'sas', 'ssa', 'sss'],
+})
 
-saa = ps.find_dep('saa')
-sas = ps.find_dep('sas')
-ssa = ps.find_dep('ssa')
-sss = ps.find_dep('sss')
+m2 = p.CompileAndLinkToExePhase({'sources': ['main.c']},
+                     [pa, ps])
 
-m = p.CompileAndLinkToExePhase({'sources': ['main.c']},
-                     [aaa, aas, asa, ass, saa, sas, ssa, sss])
 
-p.get_main_phase().depend_on(m)
+p.get_main_phase().depend_on(m2)

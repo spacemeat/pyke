@@ -1,5 +1,6 @@
-#include <humon/humon.hpp>
-#include <iostream>
+#include "humon/humon.hpp"
+//#include <iostream>
+#include "fmt/base.h"
 
 int main()
 {
@@ -8,11 +9,12 @@ int main()
 	auto h = hu::Trove::fromString(src);
 	if (auto t = std::get_if<hu::Trove>(& h))
 	{
-		std::cout << *t / "foo" % hu::val<std::string_view> {};
+		auto foobar = *t / "foo" % hu::val<std::string_view> {};
+		fmt::print("{}", foobar);
 	}
 	else
 	{
-		std::cout << "plugh";
+		fmt::print("plugh");
 	}
 }
 

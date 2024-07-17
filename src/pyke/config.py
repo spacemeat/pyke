@@ -8,67 +8,63 @@ from .utilities import MalformedConfigError, ensure_list
 class Configurator:
     ''' Loads configuration jsons.'''
 
-    loaded_configs: list[Path] = []
-    argument_aliases = {}
-    action_aliases = {}
-    default_action = ''
-    default_arguments = []
-    cache_makefile_module = False
+    def __init__(self):
+        self.loaded_configs: list[Path] = []
+        self.argument_aliases = {}
+        self.action_aliases = {}
+        self.default_action = ''
+        self.default_arguments = []
+        self.cache_makefile_module = False
 
-    @classmethod
-    def report(cls):
+    def report(self):
         ''' Prints the current configuration. '''
         report = 'Loaded configuration files:\n'
-        for file in cls.loaded_configs:
+        for file in self.loaded_configs:
             report += f'    {file}\n'
         report += 'Argument aliases:\n'
-        for k, v in cls.argument_aliases.items():
+        for k, v in self.argument_aliases.items():
             report += f'    {k}:\n'
             for i in v:
                 report += f'        {i}\n'
         report += 'Action aliases:\n'
-        for k, v in cls.action_aliases.items():
+        for k, v in self.action_aliases.items():
             report += f'    {k}:\n'
             for i in v:
                 report += f'        {i}\n'
-        report += f'Default action: {cls.default_action}\nDefault arguments:\n'
-        for arg in cls.default_arguments:
+        report += f'Default action: {self.default_action}\nDefault arguments:\n'
+        for arg in self.default_arguments:
             report += f'    {arg}\n'
-        report += f'Caching makefile modules: {cls.cache_makefile_module}\n'
+        report += f'Caching makefile modules: {self.cache_makefile_module}\n'
         return report
 
-    @classmethod
-    def load_from_default_config(cls):
+    def load_from_default_config(self):
         ''' Sets the default config options.'''
         file = Path(__file__).parent / 'pyke-config.json'
         if file.exists():
-            cls.load_config_file(file)
+            self.load_config_file(file)
 
-    @classmethod
-    def load_from_home_config(cls):
+    def load_from_home_config(self):
         ''' Loads config from ~/.config/pyke/pyke-config.json. '''
         file = Path.home() / '.config' / 'pyke' / 'pyke-config.json'
         if file.exists():
-            cls.load_config_file(file)
+            self.load_config_file(file)
 
-    @classmethod
-    def load_from_makefile_dir(cls, make_dir: Path):
+    def load_from_makefile_dir(self, make_dir: Path):
         ''' Loads config from standard files.'''
         file = Path(make_dir) / 'pyke-config.json'
         if file.exists():
-            cls.load_config_file(file)
+            self.load_config_file(file)
 
-    @classmethod
-    def load_config_file(cls, file: Path):
+    def load_config_file(self, file: Path):
         ''' Open a file for processing.'''
-        if file in cls.loaded_configs:
+        if file in self.loaded_configs:
             return
 
-        cls.loaded_configs.append(file)
+        self.loaded_configs.append(file)
         try:
             with open(file, 'r', encoding='utf-8') as fi:
                 config = json.load(fi)
-                cls.process_config(file, config)
+                self.process_config(file, config)
         except (FileNotFoundError, MalformedConfigError) as e:
             if e is FileNotFoundError:
                 print (f'Could not find config file "{file}".')
@@ -77,8 +73,7 @@ class Configurator:
             else:
                 print (f'{e}')
 
-    @classmethod
-    def process_config(cls, path: Path | None, config: str):
+    def process_config(self, path: Path | None, config: str):
         ''' Processes a json config string.'''
         if not isinstance(config, dict):
             raise MalformedConfigError(f'Config file {path}: Must be a JSON dictonary.')
@@ -108,22 +103,22 @@ class Configurator:
             for inc in includes:
                 if path and not str(inc).startswith('/'):
                     inc = path.parent / inc
-                cls.load_config_file(inc)
+                self.load_config_file(inc)
 
-        Configurator.argument_aliases |= read_block(config, 'argument_aliases', 'argument')
-        Configurator.action_aliases |= read_block(config, 'action_aliases', 'action')
+        self.argument_aliases |= read_block(config, 'argument_aliases', 'argument')
+        self.action_aliases |= read_block(config, 'action_aliases', 'action')
         if default_action := config.get('default_action'):
             if not isinstance(default_action, str):
                 raise MalformedConfigError(
                     f'Config file {path}: "default_action" must be a string.')
-            Configurator.default_action = default_action
+            self.default_action = default_action
         if default_arguments := config.get('default_arguments'):
             if not isinstance(default_arguments, list):
                 raise MalformedConfigError(
                     f' Config file {path}: "default_arguments" must be a list of strings.')
-            Configurator.default_arguments.extend(default_arguments)
+            self.default_arguments.extend(default_arguments)
         if cache_makefile_module := config.get('cache_makefile_module', False):
             if not isinstance(cache_makefile_module, bool):
                 raise MalformedConfigError(
                     f' Config file {path}: "cache_makefile_module" must be a boolean.')
-            Configurator.cache_makefile_module = cache_makefile_module
+            self.cache_makefile_module = cache_makefile_module

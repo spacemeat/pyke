@@ -19,6 +19,7 @@ class LinkToSharedObjectPhase(CFamilyBuildPhase):
 
     def patch_options(self):
         ''' Fixups run before file operations.'''
+        super().patch_options()
         for dep in self.iterate_dep_tree():
             dep.push_opts({'relocatable_code': True}, True, True)
 

@@ -1,3 +1,5 @@
+#pragma once
+
 int aaa();
 int aas();
 int asa();

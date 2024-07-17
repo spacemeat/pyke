@@ -97,10 +97,6 @@ class CFamilyBuildPhase(Phase):
 
             'target_path': '',
 
-            # Target-specific build directory.
-            'build_detail': '{group}.{toolkit}.{kind}',
-            'build_detail_anchor': '{build_anchor}/{build_detail}',
-
             # Directory where intermediate artifacts like objects are placed.
             'obj_dir': 'int',
             # The base filename of a taret object file.
@@ -322,9 +318,12 @@ class CFamilyBuildPhase(Phase):
         inc_dirs = self.opt_list('include_dirs')
         inc_anchor = self.opt_str('include_anchor')
         pkg_configs = []
+        #for lib, method in self.opt_dict('libs').items():
+        #    if method in ['archive', 'package']:
+        #        pkg_configs = self.opt_list(lib)
         for lib, method in self.opt_dict('libs').items():
-            if method in ['archive', 'package']:
-                pkg_configs = self.opt_list(lib)
+            if method == 'package':
+                pkg_configs.append(lib)
 
         defs = ''.join((f'-D{d} ' for d in self.opt_list('definitions')))
 

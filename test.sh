@@ -6,7 +6,7 @@ run_demo() {
 	local demo_path="demos/$1"
 	local result="$2"
 	echo -n "running $demo_path... "
-	output="$(pyke -m $demo_path -v0 cbd build run)"
+	output="$(pyke -m $demo_path -v0 sync cbd build run)"
 
 	if [ $? -eq 0 ]; then
 		output="$(echo "$output" | tr -d '\r')"

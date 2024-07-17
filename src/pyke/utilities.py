@@ -17,6 +17,16 @@ if typing.TYPE_CHECKING:
 class PykeException(Exception):
     ''' Parent for all Pyke errors. '''
 
+class PykeMakefileNotFoundError(PykeException):
+    ''' Raised when a pyke makefile could not be found. '''
+
+class PykeMakefileNotLoadedError(PykeException):
+    ''' Raised when a pyke makefile could not be loaded. '''
+
+class PykeNonphaseCommandFailedError(PykeException):
+    ''' Raised when a non-phase command fails, such as when syncing an external repo before phase
+    building.'''
+
 class ProjectNameCollisionError(PykeException):
     ''' Raised when more than one project phase shares a name in a hierarchy. '''
 
@@ -242,7 +252,7 @@ ansi_colors = {
     },
 }
 
-def set_color(color_set: dict[str, dict[str, str]], color: str):
+def get_color_code(color_set: dict[str, dict[str, str]], color: str):
     ''' Returns the ANSI color code for the specified thematic element.'''
     color_desc = color_set[color]
     if color_desc is not None:

@@ -85,17 +85,6 @@ class PhaseFiles:
                           if (file_type is None or
                               file_data.file_type == file_type)]
 
-class StepFunction:
-    def __init__(self, fn: typing.Callable):
-        self.fn = fn
-
-class StepCommand(StepFunction):
-    def __init__(self, command: str):
-        self.command = command
-
-#Steps: TypeAlias = list['Step'] | 'Step' | None
-
-
 class Step:
     ''' Represents a single step in a phase's action. These are dynamically added as needed.'''
     def __init__(self, name: str, depends_on: list[Self] | Self | None, inputs: list[Path],
@@ -155,19 +144,21 @@ class PhaseAction:
 
     def run(self, action_name: str):
         ''' Run all the steps recorded for this phase.'''
+        rep = self.phase.reporter
         must_report_phase = len(self.steps) > 0
         if must_report_phase:
-            self.phase.report_action_phase_start(
-                action_name, self.phase)
+            rep.report_action_phase_start(
+                action_name, type(self.phase).__name__, self.phase.full_name)
         final_res = ResultCode.SUCCEEDED
         for step in self.steps:
-            self.phase.report_step_start(step)
+            rep.report_step_start(step.name, step.inputs, step.outputs)
             res = step.run()
-            self.phase.report_step_end(step)
+            rep.report_step_end(step.command, step.result.code.succeeded(),
+                                step.result.code.view_name, step.result.notes)
             if res.failed() and final_res.succeeded():
                 final_res = res
         if must_report_phase:
-            self.phase.report_action_phase_end(final_res)
+            rep.report_action_phase_end(final_res.succeeded())
         return final_res
 
 class Action:
