@@ -26,11 +26,13 @@ fmt_repo = p.ExternalRepoPhase({
 
 fmt = p.CMakeRepoPhase({
     'name': 'fmt',
-    'lib_kind': 'static',   # shared, static_pic
-    'static_arg': '',
-    'shared_arg': ' -DBUILD_SHARED_LIBS=TRUE',
-    'static_pic_arg': ' -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE',
+    'lib_kind': 'archive',   # shared_object
+    'archive_arg': '',
+    'shared_object_arg': ' -DBUILD_SHARED_LIBS=TRUE',
+    # TODO: Make this use {relocateable_code}
+    #'archive_pic_arg': ' -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE',
     'cmake_args': '{{lib_kind}_arg} -DFMT_TEST=FALSE',
+    'makes': {'fmt': '{lib_kind}'},
 }, fmt_repo)
 
 exe = p.CompileAndLinkToExePhase({
@@ -38,8 +40,6 @@ exe = p.CompileAndLinkToExePhase({
     'sources': ['main.cpp'],
     'include_dirs': ['external/humon/include',
                      'external/fmt/include'],
-    'lib_dirs': ['{external_anchor}/external/fmt/build/ext_deps.gnu.debug'],
-    'libs': {'fmt': 'archive'}
 }, [humon, fmt])
 
 p.get_main_phase().depend_on([exe])

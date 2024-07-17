@@ -1,12 +1,10 @@
 ''' This phase syncs an external repository to a specific version. '''
 
-from functools import partial
-from pathlib import Path
 from typing import TypeAlias
 
 from .phase import Phase
-from ..action import Action, Step, Result, ResultCode
-from ..utilities import do_shell_command, PykeMakefileNotFoundError, PykeMakefileNotLoadedError
+from ..action import Action, Step
+from ..utilities import PykeMakefileNotFoundError, PykeMakefileNotLoadedError
 from ..pyke import PykeExecutor, ReturnCode
 
 Steps: TypeAlias = list[Step] | Step | None

@@ -3,16 +3,17 @@
 from functools import partial
 from pathlib import Path
 from ..action import Action, Step, Result, ResultCode, FileData
-from .phase import Phase
+from .c_family_build import CFamilyBuildPhase
 from ..utilities import do_shell_command
 
-class CMakeRepoPhase(Phase):
+class CMakeRepoPhase(CFamilyBuildPhase):
     ''' Phase to build a CMake project.'''
     def __init__(self, options: dict | None = None, dependencies = None):
         super().__init__(options, dependencies)
         self.options |= {
             'name': 'CMake-build',
             'cmake_args': '',
+            'makes': {},
         }
         self.options |= (options or {})
 
@@ -21,12 +22,18 @@ class CMakeRepoPhase(Phase):
 
         dirs = self.get_direct_dependency_output_files('dir')
         if len(dirs) > 0:
-            build_detail_anchor = dirs[0].path
+            build_detail_anchor = Path(dirs[0].path)
 
         self.record_file_operation(
             None,
             FileData(build_detail_anchor, 'dir', self),
             'create directory')
+
+        for artifact, file_type in self.opt_dict('makes').items():
+            self.record_file_operation(
+                None,
+                FileData(build_detail_anchor / artifact, file_type, self),
+                'build')
 
     def do_step_cmake(self, action: Action, depends_on: list[Step] | Step | None, cmake_path: Path):
         ''' Runs cmake to generate Makefile.'''

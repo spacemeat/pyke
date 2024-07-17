@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .options_owner import OptionsOwner
 from .reporter import Reporter
-from .utilities import PykeNonphaseCommandFailedError, do_shell_command, WorkingSet
+from .utilities import do_shell_command, WorkingSet
 
 class SyncExternalRepoClass(OptionsOwner):
     ''' Callable class (notably, not a phase) for fetching an external dependency project.'''
